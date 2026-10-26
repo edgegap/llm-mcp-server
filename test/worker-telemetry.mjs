@@ -180,6 +180,20 @@ try {
   await settle();
   const call = of('$mcp_tool_call').find((e) => props(e).$mcp_tool_name === 'edgegap_list_skills');
   check('the intent is recorded', props(call).$mcp_intent === 'checking which Edgegap skills exist');
+  // Output schemas survive the v2 SDK, and a schema-checked result still passes.
+  const withOut = (list?.result?.tools ?? []).filter((t) => t.outputSchema);
+  check('hosted: output schemas are published', withOut.length >= 14 && withOut.some((t) => t.name === 'edgegap_context'), `${withOut.length}`);
+  const ctxOut = await w.rpc('tools/call', { name: 'edgegap_context', arguments: {} });
+  check('hosted: a tool with an output schema returns structuredContent', ctxOut?.result?.structuredContent?.server?.startsWith('@edgegap/mcp') && !ctxOut.result.isError, JSON.stringify(ctxOut).slice(0, 200));
+  const bad = await w.rpc('tools/call', { name: 'edgegap_deploy', arguments: { application: 1 } });
+  const badText = (bad?.result?.content ?? []).map((c) => c.text).join('\n');
+  check('hosted: bad arguments get the host label and one line per problem', bad?.result?.isError && /^\[/.test(bad.result.content[0].text) && /- version: missing \(required\)/.test(badText) && /Required: application, version, users/.test(badText), badText.slice(0, 200));
+  // Skill files: SKILL.md listed, the rest read through the {+path} template on the v2 SDK too.
+  const listed = (await w.rpc('resources/list', {}))?.result?.resources ?? [];
+  const templates = (await w.rpc('resources/templates/list', {}))?.result?.resourceTemplates ?? [];
+  check('hosted: one listed resource per skill, plus the file template', listed.every((x) => x.uri.endsWith('/SKILL.md')) && templates.some((t) => t.uriTemplate === 'edgegap-skill://{skill}/{+path}'), `${listed.length} listed, ${templates.map((t) => t.uriTemplate).join(' ')}`);
+  const nested = await w.rpc('resources/read', { uri: 'edgegap-skill://edgegap-unreal/assets/docker/Dockerfile' });
+  check('hosted: a nested skill file reads through the template', /FROM /.test(nested?.result?.contents?.[0]?.text ?? ''), JSON.stringify(nested).slice(0, 160));
 } finally {
   w.stop();
   posthog.close();

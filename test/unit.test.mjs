@@ -6,6 +6,21 @@ import assert from 'node:assert/strict';
 import { badTag, badImage, looksSecret } from '../dist/image.js';
 import { parseBaseUrl, stripTokenPrefix, redact, loadConfig, ConfigError } from '../dist/config.js';
 import { maskSecrets } from '../dist/client.js';
+import { argumentError } from '../dist/tools.js';
+import { z } from 'zod';
+
+test('argumentError reads both SDK wordings and lists the parameters', () => {
+  const inputs = new Map([['edgegap_deploy', { application: z.string(), version: z.string(), dry_run: z.boolean().optional() }]]);
+  const v1 = 'Input validation error: Invalid arguments for tool edgegap_deploy: Invalid input: expected string, received number at application\nInvalid input: expected string, received undefined at version';
+  const v2 = 'MCP error -32602: Input validation error: Invalid arguments for tool edgegap_deploy: application: Invalid input: expected string, received number, version: Invalid input: expected string, received undefined';
+  for (const msg of [v1, v2]) {
+    const out = argumentError(msg, inputs);
+    assert.match(out, /- application: must be string \(got number\)/);
+    assert.match(out, /- version: missing \(required\)/);
+    assert.match(out, /Required: application, version\. Optional: dry_run\./);
+  }
+  assert.equal(argumentError('Something else broke', inputs), undefined);
+});
 
 test('badTag accepts build tags', () => {
   for (const t of ['build-42', 'v1.2.3', '2026.10.21-16.00.00', 'a', '_x', 'A'.repeat(128)]) {

@@ -25,7 +25,7 @@ async function read(extraEnv) {
   return {
     instructions,
     tools: tools
-      .map((t) => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema, annotations: t.annotations }))
+      .map((t) => ({ name: t.name, title: t.title, description: t.description, inputSchema: t.inputSchema, outputSchema: t.outputSchema, annotations: t.annotations }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
@@ -52,7 +52,7 @@ for (const n of Object.keys(a)) if (!b[n]) diffs.push(`removed tool ${n}`);
 for (const n of Object.keys(b)) if (!a[n]) diffs.push(`new tool ${n}`);
 for (const n of Object.keys(b)) {
   if (!a[n]) continue;
-  for (const k of ['title', 'description', 'inputSchema', 'annotations']) {
+  for (const k of ['title', 'description', 'inputSchema', 'outputSchema', 'annotations']) {
     if (JSON.stringify(a[n][k]) !== JSON.stringify(b[n][k])) diffs.push(`${n}: ${k} changed`);
   }
 }

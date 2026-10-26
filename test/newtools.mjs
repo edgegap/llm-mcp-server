@@ -858,6 +858,13 @@ res = await acall('edgegap_list_locations', {});
 check('results carry structuredContent equal to the JSON text', res.structuredContent?.locations?.length === 2 && JSON.stringify(res.structuredContent) === JSON.stringify(JSON.parse(res.content.at(-1).text)));
 res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42' });
 check('errors carry no structuredContent', res.isError && res.structuredContent === undefined);
+// ------------------------------------------------ 13. argument errors ----
+console.log('\n13. argument errors the agent can act on');
+res = await acall('edgegap_deploy', { application: 1 });
+t = text(res);
+check('bad arguments: host label first, like every result', res.isError && res.content[0].text.startsWith('['), res.content[0].text);
+check('bad arguments: one line per problem, in plain words', /- application: must be string \(got number\)/.test(t) && /- version: missing \(required\)/.test(t) && /- users: missing \(required\)/.test(t), t);
+check('bad arguments: lists required and optional parameters', /Required: application, version, users\./.test(t) && /Optional: .*dry_run/.test(t), t);
 await ac.close();
 
 // ------------------------------------------------- token prefix in env ----

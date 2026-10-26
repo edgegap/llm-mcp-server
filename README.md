@@ -207,7 +207,7 @@ They're served three ways, so every MCP client can reach them:
 
 - **Tools:** `edgegap_list_skills` and `edgegap_get_skill`, which loads a skill's `SKILL.md`, or one of its reference documents or templates with `file`.
 - **Prompts:** one per skill, named after it. In Claude Code they show up as slash commands, e.g. `/mcp__edgegap__edgegap-unity`.
-- **Resources:** one per file, at `edgegap-skill://<skill>/<path>`, e.g. `edgegap-skill://edgegap-unity/references/deploy.md`.
+- **Resources:** each skill's `SKILL.md` is listed, at `edgegap-skill://<skill>/SKILL.md`; every other file is read through the `edgegap-skill://{skill}/{+path}` template, e.g. `edgegap-skill://edgegap-unity/references/deploy.md`.
 
 Each release bundles the skills at the commit pinned in `scripts/skills-pin.txt`; `edgegap_context` reports which pack is loaded. `edgegap_list_skills` also reads the latest pack version from GitHub (one version number, cached for an hour; `EDGEGAP_SKILLS_CHECK=off` turns it off) and says when a newer one is out, and `edgegap_get_skill` adds the same note under a skill's header.
 
@@ -348,10 +348,10 @@ docker run --rm -p 8080:8080 edgegap-mcp
 
 Clients connect to `http://<host>:8080/mcp` with their own `Authorization` header, the same way they connect to the hosted endpoint. The image holds no credential, and `/health` answers without one. `PORT`, `HOST`, `EDGEGAP_READ_ONLY`, `EDGEGAP_APP_ALLOWLIST`, `EDGEGAP_MAX_DURATION_MINUTES` and `EDGEGAP_MAX_AGENT_DEPLOYMENTS` apply. Read [worker/DECISION.md](worker/DECISION.md) before exposing it beyond a private network.
 
-Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/edgegap/edgegap-mcp`, tagged `main` and `sha-<commit>` on every push to `main`, plus the version on `v*` tags:
+Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/edgegap/llm-mcp-server` (and, for existing setups, the old name `ghcr.io/edgegap/edgegap-mcp`), tagged `main` and `sha-<commit>` on every push to `main`, plus the version on `v*` tags:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/edgegap/edgegap-mcp:main
+docker run --rm -p 8080:8080 ghcr.io/edgegap/llm-mcp-server:main
 ```
 
 ## Development
