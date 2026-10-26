@@ -21,7 +21,7 @@ import {
 } from './serverconfig.js';
 import { generateDockerfile, DockerfileInputError } from './dockerfile.js';
 import { buildMatchmakerConfig, DASHBOARD_URL } from './matchmaker.js';
-import { badImage, badTag, looksSecret, TAG_FIX } from './image.js';
+import { badImage, badTag, ENCRYPTED_PLACEHOLDER, isEncryptedPlaceholder, looksSecret, TAG_FIX } from './image.js';
 import { OUTPUT } from './outputs.js';
 import { finishReport, codeForStatus, type CallMeta, type ErrorCode, type ToolCallReport } from './callreport.js';
 import { SKILLS_PACK, findSkill, findSkillFile, fileIndex, mimeType, skillUri } from './skills.js';
@@ -600,6 +600,28 @@ function dryRunResult(requests: PlannedRequest[], notes: string[] = []): ToolRes
  * Returns undefined when clean. In a dry run the token is only checked if this
  * session already holds one: a dry run must not trigger the token prompt.
  */
+/**
+ * Refuses a registry login or env value that is the API's stand-in for a
+ * stored secret: it shows up when an agent copies an existing version's
+ * settings, and sent back it overwrites the real secret.
+ */
+function encryptedPlaceholder(
+  fields: Array<[label: string, value: string | undefined]>,
+  keepHint: string
+): ToolResult | undefined {
+  const hits = fields.filter(([, v]) => isEncryptedPlaceholder(v)).map(([label]) => label);
+  if (hits.length === 0) return undefined;
+  return fail(
+    `Refused: ${hits.join(', ')} ${hits.length > 1 ? 'are' : 'is'} "${ENCRYPTED_PLACEHOLDER}". Nothing was sent. ` +
+      'That is the placeholder the Edgegap API returns instead of a stored secret, not the secret ' +
+      'itself; saved, it replaces the real value and image pulls fail with "Unable to login". ' +
+      'Copy only non-secret settings (image, resources, ports, non-secret env vars) from an ' +
+      'existing version. The registry login comes from the dashboard\'s Container Registry page ' +
+      `(${DASHBOARD_URL}) for registry.edgegap.com, or from the developer for any other registry; ` +
+      `secret env values come from the developer. ${keepHint}`
+  );
+}
+
 async function tokenLeak(
   auth: TokenSource,
   dryRun: boolean | undefined,
@@ -1008,8 +1030,10 @@ export function registerTools(
         'List the versions under an application, with their container image, resources, ports ' +
         '(including whether TLS Upgrade is on, which browser/WebGL clients need for wss://) and ' +
         'whether a registry login is set for pulling the image. Use this to find the version ' +
-        'name to deploy, to check a version is ready before deploying, or to copy settings from ' +
-        'a working version when creating a new one.',
+        'name to deploy, to check a version is ready before deploying, or to copy the non-secret ' +
+        'settings (image, resources, ports) of a working version when creating a new one. The ' +
+        'registry login and secret env values are never readable: the API returns "' + ENCRYPTED_PLACEHOLDER + '" ' +
+        'for them, so get them from the dashboard\'s Container Registry page or the developer.',
       inputSchema: {
         application: z.string().describe('Application name, as returned by edgegap_list_apps.'),
       },
@@ -1092,7 +1116,10 @@ export function registerTools(
           'Set verify_image true on the first version so a bad image fails here rather than at ' +
           'deploy time. Refused, with nothing sent, for the "latest" or an empty docker tag (use a build ID so ' +
           'deployments are reproducible) and for a docker_image that also holds a registry host or tag. ' +
-          'Env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY…) are hidden in the dashboard.',
+          'Env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY…) are hidden in the dashboard. ' +
+          'When copying an existing version, copy only non-secret settings: the API returns "' +
+          ENCRYPTED_PLACEHOLDER + '" for its registry login and secret env values, and that ' +
+          'placeholder is refused here.',
         inputSchema: {
           application: z.string().describe('Existing application name.'),
           name: z
@@ -1169,6 +1196,17 @@ export function registerTools(
             ['registry_token', args.registry_token],
           ]);
           if (leak) return leak;
+
+          const placeholder = encryptedPlaceholder(
+            [
+              ['registry_username', args.registry_username],
+              ['registry_token', args.registry_token],
+              ...(args.env ?? []).map((e): [string, string] => [`the value of env var "${e.key.slice(0, 40)}"`, e.value]),
+            ],
+            'Without them, leave registry_username and registry_token out and have the developer add the ' +
+              'login to this version in the dashboard.'
+          );
+          if (placeholder) return placeholder;
 
           const tagProblem = badTag(args.docker_tag);
           if (tagProblem) return fail(`Refused: ${tagProblem}. ${TAG_FIX}`);
@@ -1285,7 +1323,9 @@ export function registerTools(
           'edgegap_create_app_version: "latest" or empty tags, a docker_image holding a host or ' +
           'tag, and the API token in the registry login or env vars. ports and env REPLACE the ' +
           'version\'s whole list (per the API): read the current ones with edgegap_get_app_version ' +
-          'and pass every port or variable to keep. CPU and memory cannot be changed here; create a ' +
+          'and pass every port or variable to keep; secret env values are not readable, so get them ' +
+          'from the developer. Refused, with nothing sent, for a registry login or env value equal to ' +
+          'the API\'s "' + ENCRYPTED_PLACEHOLDER + '" placeholder; leave the registry login out to keep it. CPU and memory cannot be changed here; create a ' +
           'new version, or override them per deployment in edgegap_deploy.',
         inputSchema: {
           application: z.string().describe('Application name.'),
@@ -1344,6 +1384,17 @@ export function registerTools(
             ]),
           ]);
           if (leak) return leak;
+
+          const placeholder = encryptedPlaceholder(
+            [
+              ['registry_username', args.registry_username],
+              ['registry_token', args.registry_token],
+              ...(args.env ?? []).map((e): [string, string] => [`the value of env var "${e.key.slice(0, 40)}"`, e.value]),
+            ],
+            'To keep the version\'s current registry login, leave registry_username and registry_token ' +
+              'out. env replaces every variable, so leave env out to keep the current ones.'
+          );
+          if (placeholder) return placeholder;
 
           const badTls = args.ports?.find((p) => p.tls_upgrade && !TLS_PROTOCOLS.has(p.protocol.toUpperCase()));
           if (badTls) {
@@ -1557,6 +1608,12 @@ export function registerTools(
             ...tags.map((t): [string, string] => [`tag "${t.slice(0, 8)}…"`, t]),
           ]);
           if (leak) return leak;
+
+          const placeholder = encryptedPlaceholder(
+            (args.env ?? []).map((e): [string, string] => [`the value of env var "${e.key.slice(0, 40)}"`, e.value]),
+            'Leave the variable out: the deployment already gets the version\'s own env vars.'
+          );
+          if (placeholder) return placeholder;
 
           const body: Record<string, unknown> = {
             application: args.application,

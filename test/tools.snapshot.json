@@ -236,7 +236,7 @@
       {
         "name": "edgegap_create_app_version",
         "title": "Create an application version",
-        "description": "Register a container image as a deployable version of an application. The image must already be pushed to a registry that Edgegap can pull from (see edgegap_get_registry_credentials and edgegap_list_registry_tags). Resource units: 1024 cpu units = 1 vCPU; memory_mb must be at least 256 and at most double the cpu units. Set verify_image true on the first version so a bad image fails here rather than at deploy time. Refused, with nothing sent, for the \"latest\" or an empty docker tag (use a build ID so deployments are reproducible) and for a docker_image that also holds a registry host or tag. Env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY…) are hidden in the dashboard.",
+        "description": "Register a container image as a deployable version of an application. The image must already be pushed to a registry that Edgegap can pull from (see edgegap_get_registry_credentials and edgegap_list_registry_tags). Resource units: 1024 cpu units = 1 vCPU; memory_mb must be at least 256 and at most double the cpu units. Set verify_image true on the first version so a bad image fails here rather than at deploy time. Refused, with nothing sent, for the \"latest\" or an empty docker tag (use a build ID so deployments are reproducible) and for a docker_image that also holds a registry host or tag. Env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY…) are hidden in the dashboard. When copying an existing version, copy only non-secret settings: the API returns \"This value is set and encrypted\" for its registry login and secret env values, and that placeholder is refused here.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1245,7 +1245,7 @@
       {
         "name": "edgegap_list_app_versions",
         "title": "List versions of an application",
-        "description": "List the versions under an application, with their container image, resources, ports (including whether TLS Upgrade is on, which browser/WebGL clients need for wss://) and whether a registry login is set for pulling the image. Use this to find the version name to deploy, to check a version is ready before deploying, or to copy settings from a working version when creating a new one.",
+        "description": "List the versions under an application, with their container image, resources, ports (including whether TLS Upgrade is on, which browser/WebGL clients need for wss://) and whether a registry login is set for pulling the image. Use this to find the version name to deploy, to check a version is ready before deploying, or to copy the non-secret settings (image, resources, ports) of a working version when creating a new one. The registry login and secret env values are never readable: the API returns \"This value is set and encrypted\" for them, so get them from the dashboard's Container Registry page or the developer.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1956,7 +1956,7 @@
       {
         "name": "edgegap_update_app_version",
         "title": "Update an application version",
-        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep. CPU and memory cannot be changed here; create a new version, or override them per deployment in edgegap_deploy.",
+        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep; secret env values are not readable, so get them from the developer. Refused, with nothing sent, for a registry login or env value equal to the API's \"This value is set and encrypted\" placeholder; leave the registry login out to keep it. CPU and memory cannot be changed here; create a new version, or override them per deployment in edgegap_deploy.",
         "inputSchema": {
           "type": "object",
           "properties": {

@@ -2,6 +2,15 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.13.0
+
+The Edgegap API never returns stored secrets: reading a version gives the literal string "This value is set and encrypted" for `private_username`, `private_token` and every secret env value (found 2026-10-26). An agent that copied a version's settings sent the placeholder back, it replaced the real login, and image pulls failed with "Unable to login".
+
+- `edgegap_create_app_version`, `edgegap_update_app_version` and `edgegap_deploy` refuse a registry login or env value equal to that placeholder (any case, surrounding spaces ignored), with nothing sent. The error says where the real value comes from (the dashboard's Container Registry page, or the developer) and, for updates, to leave the registry fields or `env` out to keep the current ones.
+- `edgegap_list_app_versions`' description no longer says to "copy settings from a working version": only non-secret settings. The create and update descriptions mention the placeholder too.
+- Skills pack 0.18.0 (llm-agent-skills 85321a2): agent rules, the API reference and the Colyseus and Manus deploy references say to copy only non-secret settings.
+- Tests: `test/newtools.mjs` (refusals on all three tools, dry run included, and a value merely containing the text still sent) and `test/unit.test.mjs` (`isEncryptedPlaceholder`).
+
 ## 0.12.0
 
 From a review of the first 12 days of hosted traffic: empty organizations should get a next step instead of an error, and analytics should say why a call failed instead of leaving it to guesswork.

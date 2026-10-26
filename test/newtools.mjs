@@ -815,6 +815,30 @@ for (const [label, extra] of [['"latest"', { docker_tag: 'latest' }], ['host in 
   res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', ...extra });
   check(`update_app_version, ${label}: refused, nothing sent`, res.isError && calls.length === 0, text(res).slice(0, 120));
 }
+// The API returns this in place of stored secrets (live, 2026-10-26); copied
+// back from a version it overwrites the real login and pulls fail.
+const PLACEHOLDER = 'This value is set and encrypted';
+const newVer = { application: 'my-game', name: 'v-copy', docker_repository: 'registry.edgegap.com', docker_image: 'my-org-abc123/my-game-server', docker_tag: 'build-43', cpu_units: 512, memory_mb: 1024, ports: [{ port: 7777, protocol: 'UDP' }] };
+for (const [label, name, args, field] of [
+  ['create, copied registry login', 'edgegap_create_app_version', { ...newVer, registry_username: PLACEHOLDER, registry_token: PLACEHOLDER }, 'registry_username, registry_token are'],
+  ['create, copied secret env value', 'edgegap_create_app_version', { ...newVer, env: [{ key: 'API_KEY', value: ` ${PLACEHOLDER.toLowerCase()} ` }] }, 'env var "API_KEY" is'],
+  ['update, copied registry token', 'edgegap_update_app_version', { application: 'my-game', version: 'build-42', registry_token: PLACEHOLDER }, 'registry_token is'],
+  ['update, copied secret env value', 'edgegap_update_app_version', { application: 'my-game', version: 'build-42', env: [{ key: 'GAME_MODE', value: 'ffa' }, { key: 'API_KEY', value: PLACEHOLDER }] }, 'env var "API_KEY" is'],
+  ['deploy, copied secret env value', 'edgegap_deploy', { ...dep, env: [{ key: 'API_KEY', value: PLACEHOLDER }] }, 'env var "API_KEY" is'],
+  ['create dry run, copied registry token', 'edgegap_create_app_version', { ...newVer, registry_username: 'robot$my-org', registry_token: PLACEHOLDER, dry_run: true }, 'registry_token is'],
+]) {
+  calls.length = 0;
+  res = await acall(name, args);
+  t = text(res);
+  check(`${label}: refused, nothing sent`, res.isError && calls.length === 0 && t.includes(field) && /Container Registry page/.test(t) && /from the developer/.test(t), t.slice(0, 200));
+}
+calls.length = 0;
+r = json(await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', env: [{ key: 'NOTE', value: `${PLACEHOLDER} elsewhere` }] }));
+check('a value that only contains the placeholder text is sent', calls.some((x) => x.method === 'PATCH'));
+for (const n of ['edgegap_list_app_versions', 'edgegap_create_app_version', 'edgegap_update_app_version']) {
+  const d = (await ac.listTools()).tools.find((x) => x.name === n)?.description ?? '';
+  check(`${n}: the description says secrets are not copied`, d.includes(PLACEHOLDER) && /non-secret|leave the registry login out/.test(d), d.slice(-300));
+}
 calls.length = 0;
 res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', registry_token: 'reg-secret-xyz', dry_run: true });
 check('update_app_version dry run: nothing sent, registry token masked', calls.length === 0 && !text(res).includes('reg-secret-xyz'));
