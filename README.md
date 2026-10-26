@@ -246,6 +246,7 @@ The server includes the [Edgegap agent skills](https://github.com/edgegap/llm-ag
 | `edgegap-nakama` | Nakama as the backend, starting Edgegap servers for its matches. |
 | `edgegap-playfab` | PlayFab Matchmaking with Edgegap servers. |
 | `edgegap-threejs` | Three.js and other browser games with their own Node.js server. |
+| `edgegap-matchmaking` | Matchmaking design for any engine: who owns it, profiles, parties, region selection, backfill, third-party matchmakers. |
 | `edgegap-manus` | Browser games built with Manus: backend matchmaking, Steam sign-in, signed join tokens, Node WebSocket server. |
 | `edgegap-unreal` | Unreal Engine end to end: source engine, Linux server, matchmaker, end-to-end test. |
 | `edgegap-eos-voice` | Voice chat for an Unreal game on Edgegap with EOS Voice: server-side room tokens, match and team rooms. |

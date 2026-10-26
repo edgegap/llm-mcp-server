@@ -35,7 +35,7 @@ From a review of the first 12 days of hosted traffic: empty organizations should
 - New events: `mcp_session_started` on initialize, and `mcp_milestone_*` for each golden-path step (registry credentials, image pushed, app found or created, version created, deployment ready, deployment stopped). `$mcp_prompt_get` adds `prompt_name`.
 - `is_internal` comes from the new `TELEMETRY_INTERNAL_IDS` Worker variable; `npm run telemetry:id` prints a token's id. `is_probe` flags tokenless scanner traffic and made-up tool names.
 - The README's analytics paragraph says what changed: a sanitized error message is now sent on failed calls.
-- Skills pack 0.16.0 (llm-agent-skills `b89a9e8`): agent rules for empty states, the registry, token problems, waiting and cleanup, matching this release.
+- Skills pack 0.17.0 (llm-agent-skills `ec626ec`, 22 skills): agent rules for empty states, the registry, token problems, waiting and cleanup, matching this release. Includes 0.16.0's new `edgegap-matchmaking` skill (matchmaking design, parties, regions, backfill, third-party matchmakers), now routed in the server instructions.
 - README: install snippets for Cursor, VS Code and Windsurf, the six skills missing from the table, and troubleshooting for empty states and starting without a token.
 
 ## 0.11.0

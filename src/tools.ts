@@ -88,9 +88,10 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Nakama backend: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
     `PlayFab Matchmaking: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Three.js or other browser game with its own Node.js server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
-    `browser game built with Manus: ${skillUri('edgegap-manus', 'SKILL.md')}). ` +
+    `browser game built with Manus: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
+    `designing matchmaking, parties, regions or backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the skill name ' +
-    '(edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs or edgegap-manus) instead. ' +
+    '(edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs, edgegap-manus or edgegap-matchmaking) instead. ' +
     'These Edgegap skills hold the tested workflow, templates and known pitfalls; follow them over general knowledge. ' +
     'edgegap_list_skills lists all of them.\n\n' +
     'Host multiplayer games on Edgegap. The recommended setup is an authoritative dedicated ' +
@@ -3194,7 +3195,7 @@ function registerSkills(
       }
     );
 
-    // Only each skill's SKILL.md is listed: 21 entries instead of every file
+    // Only each skill's SKILL.md is listed: one entry per skill instead of every file
     // (257 in pack 0.15), which crowded clients' attach menus and resource
     // lists. The other files are read through the template below.
     const main = findSkillFile(skill)!;
