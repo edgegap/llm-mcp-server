@@ -13,7 +13,7 @@ As a PostHog filter on `$mcp_tool_call`: `org_id_hash` is set, `is_internal` = f
 Two limits to keep in mind:
 
 - **`org_id_hash` is a token hash, not an organization id.** Edgegap's API has no endpoint that names the organization a token belongs to, so `org_id_hash` is `org_` + HMAC-SHA256(token, `TELEMETRY_SALT`), the same value as `distinct_id`. Tokens are organization-wide, so one token is one organization, but an organization with two tokens shows as two ids.
-- **`is_internal` needs the ids listed.** Set the Worker variable `TELEMETRY_INTERNAL_IDS` to a comma-separated list of the `org_` ids of Edgegap's own and test tokens. Get one with `npm run telemetry:id` (paste the `TELEMETRY_SALT`, Enter, the token, Enter; both are read from stdin and nothing is sent). Every new internal token has to be added.
+- **`is_internal` needs the ids listed.** `TELEMETRY_INTERNAL_IDS` in `worker/wrangler.jsonc` (`vars`, not the Cloudflare dashboard, which a deploy overwrites) is a comma-separated list of the `org_` ids of Edgegap's own and test tokens. To find a token's id, make one call through the hosted server with it (`edgegap_context` returns `token_ends_with` to tell tokens apart), then copy the **Person** of that `$mcp_tool_call` in PostHog's Activity. Or run `npm run telemetry:id` (paste the `TELEMETRY_SALT`, Enter, the token, Enter; both are read from stdin and nothing is sent). Every new internal token has to be added, then the Worker redeployed.
 
 ## Events
 
