@@ -78,9 +78,15 @@ claude mcp add --transport http edgegap https://mcp.edgegap.dev/mcp \
 
 #### ChatGPT Codex
 
-```bash
-codex mcp add edgegap --url https://mcp.edgegap.dev/mcp
+Codex reads the token from an environment variable and sends it as `Authorization: Bearer <token>`, which the hosted endpoint accepts. In `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.edgegap]
+url = "https://mcp.edgegap.dev/mcp"
+bearer_token_env_var = "EDGEGAP_API_TOKEN"
 ```
+
+Then set `EDGEGAP_API_TOKEN` to your token in the environment Codex starts from.
 
 #### Claude Desktop and claude.ai
 
@@ -168,7 +174,7 @@ The local server can also limit what an agent can do. These variables have no ef
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `EDGEGAP_API_TOKEN` | *(prompted)* | API token. Optional: omit it and you're asked at first use. The `token ` prefix is added for you. Never pass it as a command-line argument. |
-| `EDGEGAP_READ_ONLY` | `0` | Set to `1` and the eight mutating tools are never registered, so the agent cannot be talked into calling them. |
+| `EDGEGAP_READ_ONLY` | `0` | Set to `1` and the tools that change something (marked ● in [Tools](#-tools)) are never registered, so the agent cannot be talked into calling them. |
 | `EDGEGAP_APP_ALLOWLIST` | *(empty)* | Comma-separated application names. Limits what the agent can create and deploy into. Reading (listing apps and versions) is not limited, and neither is touching deployments once running. See [DESIGN.md](DESIGN.md#scope-of-the-allowlist). |
 | `EDGEGAP_MAX_DURATION_MINUTES` | `60` | Ceiling on `max_duration` the agent may set on a version. |
 | `EDGEGAP_MAX_AGENT_DEPLOYMENTS` | `5` | `edgegap_deploy` refuses while this many deployments tagged `edgegap-mcp` are running. `0` turns the cap off. |
