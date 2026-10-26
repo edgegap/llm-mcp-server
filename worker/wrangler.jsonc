@@ -41,8 +41,16 @@
   // TELEMETRY_SALT (any long random string) hashes tokens into stable,
   // non-reversible distinct_ids; without it every event is anonymous.
   // What is sent, and what never is: worker/telemetry.ts.
+  //
+  // TELEMETRY_INTERNAL_IDS: org_ ids (PostHog distinct_ids) of Edgegap's own
+  // and test tokens, comma-separated, marked is_internal: true. Not secret.
+  // Find one in PostHog (the Person of a $mcp_tool_call made with that token)
+  // or with `npm run telemetry:id`. Set here, not in the dashboard: a deploy
+  // overwrites dashboard vars with this file.
   "vars": {
     "EDGEGAP_MAX_DURATION_MINUTES": "60",
-    "POSTHOG_HOST": "https://us.i.posthog.com"
+    "POSTHOG_HOST": "https://us.i.posthog.com",
+    // Mathieu's token (ends …35ac), added 2026-10-26.
+    "TELEMETRY_INTERNAL_IDS": "org_14ded028b92a2f9b25d662d8813b46b5"
   }
 }
