@@ -41,7 +41,15 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { Config, stripTokenPrefix } from './config.js';
 
-export class TokenUnavailableError extends Error {}
+/** Why there is no token: none given, a credential that is not an Edgegap
+ *  token, or the developer said no when asked. Read by analytics. */
+export type TokenProblem = 'absent' | 'foreign' | 'declined';
+
+export class TokenUnavailableError extends Error {
+  constructor(message: string, public readonly reason: TokenProblem = 'absent') {
+    super(message);
+  }
+}
 
 /**
  * What EdgegapClient needs from a credential source. Two implementations:
@@ -171,7 +179,10 @@ export class TokenProvider implements TokenSource {
           'This MCP client does not support interactive prompts, so the token has ' +
           'to be supplied up front. Add it to your MCP client config:\n\n' +
           '  "env": { "EDGEGAP_API_TOKEN": "your-token" }\n\n' +
-          'Generate a token at https://app.edgegap.com/user-settings?tab=tokens\n\n' +
+          'Generate a token at https://app.edgegap.com/user-settings?tab=tokens ' +
+          '(no Edgegap account yet? Sign up free at https://app.edgegap.com).\n\n' +
+          'Until then, edgegap_context, edgegap_list_skills, edgegap_get_skill, edgegap_generate_dockerfile ' +
+          'and edgegap_validate_server_config work without a token.\n\n' +
           PRIVILEGE_WARNING
       );
     }
@@ -209,7 +220,8 @@ export class TokenProvider implements TokenSource {
       throw new TokenUnavailableError(
         'The developer declined to provide an Edgegap API token. Do not retry ' +
           'automatically. Stop and tell them which operation needed it, so they ' +
-          'can decide whether to continue.'
+          'can decide whether to continue.',
+        'declined'
       );
     }
 
@@ -219,14 +231,15 @@ export class TokenProvider implements TokenSource {
         'The token privilege acknowledgement was not accepted, so no token was ' +
           'stored. Nothing has been sent to Edgegap. If the org-wide scope is the ' +
           'concern, the safer setup is a token from a separate non-production ' +
-          'organization with EDGEGAP_READ_ONLY=1.'
+          'organization with EDGEGAP_READ_ONLY=1.',
+        'declined'
       );
     }
 
     const raw = String(result.content.api_token ?? '').trim();
     const token = stripTokenPrefix(raw);
     if (!token) {
-      throw new TokenUnavailableError('An empty token was submitted. Nothing was stored.');
+      throw new TokenUnavailableError('An empty token was submitted. Nothing was stored.', 'declined');
     }
 
     this.cached = token;
@@ -247,7 +260,8 @@ export class StaticTokenProvider implements TokenSource {
    */
   constructor(
     private token: string | undefined,
-    private readonly unavailableMessage?: string
+    private readonly unavailableMessage?: string,
+    private readonly problem: 'absent' | 'foreign' = 'absent'
   ) {}
 
   get current(): string | undefined {
@@ -259,7 +273,8 @@ export class StaticTokenProvider implements TokenSource {
       throw new TokenUnavailableError(
         this.unavailableMessage ??
           'No Edgegap API token on this request. Send it as an Authorization ' +
-            'header on the MCP connection.'
+            'header on the MCP connection.',
+        this.problem
       );
     }
     return this.token;

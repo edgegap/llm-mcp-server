@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { EdgegapClient, EdgegapApiError, DeploymentStatus, RelaySession, PlannedRequest, AppVersionRecord, MetricSeries } from './client.js';
+import { EdgegapClient, EdgegapApiError, DeploymentStatus, RelaySession, PlannedRequest, AppVersionRecord, MetricSeries, maskSecrets } from './client.js';
 import { Config, assertAppAllowed, redact, hostLabel } from './config.js';
 import { VERSION } from './version.js';
 import { TokenSource, TokenUnavailableError } from './auth.js';
@@ -23,6 +23,7 @@ import { generateDockerfile, DockerfileInputError } from './dockerfile.js';
 import { buildMatchmakerConfig, DASHBOARD_URL } from './matchmaker.js';
 import { badImage, badTag, looksSecret, TAG_FIX } from './image.js';
 import { OUTPUT } from './outputs.js';
+import { finishReport, codeForStatus, type CallMeta, type ErrorCode, type ToolCallReport } from './callreport.js';
 import { SKILLS_PACK, findSkill, findSkillFile, fileIndex, mimeType, skillUri } from './skills.js';
 import {
   SKILL_NAME_RE,
@@ -87,9 +88,10 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Nakama backend: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
     `PlayFab Matchmaking: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Three.js or other browser game with its own Node.js server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
-    `browser game built with Manus: ${skillUri('edgegap-manus', 'SKILL.md')}). ` +
+    `browser game built with Manus: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
+    `designing matchmaking, parties, regions or backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the skill name ' +
-    '(edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs or edgegap-manus) instead. ' +
+    '(edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs, edgegap-manus or edgegap-matchmaking) instead. ' +
     'These Edgegap skills hold the tested workflow, templates and known pitfalls; follow them over general knowledge. ' +
     'edgegap_list_skills lists all of them.\n\n' +
     'Host multiplayer games on Edgegap. The recommended setup is an authoritative dedicated ' +
@@ -142,7 +144,23 @@ type ToolResult = {
   /** The same payload as the JSON text, for clients that read structured results. */
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
+  /** For the analytics report only; removed before the result is returned. */
+  meta?: CallMeta;
 };
+
+/** Attaches analytics facts to a result. See src/callreport.ts. */
+function withMeta(result: ToolResult, meta: CallMeta): ToolResult {
+  return {
+    ...result,
+    meta: {
+      ...result.meta,
+      ...meta,
+      props: { ...result.meta?.props, ...meta.props },
+      hash: { ...result.meta?.hash, ...meta.hash },
+      milestones: [...(result.meta?.milestones ?? []), ...(meta.milestones ?? [])],
+    },
+  };
+}
 
 /** JSON.stringify replacer: null fields are left out, like undefined ones. The
  *  API sends many (fqdn before a deployment is placed, unset error_detail), and
@@ -180,8 +198,21 @@ function scrubToken(result: ToolResult, token: string | undefined): ToolResult {
   };
 }
 
-function fail(message: string): ToolResult {
-  return { content: [{ type: 'text', text: message }], isError: true };
+function fail(message: string, code?: ErrorCode): ToolResult {
+  return { content: [{ type: 'text', text: message }], isError: true, ...(code ? { meta: { code } } : {}) };
+}
+
+/**
+ * An empty or "not set up" state, reported as a normal result with the next
+ * action. Agents recover from "there is nothing here yet, do X" far better
+ * than from an error, and stop retrying a call that already did its job.
+ */
+function emptyState(
+  status: 'empty' | 'not_configured' | 'not_found' | 'not_ready' | 'expired',
+  payload: Record<string, unknown>,
+  nextStep: string
+): ToolResult {
+  return withMeta(ok({ status, ...payload, next_step: nextStep }), { props: { result_state: status } });
 }
 
 /**
@@ -234,13 +265,20 @@ function guard(
     if (err instanceof TokenUnavailableError) {
       // Not a failure to correct — a decision the human made. Say so plainly
       // so the agent stops rather than looping on the same tool.
-      return fail(err.message);
+      const code: ErrorCode =
+        err.reason === 'foreign' ? 'AUTH_FOREIGN' : err.reason === 'declined' ? 'AUTH_DECLINED' : 'AUTH_ABSENT';
+      return fail(err.message, code);
     }
     if (err instanceof EdgegapApiError) {
       const hint = errorHint(err, notFound, forbidden);
-      return fail(`${err.message}${hint ? `\n\nLikely cause: ${hint}` : ''}`);
+      const details = apiDetails(err.details, auth.current);
+      return withMeta(fail(`${err.message}${details ? `\n${details}` : ''}${hint ? `\n\nLikely cause: ${hint}` : ''}`), {
+        code: codeForStatus(err.status, notFoundCode(notFound), forbidden === FORBIDDEN.relay ? 'NO_RELAY_ACCESS' : undefined, err.apiMessage),
+        stage: 'upstream',
+      });
     }
-    return fail(redact((err as Error).message ?? String(err), auth.current));
+    const message = redact((err as Error).message ?? String(err), auth.current);
+    return fail(message, /timed out after/.test(message) ? 'TIMEOUT' : /Network error calling/.test(message) ? 'NETWORK' : 'INTERNAL');
   });
 
   // The org-wide-scope reminder is attached to whichever call first used a
@@ -266,7 +304,40 @@ function guarded(
   return guard(auth, fn, notFound, notFound === NOT_FOUND.relay ? FORBIDDEN.relay : undefined);
 }
 
+/** The error code for a tool's 404 hint. */
+function notFoundCode(notFound: string | undefined): ErrorCode | undefined {
+  switch (notFound) {
+    case NOT_FOUND.app: return 'APP_NOT_FOUND';
+    case NOT_FOUND.deployment: return 'DEPLOYMENT_NOT_FOUND';
+    case NOT_FOUND.logs: return 'LOGS_NOT_FOUND';
+    case NOT_FOUND.relay: return 'RELAY_NOT_FOUND';
+    default: return undefined;
+  }
+}
+
+/**
+ * The API's own field-level validation detail, when it sends one, so the
+ * agent can fix the call instead of guessing (a duplicate version name, an
+ * invalid port). Secrets masked, capped at 600 characters.
+ */
+function apiDetails(details: unknown, token: string | undefined): string | undefined {
+  if (details === undefined || details === null || details === '') return undefined;
+  const text = redact(typeof details === 'string' ? details : JSON.stringify(maskSecrets(details, token)), token);
+  if (!text || text === '{}' || text === '[]') return undefined;
+  return `Details: ${text.length > 600 ? `${text.slice(0, 600)}…` : text}`;
+}
+
+/** Plan or quota wording in an API error, so the hint can say which limit. */
+const QUOTA = /quota|limit reached|exceed|upgrade your plan|plan limit|maximum number/i;
+
 function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string): string | undefined {
+  if (QUOTA.test(err.apiMessage) && [400, 402, 403, 429].includes(err.status)) {
+    return (
+      'a plan or quota limit was reached (the message above names it). Retrying will not help. ' +
+      'Stop deployments that are no longer needed (edgegap_list_deployments only_agent_deployments: true), ' +
+      'or ask the developer to raise the limit on the Billing page of the dashboard (https://app.edgegap.com).'
+    );
+  }
   switch (err.status) {
     case 401:
       // Deliberately does not promise a re-prompt: the local server asks again
@@ -636,6 +707,11 @@ export interface RegisterOptions {
   skillsCheck?: SkillsCheckOptions;
   /** The local stdio server only. */
   localSkills?: LocalSkills;
+  /**
+   * Called once per tool call with what it did (src/callreport.ts). Only the
+   * hosted Worker passes it, for analytics; nothing else is told.
+   */
+  onToolCall?: (report: ToolCallReport) => void | Promise<void>;
 }
 
 export function registerTools(
@@ -652,10 +728,50 @@ export function registerTools(
   const label = hostLabel(config);
   // ...and never carries the API token, whatever the API echoed back.
   const inputs = new Map<string, Record<string, z.ZodType>>();
+  // The API statuses a call caused are the entries it added to client.upstream.
+  // Concurrent calls on one server would share entries; that only happens on
+  // the local server, which has no onToolCall. The list is cleared whenever no
+  // call is running, so it cannot grow.
+  const onToolCall = options.onToolCall;
+  let inFlight = 0;
   const tool = ((name: string, def: unknown, cb: (...a: unknown[]) => Promise<ToolResult>) => {
     inputs.set(name, ((def as { inputSchema?: Record<string, z.ZodType> }).inputSchema) ?? {});
-    return server.registerTool(name, def as never, (async (...a: unknown[]) =>
-      withHost(scrubToken(await cb(...a), auth.current), label)) as never);
+    return server.registerTool(name, def as never, (async (...a: unknown[]) => {
+      const startedAt = Date.now();
+      const from = client.upstream.length;
+      inFlight++;
+      let result: ToolResult;
+      try {
+        result = withHost(scrubToken(await cb(...a), auth.current), label);
+      } finally {
+        inFlight--;
+      }
+      const { meta, ...clean } = result;
+      if (onToolCall) {
+        const extra = a.find((x): x is { requestId?: string | number } => !!x && typeof x === 'object' && 'requestId' in x);
+        const args = a[0] && typeof a[0] === 'object' && a[0] !== extra ? (a[0] as Record<string, unknown>) : {};
+        try {
+          await onToolCall(
+            finishReport({
+              tool: name,
+              requestId: extra?.requestId,
+              isError: clean.isError === true,
+              text: clean.content.map((c) => c.text).join('\n'),
+              token: auth.current,
+              args,
+              meta,
+              upstream: client.upstream.slice(from),
+              latencyMs: Date.now() - startedAt,
+              dryRun: args.dry_run === true,
+            })
+          );
+        } catch {
+          // Analytics never changes a result.
+        }
+      }
+      if (inFlight === 0) client.upstream.length = 0;
+      return clean;
+    }) as never);
   }) as unknown as typeof server.registerTool;
 
   // Errors the SDK raises itself (bad arguments, a handler that throws) skip
@@ -667,7 +783,25 @@ export function registerTools(
   if (sdkToolError) {
     sdk.createToolError = (message: string) => {
       const friendly = argumentError(message, inputs);
-      return withHost(scrubToken(friendly ? fail(friendly) : sdkToolError(message), auth.current), label);
+      const result = withHost(scrubToken(friendly ? fail(friendly) : sdkToolError(message), auth.current), label);
+      // Rejected by the SDK before any handler ran: bad arguments or an unknown tool.
+      const named = message.match(/(?:Invalid arguments for tool|Tool) (\S+?):? /);
+      if (onToolCall && named) {
+        Promise.resolve(
+          onToolCall(
+            finishReport({
+              tool: named[1],
+              isError: true,
+              text: result.content.map((c) => c.text).join('\n'),
+              token: auth.current,
+              meta: { code: /not found/.test(message) ? 'NOT_FOUND' : 'VALIDATION_FAILED', stage: 'pre_flight' },
+              upstream: [],
+              latencyMs: 0,
+            })
+          )
+        ).catch(() => {});
+      }
+      return result;
     };
   }
 
@@ -682,15 +816,22 @@ export function registerTools(
         'Report which Edgegap API this server talks to, its version, whether it is the local or ' +
         'hosted server, and the guardrails in force: read-only mode, application allowlist, ' +
         'max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support ' +
-        'dry_run. Call it first when unsure what this session is allowed to do, or before ' +
-        'anything billable. Makes no API call and never shows the token.',
-      inputSchema: {},
+        'dry_run. Also says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
+        'first when unsure what this session is allowed to do, before anything billable, or when tool calls fail ' +
+        'with a token problem. Makes no API call unless check_token is true, and never shows the token.',
+      inputSchema: {
+        check_token: z
+          .boolean()
+          .optional()
+          .describe('Make one read-only API call (list one application) to confirm Edgegap accepts the token. Default false.'),
+      },
       outputSchema: OUTPUT.context,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async () => {
+    async ({ check_token }) => {
       const hosted = config.transport === 'hosted';
-      return ok({
+      const tokenStatus = await describeToken(client, auth, hosted, check_token === true);
+      return withMeta(ok({
         server: `@edgegap/mcp ${VERSION}`,
         transport: hosted ? 'hosted (Streamable HTTP)' : 'local (stdio)',
         api_host: label,
@@ -705,6 +846,7 @@ export function registerTools(
               ? 'provided by the developer this session (memory only)'
               : 'not yet provided: the developer is asked on first use',
         token_scope: 'organization-wide (Edgegap cannot scope tokens)',
+        token_status: tokenStatus,
         read_only: config.readOnly,
         app_allowlist: config.appAllowlist.length ? config.appAllowlist : 'none (all applications)',
         max_duration_ceiling_minutes: config.maxDurationCeiling,
@@ -726,7 +868,8 @@ export function registerTools(
           results: `every result starts with [${label}]`,
         },
         user_agent: `edgegap-mcp/${VERSION} (<MCP client name>)`,
-      });
+        works_without_token: TOKENLESS_TOOLS,
+      }), { props: { token_state: String(tokenStatus.state) } });
     }
   );
 
@@ -740,21 +883,44 @@ export function registerTools(
         'deploying anything, so you reuse an existing application instead of making a duplicate. ' +
         'An "application" groups versions of one game server.',
       inputSchema: {
-        limit: z.number().int().min(1).max(100).optional().describe('Results per page. Default 50.'),
-        page: z.number().int().min(1).optional(),
+        limit: z.number().int().optional().describe('Results per page, 1-100. Default 50.'),
+        page: z.number().int().optional(),
       },
       outputSchema: OUTPUT.listApps,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ limit, page }) =>
       guard(auth, async () => {
-        const res = await client.listApps({ limit: limit ?? 50, page });
+        const p = clamp(page, 1, 100_000, 1);
+        const res = await client.listApps({ limit: clamp(limit, 1, 100, 50), page: page === undefined ? undefined : p });
         const apps = (res.applications ?? []).map((a) => ({
           name: a.name,
           active: a.is_active,
           last_updated: a.last_updated,
         }));
-        return ok({ ...pageInfo(res.total_count, apps.length, page ?? 1), applications: apps });
+        if (apps.length === 0 && p === 1) {
+          return emptyState(
+            'empty',
+            { total: 0, applications: [] },
+            'This organization has no applications yet. Create one with edgegap_create_app (usually named after ' +
+              'the game), then register the server image with edgegap_create_app_version.'
+          );
+        }
+        const info = pageInfo(res.total_count, apps.length, p);
+        return withMeta(
+          ok({
+            ...info,
+            applications: apps,
+            ...('next_step' in info
+              ? {}
+              : {
+                  next_step:
+                    'Reuse the application that matches this game: edgegap_list_app_versions shows its versions. ' +
+                    'Only if none fits, create one with edgegap_create_app.',
+                }),
+          }),
+          { props: { item_count: apps.length }, milestones: ['app_created'] }
+        );
       })
   );
 
@@ -789,11 +955,14 @@ export function registerTools(
             return dryRunResult(dry.requests);
           }
           const res = await client.createApp(body);
-          return ok({
-            created: res.name,
-            active: res.is_active,
-            next_step: 'Call edgegap_create_app_version to attach a container image.',
-          });
+          return withMeta(
+            ok({
+              created: res.name,
+              active: res.is_active,
+              next_step: 'Call edgegap_create_app_version to attach a container image.',
+            }),
+            { milestones: ['app_created'] }
+          );
         })
     );
   }
@@ -853,7 +1022,24 @@ export function registerTools(
       guarded(auth, NOT_FOUND.app, async () => {
         const res = await client.listAppVersions(application);
         const versions = (res.versions ?? []).map(compactVersion);
-        return ok({ application, ...pageInfo(res.total_count, versions.length, 1), versions });
+        if (versions.length === 0) {
+          return emptyState(
+            'empty',
+            { application, total: 0, versions: [] },
+            `Application "${application}" has no versions yet. Push the server image, confirm it with ` +
+              'edgegap_list_registry_tags, then register it with edgegap_create_app_version.'
+          );
+        }
+        return withMeta(
+          ok({
+            application,
+            ...pageInfo(res.total_count, versions.length, 1),
+            versions,
+            next_step:
+              'Deploy an active version with edgegap_deploy, or register a new image with edgegap_create_app_version.',
+          }),
+          { props: { item_count: versions.length } }
+        );
       })
   );
 
@@ -1068,13 +1254,18 @@ export function registerTools(
             }
           }
 
-          return ok({
-            created: `${args.application}/${res.version?.name ?? args.name}`,
-            max_duration_minutes: capped,
-            capped_by_server: capped < requested ? config.maxDurationCeiling : undefined,
-            notes: notes.length ? notes : undefined,
-            next_step: 'Call edgegap_deploy to start an instance.',
-          });
+          return withMeta(
+            ok({
+              created: `${args.application}/${res.version?.name ?? args.name}`,
+              max_duration_minutes: capped,
+              capped_by_server: capped < requested ? config.maxDurationCeiling : undefined,
+              notes: notes.length ? notes : undefined,
+              next_step:
+                `Call edgegap_deploy with application "${args.application}" and version ` +
+                `"${res.version?.name ?? args.name}" to start a server, then edgegap_wait_for_deployment.`,
+            }),
+            { milestones: ['app_version_created'], props: { registry_login_set: hasRegistryLogin } }
+          );
         })
     );
   }
@@ -1434,14 +1625,17 @@ export function registerTools(
           }
 
           const res = await client.deploy(body);
-          return ok({
-            request_id: res.request_id,
-            status: 'starting',
-            tags,
-            ...autoStop(version.max_duration),
-            resources: body.resources,
-            next_step: `Call edgegap_wait_for_deployment with request_id ${res.request_id}.`,
-          });
+          return withMeta(
+            ok({
+              request_id: res.request_id,
+              status: 'starting',
+              tags,
+              ...autoStop(version.max_duration),
+              resources: body.resources,
+              next_step: `Call edgegap_wait_for_deployment with request_id ${res.request_id}.`,
+            }),
+            { hash: { request_id: res.request_id }, props: { resources_override: body.resources !== undefined } }
+          );
         })
     );
   }
@@ -1464,7 +1658,13 @@ export function registerTools(
     async ({ request_id }) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
         const d = await client.getDeployment(request_id);
-        return ok(compactDeployment(d));
+        const status = (d.current_status ?? '').toUpperCase();
+        const nextStep = d.error || TERMINAL_BAD.some((s) => status.includes(s))
+          ? `It failed or stopped. Read why with edgegap_get_deployment_logs {request_id: "${request_id}"} before redeploying.`
+          : d.running || TERMINAL_OK.some((s) => status.includes(s))
+            ? `Players connect to fqdn on each port's external number. Stop it with edgegap_stop_deployment {request_id: "${request_id}"} when done: it bills while running.`
+            : `Still starting. Call edgegap_wait_for_deployment {request_id: "${request_id}"} instead of polling this.`;
+        return ok({ ...compactDeployment(d), next_step: nextStep });
       })
   );
 
@@ -1483,23 +1683,29 @@ export function registerTools(
         timeout_seconds: z
           .number()
           .int()
-          .min(5)
-          .max(600)
           .optional()
-          .describe('How long to wait before giving up. Default 180.'),
+          .describe('How long to wait before giving up, 5-600. Default 180.'),
       },
       outputSchema: OUTPUT.waitForDeployment,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
-    async ({ request_id, timeout_seconds }) =>
+    async ({ request_id, timeout_seconds }, extra) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
-        const budgetMs = (timeout_seconds ?? 180) * 1000;
+        const timeoutSeconds = clamp(timeout_seconds, 5, 600, 180);
+        const budgetMs = timeoutSeconds * 1000;
         const startedAt = Date.now();
         let intervalMs = 2000;
+        let polls = 0;
         let last: DeploymentStatus | undefined;
+        const progress = progressReporter(extra, timeoutSeconds);
+        const facts = (outcome: 'ready' | 'error' | 'timeout'): CallMeta => ({
+          props: { outcome, final_status: last?.current_status ?? 'unknown', timeout_ms_configured: budgetMs, poll_count: polls },
+          hash: { request_id },
+        });
 
         while (Date.now() - startedAt < budgetMs) {
           last = await client.getDeployment(request_id);
+          polls++;
           const status = (last.current_status ?? '').toUpperCase();
 
           if (last.error || TERMINAL_BAD.some((s) => status.includes(s))) {
@@ -1507,37 +1713,57 @@ export function registerTools(
             // cleaned up quickly and its logs go with it, so a separate
             // edgegap_get_deployment_logs call often finds nothing.
             const logs = await logTail(client, request_id, 3000);
-            return fail(
-              `Deployment ${request_id} failed with status ${last.current_status}.\n` +
-                `${last.error_detail ?? 'No error detail returned.'}\n\n` +
-                (logs
-                  ? `Container output (tail):\n${logs}\n\nFix the image or port configuration before redeploying.`
-                  : `No container logs could be read (the container may never have started, or it ` +
-                    `was already cleaned up). Check the image, tag and ports before redeploying.`)
+            return withMeta(
+              fail(
+                `Deployment ${request_id} failed with status ${last.current_status}.\n` +
+                  `${last.error_detail ?? 'No error detail returned.'}\n\n` +
+                  (logs
+                    ? `Container output (tail):\n${logs}\n\nFix the image or port configuration before redeploying. ` +
+                      'Do not redeploy the same version unchanged: it will fail the same way.'
+                    : `No container logs could be read here (the container may never have started, or it ` +
+                      `was already cleaned up). Try edgegap_get_deployment_logs {request_id: "${request_id}"} once; ` +
+                      'if it has nothing either, check the image, tag and ports before redeploying.'),
+                'DEPLOYMENT_FAILED'
+              ),
+              { ...facts('error'), stage: 'upstream' }
             );
           }
 
           if (last.running || TERMINAL_OK.some((s) => status.includes(s))) {
-            return ok({
-              ...compactDeployment(last),
-              waited_seconds: Math.round((Date.now() - startedAt) / 1000),
-            });
+            return withMeta(
+              ok({
+                ...compactDeployment(last),
+                waited_seconds: Math.round((Date.now() - startedAt) / 1000),
+                cost_reminder:
+                  'This server bills while it runs. When testing is done, stop it with ' +
+                  `edgegap_stop_deployment {request_id: "${request_id}"} unless the developer wants it kept running.`,
+                next_step:
+                  `Players connect to ${last.fqdn ?? 'the fqdn above'} on each port's external number. ` +
+                  `When finished: edgegap_stop_deployment {request_id: "${request_id}"}.`,
+              }),
+              { ...facts('ready'), milestones: ['deployment_ready'] }
+            );
           }
 
+          await progress(Date.now() - startedAt, `Deployment ${request_id}: ${last.current_status ?? 'starting'}`);
           await new Promise((r) => setTimeout(r, intervalMs));
           intervalMs = Math.min(intervalMs * 1.5, 10_000);
         }
 
         // Not an error: the wait ran out, the deployment did not fail. It is
         // usually still starting (large images pull slowly on a cold host).
-        return ok({
-          ...(last ? compactDeployment(last) : { request_id }),
-          ready: false,
-          waited_seconds: Math.round((Date.now() - startedAt) / 1000),
-          next_step:
-            `Not ready within ${timeout_seconds ?? 180}s, and not failed: it may still be starting. ` +
-            `Call edgegap_wait_for_deployment again, or edgegap_stop_deployment if it should not keep running.`,
-        });
+        return withMeta(
+          ok({
+            ...(last ? compactDeployment(last) : { request_id }),
+            ready: false,
+            waited_seconds: Math.round((Date.now() - startedAt) / 1000),
+            next_step:
+              `Not ready within ${timeoutSeconds}s, and not failed: it is still ${last?.current_status ?? 'starting'}. ` +
+              `Call edgegap_wait_for_deployment again with request_id "${request_id}" to keep waiting; do not deploy ` +
+              `a second server. Stop it with edgegap_stop_deployment if it should not keep running.`,
+          }),
+          facts('timeout')
+        );
       })
   );
 
@@ -1588,7 +1814,7 @@ export function registerTools(
           )
           .optional()
           .describe('e.g. [{field:"created_at",order:"asc"}] for oldest first.'),
-        limit: z.number().int().min(1).max(100).optional().describe('Default 50.'),
+        limit: z.number().int().optional().describe('1-100. Default 50.'),
       },
       outputSchema: OUTPUT.listDeployments,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -1611,7 +1837,7 @@ export function registerTools(
           filters?.length || order_by?.length
             ? JSON.stringify({ filters: filters ?? [], ...(order_by?.length ? { order_by } : {}) })
             : undefined;
-        const res = await client.listDeployments({ query, limit: limit ?? 50 });
+        const res = await client.listDeployments({ query, limit: clamp(limit, 1, 100, 50) });
         const rows = (res.data ?? []).map((d) => ({
           request_id: d.request_id,
           ready: d.ready,
@@ -1619,7 +1845,31 @@ export function registerTools(
           started: d.start_time,
           tags: d.tags,
         }));
-        return ok({ ...pageInfo(res.total_count, rows.length, 1), deployments: rows });
+        if (rows.length === 0) {
+          return emptyState(
+            'empty',
+            { total: 0, deployments: [] },
+            only_agent_deployments
+              ? 'No deployment started through this server is running: nothing is left to stop.'
+              : filters?.length
+                ? 'No running deployment matches these filters.'
+                : 'No deployments are running. Start one with edgegap_deploy.'
+          );
+        }
+        const info = pageInfo(res.total_count, rows.length, 1);
+        return withMeta(
+          ok({
+            ...info,
+            deployments: rows,
+            ...('next_step' in info
+              ? {}
+              : {
+                  next_step:
+                    'Stop the ones you started and no longer need with edgegap_stop_deployment, one request_id per call.',
+                }),
+          }),
+          { props: { item_count: rows.length, only_agent_deployments: only_agent_deployments === true } }
+        );
       })
   );
 
@@ -1654,10 +1904,17 @@ export function registerTools(
             res = await client.stopDeployment(request_id);
           } catch (err) {
             const gone = await alreadyStopped(client, request_id, err);
-            if (gone) return ok(gone);
+            if (gone) return withMeta(ok(gone), { hash: { request_id }, props: { stop_result: gone.result } });
             throw err;
           }
-          return ok({ request_id, result: res.message ?? 'stop requested' });
+          return withMeta(
+            ok({
+              request_id,
+              result: res.message ?? 'stop requested',
+              next_step: 'Before ending the task, confirm nothing else is left with edgegap_list_deployments only_agent_deployments: true.',
+            }),
+            { hash: { request_id }, milestones: ['deployment_stopped'], props: { stop_result: 'stopped' } }
+          );
         })
     );
   }
@@ -1677,23 +1934,31 @@ export function registerTools(
         max_characters: z
           .number()
           .int()
-          .min(500)
-          .max(50_000)
           .optional()
-          .describe('Truncate logs to this length, keeping the tail. Default 8000.'),
+          .describe('Truncate logs to this length (500-50000), keeping the tail. Default 8000.'),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ request_id, max_characters }) =>
       guarded(auth, NOT_FOUND.logs, async () => {
-        const res = await client.getDeploymentLogs(request_id);
-        const cap = max_characters ?? 8000;
+        let res;
+        try {
+          res = await client.getDeploymentLogs(request_id);
+        } catch (err) {
+          // The logs endpoint answers 400 for every "no logs" case alike. Ask
+          // the status endpoint which one this is.
+          if (!(err instanceof EdgegapApiError) || ![400, 404].includes(err.status)) throw err;
+          const why = await whyNoLogs(client, request_id);
+          if (!why) throw err;
+          return why;
+        }
+        const cap = clamp(max_characters, 500, 50_000, 8000);
         const tail = (s: string | null | undefined) =>
           !s ? undefined : s.length > cap ? `...[truncated]...\n${s.slice(-cap)}` : s;
 
         return ok({
           request_id,
-          logs: tail(res.logs) ?? '(no logs returned)',
+          logs: tail(res.logs) ?? '(no logs returned yet: the server has printed nothing)',
           crash_logs: tail(res.crash_logs),
           exit_code: res.crash_data?.exit_code,
           crash_message: res.crash_data?.message,
@@ -1912,7 +2177,7 @@ export function registerTools(
           : undefined;
       const verdict = errors.length > 0 ? 'fail' : warnings.length > 0 ? 'pass_with_warnings' : 'pass';
 
-      return ok({
+      return withMeta(ok({
         verdict,
         engine,
         errors,
@@ -1931,6 +2196,15 @@ export function registerTools(
             : 'Build with "docker build --platform linux/amd64 -t <image>:<unique-tag> ." and run it ' +
               'locally with the same port mapping to confirm it starts. Then push it; ' +
               'edgegap_get_registry_credentials gives you a registry and the exact commands.',
+      }), {
+        props: {
+          validation_result: errors.length > 0 ? 'fail' : 'pass',
+          issue_count: errors.length + warnings.length,
+          error_count: errors.length,
+          warning_count: warnings.length,
+          engine,
+          checked_dockerfile: args.dockerfile !== undefined,
+        },
       });
     }
   );
@@ -1953,7 +2227,9 @@ export function registerTools(
           'do not retry. When it does return a token, it is registry-scoped (push/pull images in ' +
           'this project), not the org API token: pass it to docker login via --password-stdin, ' +
           'never as a command-line argument, and do not write it into files. Call ' +
-          'edgegap_validate_server_config before building.',
+          'edgegap_validate_server_config before building. Any other registry Edgegap can pull from ' +
+          '(Docker Hub, GHCR, ECR, GitLab) works too: then skip this tool and pass that registry and its ' +
+          'pull login to edgegap_create_app_version.',
         inputSchema: {
           image_name: z
             .string()
@@ -2001,7 +2277,7 @@ export function registerTools(
           const buildTag = tag ?? '<unique-build-tag>';
           const ref = `${host}/${creds.project}/${image}:${buildTag}`;
 
-          return ok({
+          return withMeta(ok({
             registry_url: host,
             project: creds.project,
             username: creds.username,
@@ -2025,7 +2301,7 @@ export function registerTools(
               '(it never needs to appear in a command line or file), then build and push. ' +
               `Confirm the push with edgegap_list_registry_tags (image_name "${image}", without the project), ` +
               'then call edgegap_create_app_version with the values in for_create_app_version.',
-          });
+          }), { milestones: ['registry_credentials_ok'], props: { registry_status: 'credentials_returned' } });
         })
     );
   }
@@ -2038,7 +2314,9 @@ export function registerTools(
       description:
         'List the tags pushed for one image in this organization\'s Edgegap container registry, ' +
         'with push time and size. Call it after docker push to confirm the tag landed before ' +
-        'edgegap_create_app_version, which otherwise fails later with an image-pull error.',
+        'edgegap_create_app_version, which otherwise fails later with an image-pull error. An image ' +
+        'that was never pushed comes back as status "not_found" with no tags, not as an error. Only ' +
+        'for registry.edgegap.com: images in Docker Hub, GHCR or another registry are not listed here.',
       inputSchema: {
         image_name: z
           .string()
@@ -2048,7 +2326,7 @@ export function registerTools(
               'The API reads the project from your token; "<project>/my-game-server" is not found.'
           ),
         page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(100).optional().describe('Default 20.'),
+        limit: z.number().int().optional().describe('1-100. Default 20.'),
       },
       outputSchema: OUTPUT.listRegistryTags,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -2059,7 +2337,7 @@ export function registerTools(
         // the API wants: no "registry.edgegap.com/" host, no ":tag".
         let name = imageNameOnly(image_name);
 
-        const query = { page, limit: limit ?? 20 };
+        const query = { page, limit: clamp(limit, 1, 100, 20) };
         const notFound = (err: unknown) => err instanceof EdgegapApiError && err.status === 404;
         let res;
         try {
@@ -2073,13 +2351,28 @@ export function registerTools(
             res = await client.listRegistryTags(name, query);
           }
         } catch (err) {
-          // The generic 404 hint points at applications, which is wrong here.
-          if (!notFound(err)) throw err;
-          return fail(
-            `No image named "${name}" in this organization's Edgegap registry, so nothing has been ` +
-              'pushed under that name. Check the name (image name only, as used after ' +
-              '"registry.edgegap.com/<project>/" in docker push), or push the image first.'
-          );
+          // Nothing pushed under that name is a state, not a failure: the
+          // answer to "did my push land?" is "no, push it".
+          if (notFound(err)) {
+            return emptyState(
+              'not_found',
+              { image_name: name, total: 0, tags: [] },
+              `Nothing has been pushed as "${name}" to this organization's Edgegap registry. Check the name (image ` +
+                'name only, as used after "registry.edgegap.com/<project>/" in docker push), or push the image ' +
+                'first (edgegap_get_registry_credentials has the commands). If the image lives in Docker Hub, GHCR ' +
+                'or another registry, skip this check and pass that registry to edgegap_create_app_version.'
+            );
+          }
+          if (err instanceof EdgegapApiError && err.status === 403) {
+            return emptyState(
+              'not_configured',
+              { image_name: name, total: 0, tags: [] },
+              'This token cannot read an Edgegap container registry for this organization (403). Ask the developer ' +
+                'to open the Container Registry page of the dashboard (https://app.edgegap.com), or push the image to ' +
+                'Docker Hub, GHCR or another registry and pass it to edgegap_create_app_version with its pull login.'
+            );
+          }
+          throw err;
         }
 
         const tags = (res.data ?? []).map((t) => ({
@@ -2089,19 +2382,33 @@ export function registerTools(
           digest: t.artifact?.image_hash,
         }));
         const hasNext = res.pagination?.has_next === true;
-        return ok({
-          image_name: name,
-          note: name !== image_name ? `Looked up "${name}". Pass the image name only next time.` : undefined,
-          total: res.count ?? tags.length,
-          ...(hasNext
-            ? {
-                showing: tags.length,
-                truncated: true,
-                next_step: `Only page ${page ?? 1} is shown. Call again with page: ${(page ?? 1) + 1} before concluding a tag is missing.`,
-              }
-            : {}),
-          tags,
-        });
+        if (tags.length === 0 && !hasNext && (page ?? 1) === 1) {
+          return emptyState(
+            'empty',
+            { image_name: name, total: 0, tags: [] },
+            `The image "${name}" exists but has no tags. Push a build with a unique tag (never "latest"), then check again.`
+          );
+        }
+        return withMeta(
+          ok({
+            image_name: name,
+            note: name !== image_name ? `Looked up "${name}". Pass the image name only next time.` : undefined,
+            total: res.count ?? tags.length,
+            ...(hasNext
+              ? {
+                  showing: tags.length,
+                  truncated: true,
+                  next_step: `Only page ${page ?? 1} is shown. Call again with page: ${(page ?? 1) + 1} before concluding a tag is missing.`,
+                }
+              : {
+                  next_step:
+                    'If the tag you pushed is listed, register it with edgegap_create_app_version (docker_repository ' +
+                    `"registry.edgegap.com", docker_image "<project>/${name}", and that tag).`,
+                }),
+            tags,
+          }),
+          { props: { item_count: tags.length }, milestones: tags.length ? ['image_pushed'] : [] }
+        );
       })
   );
 
@@ -2279,7 +2586,24 @@ export function registerTools(
     },
     async () =>
       guard(auth, async () => {
-        const res = await client.listRelaySessions();
+        let res;
+        try {
+          res = await client.listRelaySessions();
+        } catch (err) {
+          // An organization without relays gets 403 here. Listing has nothing
+          // to correct: there are no sessions, and none can be billing.
+          if (!(err instanceof EdgegapApiError) || err.status !== 403) throw err;
+          return emptyState(
+            'not_configured',
+            { total: 0, sessions: [] },
+            'This organization cannot use relays (the API answered 403), so no relay sessions exist or bill. ' +
+              'Relays are not enabled on every plan; check the Relays page of the dashboard or ask Edgegap support. ' +
+              'For a multiplayer match, a dedicated server (edgegap_deploy) needs no relay.'
+          );
+        }
+        if ((res.sessions ?? []).length === 0) {
+          return emptyState('empty', { total: 0, sessions: [] }, 'No relay sessions are open, so none are billing.');
+        }
         const sessions = (res.sessions ?? []).map((r) => ({
           session_id: r.session_id,
           status: r.status,
@@ -2449,6 +2773,7 @@ export function registerTools(
       guarded(auth, NOT_FOUND.app, async () => {
         assertAppAllowed(config, args.application);
         const { config: mmConfig, problems, cautions } = buildMatchmakerConfig(args);
+        let verified = false;
 
         if (args.verify_version !== false) {
           try {
@@ -2463,24 +2788,46 @@ export function registerTools(
               if (v.is_active === false) problems.push(`Version "${args.version}" is inactive, so the matchmaker cannot deploy it.`);
               if (!v.ports?.length) problems.push(`Version "${args.version}" has no ports, so matched players have nothing to connect to.`);
             }
+            verified = true;
           } catch (err) {
             if (err instanceof EdgegapApiError && err.status === 404) {
               problems.push(`Application "${args.application}" does not exist. Call edgegap_list_apps.`);
+            } else if (err instanceof TokenUnavailableError && err.reason !== 'declined') {
+              // Building the config needs no token; only the version check
+              // does. Without one, hand back the config and say what was skipped.
+              cautions.push(
+                `Not checked against Edgegap: this session has no API token, so whether "${args.application}/${args.version}" ` +
+                  'exists, is active and has ports was not verified. Check it in the dashboard before uploading.'
+              );
             } else {
               throw err;
             }
           }
         }
 
+        const facts: CallMeta = {
+          props: {
+            matchmaker_template: 'single_profile',
+            team_count: args.team_count,
+            has_latency_rule: args.max_latency_ms !== undefined,
+            expansion_count: args.expansions?.length ?? 0,
+            problem_count: problems.length,
+            version_verified: verified,
+          },
+        };
         if (problems.length > 0) {
-          return fail(
-            'The matchmaker configuration has problems; fix them before uploading:\n- ' +
-              problems.join('\n- ') +
-              `\n\nDraft config:\n${JSON.stringify(mmConfig, null, 2)}`
+          return withMeta(
+            fail(
+              `The matchmaker configuration has ${problems.length} problem${problems.length === 1 ? '' : 's'}; fix all of them before uploading:\n- ` +
+                problems.join('\n- ') +
+                `\n\nDraft config:\n${JSON.stringify(mmConfig, null, 2)}`,
+              'VALIDATION_FAILED'
+            ),
+            facts
           );
         }
 
-        return ok({
+        return withMeta(ok({
           config: mmConfig,
           cautions: cautions.length ? cautions : undefined,
           next_steps: [
@@ -2497,7 +2844,7 @@ export function registerTools(
               ? `Browser clients are allowed from: ${args.allowed_cors_origins.join(', ')}. Add any other origin the game is served from (each staging or production URL) before uploading.`
               : 'If game clients run in a browser (WebGL), set allowed_cors_origins to the origin of every page that serves the game, including http://localhost:<port> for local testing, or browsers will block the matchmaker calls.',
           ],
-        });
+        }), facts);
       })
   );
 
@@ -2589,12 +2936,25 @@ function registerSkills(
     },
     async ({ skill: name, file }) => {
       const skill = findSkill(name);
-      if (!skill) return fail(`No skill named "${name}". The skills are: ${names.join(', ')}.`);
+      if (!skill) {
+        const guess = closestSkill(name, names);
+        return withMeta(
+          fail(
+            `No skill named "${name}".${guess ? ` Did you mean "${guess}"?` : ''} The skills are: ${names.join(', ')}.`,
+            'SKILL_NOT_FOUND'
+          ),
+          { props: { skill_name: name.slice(0, 60) } }
+        );
+      }
       const found = findSkillFile(skill, file);
       if (!found) {
-        return fail(
-          `"${file}" is not a file in the ${skill.name} skill. Its files are:\n` +
-            skill.files.map((f) => `- ${f.path}`).join('\n')
+        return withMeta(
+          fail(
+            `"${file}" is not a file in the ${skill.name} skill. Its files are:\n` +
+              ['SKILL.md', ...fileIndex(skill)].map((p) => `- ${p}`).join('\n'),
+            'SKILL_NOT_FOUND'
+          ),
+          { props: { skill_name: skill.name, skill_file: String(file).slice(0, 120) } }
         );
       }
       const status = found.path === 'SKILL.md' ? servedPackStatus(await latestPack(check), hosted) : undefined;
@@ -2605,7 +2965,10 @@ function registerSkills(
       const footer = others.length
         ? `\n\n---\nOther files in this skill:\n${others.map((p) => `- ${p}`).join('\n')}\n\n${howToFetch(skill.name)}`
         : '';
-      return { content: [{ type: 'text' as const, text: `${header}\n\n${found.content}${footer}` }] };
+      return {
+        content: [{ type: 'text' as const, text: `${header}\n\n${found.content}${footer}` }],
+        meta: { props: { skill_name: skill.name, skill_file: found.path, resource_uri: skillUri(skill.name, found.path) } },
+      };
     }
   );
 
@@ -2764,6 +3127,44 @@ function registerSkills(
     }
   );
 
+  // The one obvious place to start: a prompt that runs the golden path for
+  // whatever engine and netcode the project uses.
+  server.registerPrompt(
+    'deploy-game-server',
+    {
+      title: 'Deploy my game server to Edgegap',
+      description:
+        'Start here. Detects the project\'s engine and netcode, loads the matching Edgegap skill, and walks the golden ' +
+        'path to a running dedicated server: Dockerfile, registry, app version, deploy, wait, then stop.',
+    },
+    () => ({
+      description: 'Deploy this project\'s game server to Edgegap',
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text:
+              'Deploy this project\'s game server to Edgegap as an authoritative dedicated server.\n\n' +
+              '1. Look at the project files to find the engine (Unity, Unreal, Godot, or a Node.js/other server) and ' +
+              'the netcode (NGO, FishNet, PurrNet, Mirror, Photon Fusion, Colyseus, Nakama, PlayFab...).\n' +
+              '2. Load the matching skill with edgegap_get_skill (edgegap_list_skills says which; "edgegap" if unsure) ' +
+              'and follow it over anything below.\n' +
+              '3. Golden path: edgegap_generate_dockerfile (or edgegap_validate_server_config on an existing ' +
+              'Dockerfile) → edgegap_get_registry_credentials, build and push → edgegap_list_registry_tags → ' +
+              'edgegap_list_apps / edgegap_create_app → edgegap_create_app_version → edgegap_deploy → ' +
+              'edgegap_wait_for_deployment → edgegap_stop_deployment when done.\n' +
+              '4. Results with a status such as "empty" or "not_configured" are normal states: do what their ' +
+              'next_step says instead of retrying.\n' +
+              '5. Before finishing, stop every deployment you started unless I ask to keep it, and confirm with ' +
+              'edgegap_list_deployments only_agent_deployments: true.\n\n' +
+              'Ask me before anything you are unsure of, and use dry_run: true on a write you want to check first.',
+          },
+        },
+      ],
+    })
+  );
+
   for (const skill of SKILLS_PACK.skills) {
     // A prompt per skill: in Claude Code these show up as slash commands.
     server.registerPrompt(
@@ -2794,7 +3195,7 @@ function registerSkills(
       }
     );
 
-    // Only each skill's SKILL.md is listed: 21 entries instead of every file
+    // Only each skill's SKILL.md is listed: one entry per skill instead of every file
     // (257 in pack 0.15), which crowded clients' attach menus and resource
     // lists. The other files are read through the template below.
     const main = findSkillFile(skill)!;
@@ -2844,10 +3245,165 @@ function registerSkills(
  * call, and some agents retried it.
  */
 function manualStepsResult(steps: string): ToolResult {
+  const nextStep =
+    'Ask the developer for the registry Project, Username and Token from the Container Registry page, or ' +
+    'whether to use Docker Hub, GHCR or another registry instead. Do not call this tool again.';
   return {
-    content: [{ type: 'text', text: `status: manual_steps_required (no credentials returned)\n\n${steps}` }],
-    structuredContent: { status: 'manual_steps_required', credentials_returned: false, steps },
+    content: [{ type: 'text', text: `status: manual_steps_required (no credentials returned)\n\n${steps}\n\nnext_step: ${nextStep}` }],
+    structuredContent: { status: 'manual_steps_required', credentials_returned: false, steps, next_step: nextStep },
+    meta: { props: { registry_status: 'manual_steps_required' } },
   };
+}
+
+/** A number argument pulled into range, so an agent's limit: 500 is served
+ *  as 100 instead of refused before the API is even called. */
+function clamp(value: number | undefined, min: number, max: number, fallback: number): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+/** Tools that need no Edgegap token, for onboarding and the token messages. */
+const TOKENLESS_TOOLS = [
+  'edgegap_context',
+  'edgegap_list_skills',
+  'edgegap_get_skill',
+  'edgegap_generate_dockerfile',
+  'edgegap_validate_server_config',
+  'edgegap_build_matchmaker_config (without the version check)',
+];
+
+/**
+ * Whether this session can call the Edgegap API, and if not, why and how to
+ * fix it. Never shows the token: only its last four characters, which is
+ * what the developer needs to find it on the tokens page. Edgegap has no
+ * endpoint that names the organization a token belongs to, so this cannot.
+ */
+async function describeToken(
+  client: EdgegapClient,
+  auth: TokenSource,
+  hosted: boolean,
+  check: boolean
+): Promise<Record<string, unknown> & { state: string }> {
+  const fix = `Create a token at ${TOKENS_URL} (no account yet? sign up free at ${SIGNUP_URL}).`;
+  if (!auth.current) {
+    if (!hosted) {
+      return { state: 'not_provided', note: 'The developer is asked for a token on the first call that needs one.', fix };
+    }
+    try {
+      await auth.get();
+    } catch (err) {
+      const reason = err instanceof TokenUnavailableError ? err.reason : 'absent';
+      return {
+        state: reason,
+        note:
+          reason === 'foreign'
+            ? 'The Authorization header holds a credential the MCP client issued itself, not an Edgegap token. ' +
+              'This client cannot pass an Edgegap token to the hosted server: use the local server ' +
+              '(npx -y @edgegap/mcp) with EDGEGAP_API_TOKEN instead.'
+            : 'No Authorization header on this connection. Add "Authorization: token <your Edgegap token>" to the MCP client config.',
+        fix,
+        works_without_token: TOKENLESS_TOOLS,
+      };
+    }
+  }
+  const token = auth.current;
+  const base = {
+    token_ends_with: token ? `…${token.slice(-4)}` : undefined,
+    organization: 'not reported: the Edgegap API has no endpoint that names a token\'s organization. Match the token by its last characters on the tokens page.',
+  };
+  if (!check) return { state: 'present (not checked)', ...base, note: 'Pass check_token: true to confirm Edgegap accepts it.' };
+  try {
+    await client.listApps({ limit: 1 });
+    return { state: 'accepted', ...base };
+  } catch (err) {
+    if (err instanceof EdgegapApiError && err.status === 401) {
+      return { state: 'rejected', ...base, note: 'Edgegap rejected this token: it was revoked, expired or mistyped.', fix };
+    }
+    return { state: 'unknown', ...base, note: `The check call failed: ${(err as Error).message.slice(0, 200)}` };
+  }
+}
+
+const TOKENS_URL = 'https://app.edgegap.com/user-settings?tab=tokens';
+const SIGNUP_URL = 'https://app.edgegap.com';
+
+/**
+ * Sends MCP progress notifications while a tool waits, when the client asked
+ * for them (a progressToken in the request). Silently does nothing otherwise,
+ * and a client that cannot take them never breaks the call.
+ */
+function progressReporter(extra: unknown, totalSeconds: number) {
+  const e = extra as
+    | { _meta?: { progressToken?: string | number }; sendNotification?: (n: never) => Promise<void> }
+    | undefined;
+  const progressToken = e?._meta?.progressToken;
+  const send = e?.sendNotification;
+  if (progressToken === undefined || !send) return async (_elapsedMs: number, _message: string) => {};
+  return async (elapsedMs: number, message: string) => {
+    try {
+      await send({
+        method: 'notifications/progress',
+        params: { progressToken, progress: Math.round(elapsedMs / 1000), total: totalSeconds, message },
+      } as never);
+    } catch {
+      // Progress is a courtesy; the wait goes on without it.
+    }
+  };
+}
+
+/**
+ * Why a deployment has no logs, from its status: it does not exist (or is
+ * another organization's), it has not started, or it has stopped and its logs
+ * went with it. Undefined when the status does not explain it, so the caller
+ * reports the original API error.
+ */
+async function whyNoLogs(client: EdgegapClient, requestId: string): Promise<ToolResult | undefined> {
+  let d: DeploymentStatus;
+  try {
+    d = await client.getDeployment(requestId);
+  } catch (err) {
+    if (err instanceof EdgegapApiError && [400, 404].includes(err.status)) {
+      return withMeta(
+        fail(
+          `No deployment with request_id "${requestId}" in this organization: it was never created here, belongs ` +
+            'to another organization, or stopped long enough ago to be cleaned up. Check the request_id with ' +
+            'edgegap_list_deployments.',
+          'DEPLOYMENT_NOT_FOUND'
+        ),
+        { stage: 'upstream' }
+      );
+    }
+    return undefined;
+  }
+  const status = (d.current_status ?? '').toUpperCase();
+  if (d.error || TERMINAL_BAD.some((s) => status.includes(s))) {
+    return emptyState(
+      'expired',
+      { request_id: requestId, deployment_status: d.current_status, error_detail: d.error_detail || undefined, logs: '' },
+      'This deployment has stopped, and its container logs went with it (they are only kept when Endpoint ' +
+        'Storage was set on the version). error_detail is what Edgegap kept. Fix the cause and redeploy; ' +
+        'edgegap_wait_for_deployment returns the log tail itself when a start fails.'
+    );
+  }
+  if (!d.running && !TERMINAL_OK.some((s) => status.includes(s))) {
+    return emptyState(
+      'not_ready',
+      { request_id: requestId, deployment_status: d.current_status, logs: '' },
+      `The container has not started yet, so it has no logs. Call edgegap_wait_for_deployment {request_id: "${requestId}"}, ` +
+        'then read the logs if it fails or misbehaves.'
+    );
+  }
+  return undefined;
+}
+
+/** The skill name an agent most likely meant: "unity" → "edgegap-unity". */
+function closestSkill(input: string, names: string[]): string | undefined {
+  const wanted = input.trim().toLowerCase().replace(/^edgegap[-_ ]?/, '').replace(/[_ ]/g, '-');
+  if (!wanted) return 'edgegap';
+  return (
+    names.find((n) => n === `edgegap-${wanted}`) ??
+    names.find((n) => n.replace(/^edgegap-?/, '').startsWith(wanted)) ??
+    names.find((n) => wanted.includes(n.replace(/^edgegap-/, '')) && n !== 'edgegap')
+  );
 }
 
 function registryCredentialsUnavailable(imageName?: string, tag?: string): string {

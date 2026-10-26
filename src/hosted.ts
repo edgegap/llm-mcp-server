@@ -55,7 +55,10 @@ export function extractToken(header: string | null | undefined): TokenResult {
  */
 export function unavailableMessage(problem: 'absent' | 'foreign'): string {
   const common =
-    `Get a token at ${TOKEN_URL}. It is used for the request and discarded — ` +
+    `Get a token at ${TOKEN_URL} (no Edgegap account yet? Sign up free at https://app.edgegap.com). ` +
+    'Until then, edgegap_context, edgegap_list_skills, edgegap_get_skill, edgegap_generate_dockerfile and ' +
+    'edgegap_validate_server_config work without one, so you can prepare the server build first.\n\n' +
+    'The token is used for the request and discarded — ' +
     'never stored. Edgegap tokens are organization-wide and cannot be scoped, ' +
     'so prefer the local server (npx -y @edgegap/mcp), which keeps the token ' +
     'on your own machine and never sends it through Edgegap infrastructure.';

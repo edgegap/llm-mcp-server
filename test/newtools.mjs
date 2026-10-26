@@ -114,6 +114,10 @@ const mock = http.createServer((req, res) => {
       // One that never gets ready within the wait.
       case 'GET /v1/status/slowdep00001':
         return send(200, { request_id: 'slowdep00001', current_status: 'Status.DEPLOYING', running: false, error: false });
+      // The logs endpoint answers the same 400 whether a deployment is starting or stopped.
+      case 'GET /v1/deployment/slowdep00001/container-logs':
+      case 'GET /v1/deployment/stoppeddep01/container-logs':
+        return send(400, { message: 'The browser (or proxy) sent a request that this server could not understand.' });
       // Stop on a deployment Edgegap already cleaned up, and on one already terminated.
       case 'DELETE /v1/stop/gonedeploy01':
       case 'GET /v1/status/gonedeploy01':
@@ -367,7 +371,8 @@ r = json(await c.callTool({ name: 'edgegap_list_registry_tags', arguments: { ima
 check('more pages: marked truncated with a next step', r.truncated === true && r.total === 40 && /page: 2/.test(r.next_step ?? ''));
 
 res = await c.callTool({ name: 'edgegap_list_registry_tags', arguments: { image_name: 'never-pushed' } });
-check('unknown image: reported as an error', res.isError === true && /No image named "never-pushed"/.test(text(res)));
+r = json(res);
+check('never-pushed image: a not_found state with a next step, not an error', !res.isError && r.status === 'not_found' && r.tags?.length === 0 && /Nothing has been pushed as "never-pushed"/.test(r.next_step) && /Docker Hub/.test(r.next_step), text(res).slice(0, 200));
 check('unknown image: does not point the agent at applications', !/edgegap_list_apps/.test(text(res)));
 
 // ---------------------------------------------------------- deployments ----
@@ -480,8 +485,17 @@ check('the registry token from the API never reaches the agent', !JSON.stringify
 console.log('\n404 hints');
 res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'gone-deployment' } });
 t = text(res);
-check('logs of a stopped deployment: explains they are gone without Endpoint Storage', /Endpoint Storage/.test(t) && /stopped/.test(t));
+check('logs of a deployment Edgegap does not know: an error naming the request_id', res.isError && /No deployment with request_id "gone-deployment"/.test(t) && /edgegap_list_deployments/.test(t), t.slice(0, 200));
 check('logs 404: does not point at applications', !/edgegap_list_apps/.test(t));
+res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'stoppeddep01' } });
+r = json(res);
+check('logs of a stopped deployment: an "expired" state that explains Endpoint Storage', !res.isError && r.status === 'expired' && /Endpoint/.test(r.next_step) && r.deployment_status === 'Status.TERMINATED', text(res).slice(0, 200));
+res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'slowdep00001' } });
+r = json(res);
+check('logs of a starting deployment: a "not_ready" state pointing at wait_for_deployment', !res.isError && r.status === 'not_ready' && /edgegap_wait_for_deployment/.test(r.next_step), text(res).slice(0, 200));
+res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'faileddep001', max_characters: 20 } });
+r = json(res);
+check('logs: an out-of-range max_characters is clamped, not refused', !res.isError && /Segmentation fault/.test(r.logs ?? ''), text(res).slice(0, 200));
 res = await c.callTool({ name: 'edgegap_get_deployment', arguments: { request_id: 'gone-deployment' } });
 check('deployment 404: points at edgegap_list_deployments, not apps', /edgegap_list_deployments/.test(text(res)) && !/edgegap_list_apps/.test(text(res)));
 res = await c.callTool({ name: 'edgegap_list_app_versions', arguments: { application: 'ghost-game' } });
@@ -489,7 +503,7 @@ check('app 404: still points at edgegap_list_apps', /edgegap_list_apps/.test(tex
 res = await c.callTool({ name: 'edgegap_get_deployment', arguments: { request_id: 'unknown-id' } });
 check('unknown request_id (400): explained as a bad or expired request_id', /no deployment with that request_id/.test(text(res)));
 res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'unknown-id' } });
-check('logs for an unknown request_id (400): same explanation as a stopped one', /Endpoint Storage/.test(text(res)));
+check('logs for an unknown request_id (400): told apart from a stopped one', res.isError && /No deployment with request_id "unknown-id"/.test(text(res)));
 
 // ------------------------------------------------- PostHog error review ----
 console.log('\nerrors that are not failures, and failures that explain themselves');
@@ -509,7 +523,8 @@ check('stop a deployment Edgegap no longer knows: success, not_running, does not
 relayForbidden = true;
 res = await c.callTool({ name: 'edgegap_list_relay_sessions', arguments: {} });
 t = text(res);
-check('relay 403: explains relays are not enabled, not a bad token', res.isError && /cannot use relays/.test(t) && /new token will not help/i.test(t), t.slice(0, 300));
+r = json(res);
+check('relay list 403: a not_configured state, not a bad token', !res.isError && r.status === 'not_configured' && r.sessions?.length === 0 && /cannot use relays/.test(r.next_step), t.slice(0, 300));
 relayForbidden = false;
 
 // ------------------------------------------------- WebGL in the generator ----

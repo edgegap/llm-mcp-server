@@ -69,7 +69,19 @@ export function mimeType(path: string): string {
   return 'text/plain';
 }
 
+/**
+ * Files bundled for completeness but of no use to an agent: Unity .meta
+ * files hold asset GUIDs. They stay in the bundle, because a project that
+ * copies the templates needs them next to their assets (and
+ * edgegap_update_skills rewrites hand-copied skills from the bundle), but they
+ * are never listed: an agent shown one tends to read it, and one session read
+ * EdgegapSettings.cs.meta 14 times. Still readable by exact path.
+ */
+export function isListable(path: string): boolean {
+  return !path.endsWith('.meta');
+}
+
 /** The skill's other files, so an agent knows what it can fetch next. */
 export function fileIndex(skill: Skill): string[] {
-  return skill.files.filter((f) => f.path !== 'SKILL.md').map((f) => f.path);
+  return skill.files.filter((f) => f.path !== 'SKILL.md' && isListable(f.path)).map((f) => f.path);
 }

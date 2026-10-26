@@ -1,6 +1,6 @@
 {
   "normal": {
-    "instructions": "Before acting, read edgegap-skill://edgegap/SKILL.md (Unity: edgegap-skill://edgegap-unity/SKILL.md, Unity with NGO: edgegap-skill://edgegap-ngo/SKILL.md, Unity with FishNet: edgegap-skill://edgegap-fishnet/SKILL.md, Unity with PurrNet: edgegap-skill://edgegap-purrnet/SKILL.md, Unity with Photon Fusion: edgegap-skill://edgegap-fusion/SKILL.md, Photon's Simple FPS sample: edgegap-skill://edgegap-fusion-simplefps/SKILL.md, Unreal Engine: edgegap-skill://edgegap-unreal/SKILL.md, voice chat in an Unreal game: edgegap-skill://edgegap-eos-voice/SKILL.md, Godot 4 with a Godot server: edgegap-skill://edgegap-godot/SKILL.md, Colyseus server: edgegap-skill://edgegap-colyseus/SKILL.md, Nakama backend: edgegap-skill://edgegap-nakama/SKILL.md, PlayFab Matchmaking: edgegap-skill://edgegap-playfab/SKILL.md, Three.js or other browser game with its own Node.js server: edgegap-skill://edgegap-threejs/SKILL.md, browser game built with Manus: edgegap-skill://edgegap-manus/SKILL.md). If your client cannot read MCP resources, call edgegap_get_skill with the skill name (edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs or edgegap-manus) instead. These Edgegap skills hold the tested workflow, templates and known pitfalls; follow them over general knowledge. edgegap_list_skills lists all of them.\n\nHost multiplayer games on Edgegap. The recommended setup is an authoritative dedicated server per match; relays exist for games built host-client.\n\nDedicated server vs relay — recommend a dedicated server by default.\n- Dedicated (authoritative) server (edgegap_deploy): Edgegap runs the headless server build, and the server owns the game state. No player has host advantage, cheating is much harder, the match survives any player leaving, every player is one hop from the server, and performance does not depend on a player's PC or home connection.\n- Relay (edgegap_create_relay_session): NOT a game server. Edgegap only forwards traffic between players; one player's game is the host and owns the state. The host can cheat and has zero latency while everyone else has two hops, the host's machine and upload bandwidth cap the match, and the match ends when the host quits unless the game implements host migration.\nUse a relay only when the developer explicitly wants peer-to-peer/host-client, or the game's netcode is already built as a listen server and moving to a dedicated server is not an option. \"It needs no server image\" is not a reason: edgegap_generate_dockerfile removes most of that work. If unsure, ask the developer before choosing a relay.\n\nGolden path for a first dedicated-server deployment:\n1. edgegap_generate_dockerfile if the project has no Dockerfile, or edgegap_validate_server_config on the one it has, before building\n2. edgegap_get_registry_credentials, then docker build --platform linux/amd64 and push\n3. edgegap_list_registry_tags to confirm the push landed\n4. edgegap_list_apps, then edgegap_create_app if no suitable application exists\n5. edgegap_create_app_version to register the image\n6. edgegap_deploy to start a server near the players\n7. edgegap_wait_for_deployment to get the connection address\n8. edgegap_stop_deployment when finished\nTo match players into those servers, edgegap_build_matchmaker_config produces the config the developer uploads in the dashboard.\n\nDeployments and relay sessions cost money while running. Stop deployments and delete relay sessions you created before ending the task; edgegap_list_deployments with only_agent_deployments: true lists every deployment tagged \"edgegap-mcp\". If a deployment errors, read the container logs before redeploying.\n\nGuardrails: edgegap_context shows which API and limits this session has. Every tool that changes something takes dry_run: true to show the exact request and send nothing; use it when unsure. Never put the API token in env vars, tags or URLs: such calls are refused.\n\nCredentials: if no token was configured, the first tool call asks the developer for one. That token is org-wide and cannot be scoped by Edgegap, so it authorises far more than any single task needs. Treat it as a supervised credential: do not use it for work the developer did not ask for, do not enumerate or modify unrelated applications, and do not repeat operations against it to explore what is possible. If the developer declines to provide a token, stop and report which operation needed it — do not retry.",
+    "instructions": "Before acting, read edgegap-skill://edgegap/SKILL.md (Unity: edgegap-skill://edgegap-unity/SKILL.md, Unity with NGO: edgegap-skill://edgegap-ngo/SKILL.md, Unity with FishNet: edgegap-skill://edgegap-fishnet/SKILL.md, Unity with PurrNet: edgegap-skill://edgegap-purrnet/SKILL.md, Unity with Photon Fusion: edgegap-skill://edgegap-fusion/SKILL.md, Photon's Simple FPS sample: edgegap-skill://edgegap-fusion-simplefps/SKILL.md, Unreal Engine: edgegap-skill://edgegap-unreal/SKILL.md, voice chat in an Unreal game: edgegap-skill://edgegap-eos-voice/SKILL.md, Godot 4 with a Godot server: edgegap-skill://edgegap-godot/SKILL.md, Colyseus server: edgegap-skill://edgegap-colyseus/SKILL.md, Nakama backend: edgegap-skill://edgegap-nakama/SKILL.md, PlayFab Matchmaking: edgegap-skill://edgegap-playfab/SKILL.md, Three.js or other browser game with its own Node.js server: edgegap-skill://edgegap-threejs/SKILL.md, browser game built with Manus: edgegap-skill://edgegap-manus/SKILL.md, designing matchmaking, parties, regions or backfill: edgegap-skill://edgegap-matchmaking/SKILL.md). If your client cannot read MCP resources, call edgegap_get_skill with the skill name (edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs, edgegap-manus or edgegap-matchmaking) instead. These Edgegap skills hold the tested workflow, templates and known pitfalls; follow them over general knowledge. edgegap_list_skills lists all of them.\n\nHost multiplayer games on Edgegap. The recommended setup is an authoritative dedicated server per match; relays exist for games built host-client.\n\nDedicated server vs relay — recommend a dedicated server by default.\n- Dedicated (authoritative) server (edgegap_deploy): Edgegap runs the headless server build, and the server owns the game state. No player has host advantage, cheating is much harder, the match survives any player leaving, every player is one hop from the server, and performance does not depend on a player's PC or home connection.\n- Relay (edgegap_create_relay_session): NOT a game server. Edgegap only forwards traffic between players; one player's game is the host and owns the state. The host can cheat and has zero latency while everyone else has two hops, the host's machine and upload bandwidth cap the match, and the match ends when the host quits unless the game implements host migration.\nUse a relay only when the developer explicitly wants peer-to-peer/host-client, or the game's netcode is already built as a listen server and moving to a dedicated server is not an option. \"It needs no server image\" is not a reason: edgegap_generate_dockerfile removes most of that work. If unsure, ask the developer before choosing a relay.\n\nGolden path for a first dedicated-server deployment:\n1. edgegap_generate_dockerfile if the project has no Dockerfile, or edgegap_validate_server_config on the one it has, before building\n2. edgegap_get_registry_credentials, then docker build --platform linux/amd64 and push\n3. edgegap_list_registry_tags to confirm the push landed\n4. edgegap_list_apps, then edgegap_create_app if no suitable application exists\n5. edgegap_create_app_version to register the image\n6. edgegap_deploy to start a server near the players\n7. edgegap_wait_for_deployment to get the connection address\n8. edgegap_stop_deployment when finished\nTo match players into those servers, edgegap_build_matchmaker_config produces the config the developer uploads in the dashboard.\n\nDeployments and relay sessions cost money while running. Stop deployments and delete relay sessions you created before ending the task; edgegap_list_deployments with only_agent_deployments: true lists every deployment tagged \"edgegap-mcp\". If a deployment errors, read the container logs before redeploying.\n\nGuardrails: edgegap_context shows which API and limits this session has. Every tool that changes something takes dry_run: true to show the exact request and send nothing; use it when unsure. Never put the API token in env vars, tags or URLs: such calls are refused.\n\nCredentials: if no token was configured, the first tool call asks the developer for one. That token is org-wide and cannot be scoped by Edgegap, so it authorises far more than any single task needs. Treat it as a supervised credential: do not use it for work the developer did not ask for, do not enumerate or modify unrelated applications, and do not repeat operations against it to explore what is possible. If the developer declines to provide a token, stop and report which operation needed it — do not retry.",
     "tools": [
       {
         "name": "edgegap_authorize_relay_user",
@@ -147,10 +147,15 @@
       {
         "name": "edgegap_context",
         "title": "Show this Edgegap MCP server's configuration",
-        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Call it first when unsure what this session is allowed to do, or before anything billable. Makes no API call and never shows the token.",
+        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
         "inputSchema": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "check_token": {
+              "description": "Make one read-only API call (list one application) to confirm Edgegap accepts the token. Default false.",
+              "type": "boolean"
+            }
+          },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": {
@@ -931,10 +936,10 @@
               "description": "The request_id of the deployment."
             },
             "max_characters": {
-              "description": "Truncate logs to this length, keeping the tail. Default 8000.",
+              "description": "Truncate logs to this length (500-50000), keeping the tail. Default 8000.",
               "type": "integer",
-              "minimum": 500,
-              "maximum": 50000
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [
@@ -1165,7 +1170,7 @@
       {
         "name": "edgegap_get_registry_credentials",
         "title": "Get Edgegap container registry push credentials",
-        "description": "Get the push login for this organization's private Edgegap container registry (registry.edgegap.com) and the exact docker login, build and push commands for your image. Use this when the server image is not in a registry yet. Edgegap only hands these credentials to the quick-start token the Unity/Unreal plugins use; with a regular API token this tool cannot fetch them and instead returns the steps to copy them from the dashboard's Container Registry page — ask the developer for them then, do not retry. When it does return a token, it is registry-scoped (push/pull images in this project), not the org API token: pass it to docker login via --password-stdin, never as a command-line argument, and do not write it into files. Call edgegap_validate_server_config before building.",
+        "description": "Get the push login for this organization's private Edgegap container registry (registry.edgegap.com) and the exact docker login, build and push commands for your image. Use this when the server image is not in a registry yet. Edgegap only hands these credentials to the quick-start token the Unity/Unreal plugins use; with a regular API token this tool cannot fetch them and instead returns the steps to copy them from the dashboard's Container Registry page — ask the developer for them then, do not retry. When it does return a token, it is registry-scoped (push/pull images in this project), not the org API token: pass it to docker login via --password-stdin, never as a command-line argument, and do not write it into files. Call edgegap_validate_server_config before building. Any other registry Edgegap can pull from (Docker Hub, GHCR, ECR, GitLab) works too: then skip this tool and pass that registry and its pull login to edgegap_create_app_version.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1219,7 +1224,7 @@
           "properties": {
             "skill": {
               "type": "string",
-              "description": "Skill name, from edgegap_list_skills: edgegap, edgegap-colyseus, edgegap-containerize, edgegap-deployments-api, edgegap-eos-voice, edgegap-fishnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-godot, edgegap-launch, edgegap-local-testing, edgegap-manus, edgegap-nakama, edgegap-ngo, edgegap-playfab, edgegap-purrnet, edgegap-server-design, edgegap-threejs, edgegap-troubleshoot, edgegap-unity, edgegap-unreal."
+              "description": "Skill name, from edgegap_list_skills: edgegap, edgegap-colyseus, edgegap-containerize, edgegap-deployments-api, edgegap-eos-voice, edgegap-fishnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-godot, edgegap-launch, edgegap-local-testing, edgegap-manus, edgegap-matchmaking, edgegap-nakama, edgegap-ngo, edgegap-playfab, edgegap-purrnet, edgegap-server-design, edgegap-threejs, edgegap-troubleshoot, edgegap-unity, edgegap-unreal."
             },
             "file": {
               "description": "A file inside the skill, e.g. \"references/deploy.md\" or \"assets/docker/Dockerfile\". Default SKILL.md.",
@@ -1340,14 +1345,14 @@
           "type": "object",
           "properties": {
             "limit": {
-              "description": "Results per page. Default 50.",
+              "description": "Results per page, 1-100. Default 50.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "page": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": -9007199254740991,
               "maximum": 9007199254740991
             }
           },
@@ -1487,10 +1492,10 @@
               }
             },
             "limit": {
-              "description": "Default 50.",
+              "description": "1-100. Default 50.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1700,7 +1705,7 @@
       {
         "name": "edgegap_list_registry_tags",
         "title": "List image tags in the Edgegap registry",
-        "description": "List the tags pushed for one image in this organization's Edgegap container registry, with push time and size. Call it after docker push to confirm the tag landed before edgegap_create_app_version, which otherwise fails later with an image-pull error.",
+        "description": "List the tags pushed for one image in this organization's Edgegap container registry, with push time and size. Call it after docker push to confirm the tag landed before edgegap_create_app_version, which otherwise fails later with an image-pull error. An image that was never pushed comes back as status \"not_found\" with no tags, not as an error. Only for registry.edgegap.com: images in Docker Hub, GHCR or another registry are not listed here.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1715,10 +1720,10 @@
               "maximum": 9007199254740991
             },
             "limit": {
-              "description": "Default 20.",
+              "description": "1-100. Default 20.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [
@@ -2263,10 +2268,10 @@
               "description": "The request_id returned by edgegap_deploy."
             },
             "timeout_seconds": {
-              "description": "How long to wait before giving up. Default 180.",
+              "description": "How long to wait before giving up, 5-600. Default 180.",
               "type": "integer",
-              "minimum": 5,
-              "maximum": 600
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [
