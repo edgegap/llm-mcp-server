@@ -107,6 +107,53 @@ In Claude Desktop, open **Settings → Developer → Edit Config** and add the l
 
 Leave the token out and you're asked for it on first use. claude.ai in the browser can't run a local server, so it can't use Edgegap MCP until the hosted endpoint supports OAuth.
 
+#### Cursor
+
+The **Cursor** button at the top of this page installs it; to do it by hand, add this to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "edgegap": {
+      "url": "https://mcp.edgegap.dev/mcp",
+      "headers": { "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
+    }
+  }
+}
+```
+
+#### VS Code (Copilot agent mode)
+
+The **VS Code** button at the top of this page installs it; to do it by hand, add this to `.vscode/mcp.json` (VS Code uses `servers`, not `mcpServers`):
+
+```json
+{
+  "servers": {
+    "edgegap": {
+      "type": "http",
+      "url": "https://mcp.edgegap.dev/mcp",
+      "headers": { "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
+    }
+  }
+}
+```
+
+#### Windsurf
+
+In `~/.codeium/windsurf/mcp_config.json`, run the [Local Server](#local-server), which works in every client that starts MCP servers as commands:
+
+```json
+{
+  "mcpServers": {
+    "edgegap": {
+      "command": "npx",
+      "args": ["-y", "@edgegap/mcp"],
+      "env": { "EDGEGAP_API_TOKEN": "xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
+    }
+  }
+}
+```
+
 #### mcp.json
 
 Most agentic IDEs also support integration by pasting JSON configuration:
@@ -167,7 +214,7 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.11.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.12.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`:
 
@@ -193,6 +240,12 @@ The server includes the [Edgegap agent skills](https://github.com/edgegap/llm-ag
 | `edgegap-fishnet` | Unity with FishNet end to end: headless server, Bayou/WebGL, matchmaker, end-to-end test. |
 | `edgegap-purrnet` | Unity with PurrNet end to end: dedicated server, connect panel, matchmaker, end-to-end test. |
 | `edgegap-fusion` | Unity with Photon Fusion 2 end to end: IL2CPP Linux server, server bound to 0.0.0.0, Edgegap deployment, BR200 kit. |
+| `edgegap-fusion-simplefps` | Photon's Simple FPS sample on Edgegap dedicated servers. |
+| `edgegap-godot` | Godot 4 with a Godot dedicated server: headless export, ENet or WebSocket, matchmaker. |
+| `edgegap-colyseus` | Colyseus servers on Edgegap, direct or through the matchmaker. |
+| `edgegap-nakama` | Nakama as the backend, starting Edgegap servers for its matches. |
+| `edgegap-playfab` | PlayFab Matchmaking with Edgegap servers. |
+| `edgegap-threejs` | Three.js and other browser games with their own Node.js server. |
 | `edgegap-manus` | Browser games built with Manus: backend matchmaking, Steam sign-in, signed join tokens, Node WebSocket server. |
 | `edgegap-unreal` | Unreal Engine end to end: source engine, Linux server, matchmaker, end-to-end test. |
 | `edgegap-eos-voice` | Voice chat for an Unreal game on Edgegap with EOS Voice: server-side room tokens, match and team rooms. |
@@ -206,7 +259,7 @@ The server includes the [Edgegap agent skills](https://github.com/edgegap/llm-ag
 They're served three ways, so every MCP client can reach them:
 
 - **Tools:** `edgegap_list_skills` and `edgegap_get_skill`, which loads a skill's `SKILL.md`, or one of its reference documents or templates with `file`.
-- **Prompts:** one per skill, named after it. In Claude Code they show up as slash commands, e.g. `/mcp__edgegap__edgegap-unity`.
+- **Prompts:** `deploy-game-server` ("Deploy my game server to Edgegap") is the place to start: it finds the engine and netcode, loads the matching skill and walks the golden path, cleanup included. There is also one prompt per skill, named after it. In Claude Code they show up as slash commands, e.g. `/mcp__edgegap__deploy-game-server`.
 - **Resources:** each skill's `SKILL.md` is listed, at `edgegap-skill://<skill>/SKILL.md`; every other file is read through the `edgegap-skill://{skill}/{+path}` template, e.g. `edgegap-skill://edgegap-unity/references/deploy.md`.
 
 Each release bundles the skills at the commit pinned in `scripts/skills-pin.txt`; `edgegap_context` reports which pack is loaded. `edgegap_list_skills` also reads the latest pack version from GitHub (one version number, cached for an hour; `EDGEGAP_SKILLS_CHECK=off` turns it off) and says when a newer one is out, and `edgegap_get_skill` adds the same note under a skill's header.
@@ -304,7 +357,7 @@ Your API token can do anything in your organization, so the server adds its own 
 
 The server identifies itself with `User-Agent: edgegap-mcp/<version> (<MCP client name>)` on every API call.
 
-**Usage analytics.** The local server and the self-hosted Docker image send nothing beyond the API calls themselves. The hosted endpoint at `mcp.edgegap.dev` uses [PostHog MCP Analytics](https://posthog.com/docs/mcp-analytics) (`@posthog/mcp`) and sends usage events to Edgegap's PostHog: which MCP client connected, which tool, prompt or skill resource was used, the names (not values) of the arguments passed, whether a call succeeded and its error category, how long it took, and whether it was a dry run, plus the server version and Cloudflare's country code. Only named metadata properties are let through. It never sends your token, tool argument values (IP addresses, env vars, app or image names), results or error text, and GeoIP is off. It adds no parameters to the tools. Events from one token are grouped under a keyed, non-reversible hash of it. To opt out, send the header `X-Edgegap-Telemetry: off` (or `DNT: 1`), or use the local server.
+**Usage analytics.** The local server and the self-hosted Docker image send nothing beyond the API calls themselves. The hosted endpoint at `mcp.edgegap.dev` uses [PostHog MCP Analytics](https://posthog.com/docs/mcp-analytics) (`@posthog/mcp`) and sends usage events to Edgegap's PostHog: which MCP client connected, which tool, prompt or skill resource was used, the names (not values) of the arguments passed, whether a call succeeded, its error code, the stage it failed at and the Edgegap API status, how long it took, whether it was a dry run, a few facts about the call (how a wait for a deployment ended, a validation result, which skill was loaded), which golden-path step was reached, plus the server version and Cloudflare's country code. On a failed call it also sends the error message, after removing your token, the values of the arguments you passed, and anything shaped like a credential, an IP address or an ID, cut to 300 characters. Deployment IDs are only sent as a keyed hash. Only named metadata properties are let through. It never sends your token, tool argument values (IP addresses, env vars, app or image names) or results, and GeoIP is off. It adds no parameters to the tools. Events from one token are grouped under a keyed, non-reversible hash of it. The full list is in [docs/analytics.md](docs/analytics.md). To opt out, send the header `X-Edgegap-Telemetry: off` (or `DNT: 1`), or use the local server.
 
 ## 🚨 Troubleshooting
 
@@ -325,6 +378,14 @@ Edgegap could not pull your container image. Check the repository, image name, a
 ### Registry Credentials Unavailable
 
 Edgegap only gives registry credentials to the quick-start token the Unity and Unreal plugins use, so with a regular API token your agent can't retrieve them and asks you instead. Copy the Project, Username and Token from the [dashboard](https://app.edgegap.com) under **Container Registry**, or push to another registry Edgegap can pull from (Docker Hub, GitHub, AWS ECR, GCP, GitLab). See [External Registries](https://docs.edgegap.com/docs/tools-and-integrations/docker/external-registries).
+
+### "status": "empty" or "not_configured"
+
+Not an error. A list with nothing in it (no applications yet, no deployments running, an image never pushed) or a feature this organization has not set up (relays, a registry this token cannot read) comes back as a normal result with `status` and a `next_step`. Your agent should do the next step instead of retrying.
+
+### No Token Yet
+
+The skills (`edgegap_list_skills`, `edgegap_get_skill`), `edgegap_context`, `edgegap_generate_dockerfile` and `edgegap_validate_server_config` work without a token, so an agent can prepare the server build first. Create an account at [app.edgegap.com](https://app.edgegap.com) and a token under [User Settings → Tokens](https://app.edgegap.com/user-settings?tab=tokens). `edgegap_context` with `check_token: true` says whether the session's token is present and accepted, and shows its last four characters so you can find it on that page.
 
 ### Server Starts Locally but Not on Edgegap
 

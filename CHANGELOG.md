@@ -2,6 +2,42 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.12.0
+
+From a review of the first 12 days of hosted traffic: empty organizations should get a next step instead of an error, and analytics should say why a call failed instead of leaving it to guesswork.
+
+**Empty and "not set up" states are results, not errors.** Each comes back with `status` and a `next_step`:
+- `edgegap_list_apps`, `edgegap_list_app_versions`, `edgegap_list_deployments`, `edgegap_list_relay_sessions`: `status: "empty"` with what to do next (create an application, register a version, nothing left to stop...).
+- `edgegap_list_relay_sessions` for an organization without relays (403): `status: "not_configured"`, no sessions, nothing billing.
+- `edgegap_list_registry_tags`: an image never pushed is `status: "not_found"` with the push steps and the Docker Hub/GHCR path (was an error); one with no tags is `"empty"`; a token that cannot read the registry (403) is `"not_configured"`.
+- `edgegap_get_deployment_logs` asks the status endpoint why there are no logs: the deployment does not exist in this organization (still an error, `DEPLOYMENT_NOT_FOUND`), has not started yet (`"not_ready"`, wait first), or has stopped and its logs went with it (`"expired"`, with the `error_detail` Edgegap kept).
+- `edgegap_get_registry_credentials`' manual steps carry a `next_step` too: ask for the dashboard login or use another registry, and do not call it again. Its description and `edgegap_list_registry_tags`' say that Docker Hub, GHCR and other registries work with `edgegap_create_app_version`.
+
+**Every step says what comes next.** `next_step` on list results, `edgegap_get_deployment` (connect, wait, or read the logs), `edgegap_create_app_version` (the exact deploy), `edgegap_stop_deployment` (confirm nothing is left). `edgegap_wait_for_deployment`:
+- ready: a `cost_reminder` with the exact `edgegap_stop_deployment` call, and the address in `next_step`;
+- failed: says not to redeploy the same version unchanged, and when it could not read logs, names the `edgegap_get_deployment_logs` call to try;
+- timed out: the current status, and "call again, do not deploy a second server";
+- sends MCP progress notifications while it polls, when the client asks for them.
+
+**Errors the agent can fix.** API validation detail (`details`) is passed through with secrets masked, so a duplicate version name or a bad port reads as such. A quota or plan limit says which limit and to raise it on the Billing page instead of suggesting a new token.
+
+**Fewer refusals before the API is called.** `limit` on the list tools, `max_characters` on `edgegap_get_deployment_logs` and `timeout_seconds` on `edgegap_wait_for_deployment` are clamped into range instead of refused (their ranges moved from the schema to the descriptions; any value accepted before is accepted now). `edgegap_build_matchmaker_config` without a token builds the config and says the version was not checked, instead of failing.
+
+**Onboarding without a token.**
+- `edgegap_context` reports `token_status` (present, accepted, rejected, absent, or a client-issued credential, with what to do), the token's last four characters to find it on the tokens page, and `works_without_token`. New optional `check_token: true` makes one read-only call to confirm Edgegap accepts the token; without it the tool still makes no API call.
+- Token messages, local and hosted, give the sign-up link and list the tools that work without a token.
+- `edgegap_get_skill` suggests the skill that was probably meant ("unity" → `edgegap-unity`).
+- New prompt `deploy-game-server` ("Deploy my game server to Edgegap"): the obvious place to start. It finds the engine and netcode, loads the matching skill and walks the golden path, cleanup included.
+- Unity `.meta` files are no longer listed in skill file indexes (one session read `EdgegapSettings.cs.meta` 14 times). They stay in the bundle and readable by exact path: the PurrNet skill asks agents to copy one.
+
+**Hosted analytics** (`docs/analytics.md` has the full list and the real-user definition):
+- Every `$mcp_tool_call` carries `tool_name`, `success`, a stable `error_code`, a sanitized `error_message` (token, argument values and credential-shaped strings masked, 300 characters), `failed_stage` (`pre_flight`/`upstream`/`post_process`), `upstream_status`, `upstream_calls`, `latency_ms`, `org_id_hash`, `is_internal`, `client_name`/`client_version`, `transport` and `server_version`, plus tool facts: `skill_name`, `wait_for_deployment`'s `outcome`/`final_status`/`poll_count`/`timeout_ms_configured`, the validator's `validation_result`/`issue_count`, a salted `request_id_hash` on deploy, wait and stop, matchmaker config shape, empty-state `result_state`.
+- New events: `mcp_session_started` on initialize, and `mcp_milestone_*` for each golden-path step (registry credentials, image pushed, app found or created, version created, deployment ready, deployment stopped). `$mcp_prompt_get` adds `prompt_name`.
+- `is_internal` comes from the new `TELEMETRY_INTERNAL_IDS` Worker variable; `npm run telemetry:id` prints a token's id. `is_probe` flags tokenless scanner traffic and made-up tool names.
+- The README's analytics paragraph says what changed: a sanitized error message is now sent on failed calls.
+- Skills pack 0.16.0 (llm-agent-skills `b89a9e8`): agent rules for empty states, the registry, token problems, waiting and cleanup, matching this release.
+- README: install snippets for Cursor, VS Code and Windsurf, the six skills missing from the table, and troubleshooting for empty states and starting without a token.
+
 ## 0.11.0
 
 - `edgegap_update_app_version` takes `ports` and `env`. Edgegap's spec (2026.10.23) now says updating them **replaces all current values**, so the description, the parameters and the result all say so. `env` gets the same token refusal and secret-name hiding as create; `ports` gets the same `tls_upgrade` check.
