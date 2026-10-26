@@ -1030,8 +1030,10 @@ export function registerTools(
           'the shutdown grace period. Only the fields you pass change. Deployments already running ' +
           'keep their old settings; new deployments get the new ones. Same refusals as ' +
           'edgegap_create_app_version: "latest" or empty tags, a docker_image holding a host or ' +
-          'tag, and the API token in the registry login. Resources, ports and env vars cannot be ' +
-          'changed here; create a new version for those.',
+          'tag, and the API token in the registry login or env vars. ports and env REPLACE the ' +
+          'version\'s whole list (per the API): read the current ones with edgegap_get_app_version ' +
+          'and pass every port or variable to keep. CPU and memory cannot be changed here; create a ' +
+          'new version, or override them per deployment in edgegap_deploy.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().describe('Version name to change.'),
@@ -1055,6 +1057,23 @@ export function registerTools(
             .max(3600)
             .optional()
             .describe('Seconds between SIGTERM and SIGKILL when a deployment stops.'),
+          ports: z
+            .array(
+              z.object({
+                port: z.number().int().min(1).max(59999).describe('Port the server listens on.'),
+                protocol: z.string().describe(`One of ${PROTOCOLS.join(', ')}. Most game servers use UDP.`),
+                name: z.string().optional().describe('Label, e.g. "gameport".'),
+                to_check: z.boolean().optional().describe('Readiness check on this port. Default true.'),
+                tls_upgrade: z.boolean().optional().describe('wss:// / https:// for browser clients. WS and HTTP ports only.'),
+              })
+            )
+            .min(1)
+            .optional()
+            .describe('REPLACES every port on the version. Include the ports to keep, not only new ones.'),
+          env: z
+            .array(z.object({ key: z.string(), value: z.string() }))
+            .optional()
+            .describe('REPLACES every env var on the version; [] removes them all. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
         annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -1066,8 +1085,20 @@ export function registerTools(
           const leak = await tokenLeak(auth, args.dry_run, [
             ['registry_username', args.registry_username],
             ['registry_token', args.registry_token],
+            ...(args.env ?? []).flatMap((e): Array<[string, string]> => [
+              [`env var name "${e.key.slice(0, 40)}"`, e.key],
+              [`the value of env var "${e.key.slice(0, 40)}"`, e.value],
+            ]),
           ]);
           if (leak) return leak;
+
+          const badTls = args.ports?.find((p) => p.tls_upgrade && !TLS_PROTOCOLS.has(p.protocol.toUpperCase()));
+          if (badTls) {
+            return fail(
+              `Port ${badTls.port} is ${badTls.protocol}; tls_upgrade only works on WS and HTTP ports. ` +
+                'Use protocol "WS" for a WebSocket server, or drop tls_upgrade.'
+            );
+          }
 
           if (args.docker_tag !== undefined) {
             const tagProblem = badTag(args.docker_tag);
@@ -1093,6 +1124,14 @@ export function registerTools(
             force_cache: args.force_cache,
             verify_image: args.verify_image,
             termination_grace_period_seconds: args.termination_grace_period_seconds,
+            ports: args.ports?.map((p) => ({
+              port: p.port,
+              protocol: p.protocol,
+              name: p.name ?? 'gameport',
+              to_check: p.to_check ?? true,
+              tls_upgrade: p.tls_upgrade ?? false,
+            })),
+            envs: args.env?.map((e) => ({ key: e.key, value: e.value, is_hidden: looksSecret(e.key) })),
           };
           for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
           if (Object.keys(body).length === 0) {
@@ -1103,6 +1142,8 @@ export function registerTools(
             capped !== undefined && capped < (args.max_duration_minutes ?? 0)
               ? [`max_duration capped to ${capped} minutes by EDGEGAP_MAX_DURATION_MINUTES.`]
               : [];
+          if (args.ports) notes.push(`ports replaced: the version now has exactly these ${args.ports.length}.`);
+          if (args.env) notes.push(`env replaced: the version now has exactly these ${args.env.length} variables.`);
           if (args.dry_run) {
             const dry = client.dryRun();
             await dry.client.updateAppVersion(args.application, args.version, body);
@@ -1225,8 +1266,13 @@ export function registerTools(
             .int()
             .min(256)
             .optional()
-            .describe('Override the version CPU (with memory_mb). Not in the published v2 spec, so the API may ignore it; a version with the size you need is the reliable way.'),
-          memory_mb: z.number().int().min(256).optional().describe('Override the version memory (with cpu_units). Same caveat as cpu_units.'),
+            .describe('Override the version\'s CPU for this deployment only, with memory_mb. 1024 = 1 vCPU.'),
+          memory_mb: z
+            .number()
+            .int()
+            .min(256)
+            .optional()
+            .describe('Override the version\'s memory for this deployment only, with cpu_units. At most 2x cpu_units.'),
           dry_run: dryRunParam,
         },
         annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -1269,7 +1315,17 @@ export function registerTools(
               is_hidden: looksSecret(e.key),
             }));
           }
-          if (args.cpu_units && args.memory_mb) {
+          // The v2 API takes both or neither (DeploymentV2.resources).
+          if ((args.cpu_units === undefined) !== (args.memory_mb === undefined)) {
+            return fail('Pass both cpu_units and memory_mb to override the version\'s resources, or neither to use the version\'s.');
+          }
+          if (args.cpu_units !== undefined && args.memory_mb !== undefined) {
+            if (args.memory_mb > args.cpu_units * 2) {
+              return fail(
+                `memory_mb (${args.memory_mb}) exceeds twice cpu_units (${args.cpu_units}). Edgegap rejects this. ` +
+                  `Lower memory_mb to ${args.cpu_units * 2} or raise cpu_units.`
+              );
+            }
             body.resources = { cpu_units: args.cpu_units, memory_mib: args.memory_mb };
           }
 
@@ -1318,13 +1374,7 @@ export function registerTools(
             status: 'starting',
             tags,
             ...autoStop(version.max_duration),
-            // "resources" is not in the published v2 deploy schema
-            // (test/spec.mjs). Say so rather than promise the override.
-            resources_note: body.resources
-              ? 'cpu_units/memory_mb were sent, but the published v2 API does not document a per-deployment ' +
-                'override, so the deployment may run with the version\'s size. For a different size, create a ' +
-                'version with it.'
-              : undefined,
+            resources: body.resources,
             next_step: `Call edgegap_wait_for_deployment with request_id ${res.request_id}.`,
           });
         })
