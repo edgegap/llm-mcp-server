@@ -3,7 +3,7 @@
 // edge cases of each rule directly. Run with: node --test test/unit.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badTag, badImage, looksSecret } from '../dist/image.js';
+import { badTag, badImage, looksSecret, isEncryptedPlaceholder } from '../dist/image.js';
 import { parseBaseUrl, stripTokenPrefix, redact, loadConfig, ConfigError } from '../dist/config.js';
 import { maskSecrets } from '../dist/client.js';
 import { argumentError } from '../dist/tools.js';
@@ -98,6 +98,13 @@ test('looksSecret flags secret-like env names only', () => {
   }
   for (const n of ['GAME_MODE', 'MATCH_ID', 'PORT', 'MAX_PLAYERS', 'REGION']) {
     assert.equal(looksSecret(n), false, n);
+  }
+});
+
+test('isEncryptedPlaceholder matches only the API placeholder for a stored secret', () => {
+  for (const v of ['This value is set and encrypted', ' this value is set and encrypted\n']) assert.equal(isEncryptedPlaceholder(v), true, v);
+  for (const v of ['robot$my-org', '', undefined, null, 'This value is set and encrypted!', 'note: This value is set and encrypted']) {
+    assert.equal(isEncryptedPlaceholder(v), false, String(v));
   }
 });
 

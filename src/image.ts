@@ -56,3 +56,15 @@ const SECRET_NAME_RE = /SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_?KEY
 export function looksSecret(name: string): boolean {
   return SECRET_NAME_RE.test(name);
 }
+
+/**
+ * What GET /v1/app/{app}/version(s) return in place of private_username,
+ * private_token and every is_secret env value (live API, 2026-10-26). Sent
+ * back, it becomes the stored value, and image pulls fail with "Unable to
+ * login".
+ */
+export const ENCRYPTED_PLACEHOLDER = 'This value is set and encrypted';
+
+export function isEncryptedPlaceholder(value: string | undefined | null): boolean {
+  return typeof value === 'string' && value.trim().toLowerCase() === ENCRYPTED_PLACEHOLDER.toLowerCase();
+}
