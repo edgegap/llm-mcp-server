@@ -147,10 +147,15 @@
       {
         "name": "edgegap_context",
         "title": "Show this Edgegap MCP server's configuration",
-        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Call it first when unsure what this session is allowed to do, or before anything billable. Makes no API call and never shows the token.",
+        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
         "inputSchema": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "check_token": {
+              "description": "Make one read-only API call (list one application) to confirm Edgegap accepts the token. Default false.",
+              "type": "boolean"
+            }
+          },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": {
@@ -931,10 +936,10 @@
               "description": "The request_id of the deployment."
             },
             "max_characters": {
-              "description": "Truncate logs to this length, keeping the tail. Default 8000.",
+              "description": "Truncate logs to this length (500-50000), keeping the tail. Default 8000.",
               "type": "integer",
-              "minimum": 500,
-              "maximum": 50000
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [
@@ -1165,7 +1170,7 @@
       {
         "name": "edgegap_get_registry_credentials",
         "title": "Get Edgegap container registry push credentials",
-        "description": "Get the push login for this organization's private Edgegap container registry (registry.edgegap.com) and the exact docker login, build and push commands for your image. Use this when the server image is not in a registry yet. Edgegap only hands these credentials to the quick-start token the Unity/Unreal plugins use; with a regular API token this tool cannot fetch them and instead returns the steps to copy them from the dashboard's Container Registry page — ask the developer for them then, do not retry. When it does return a token, it is registry-scoped (push/pull images in this project), not the org API token: pass it to docker login via --password-stdin, never as a command-line argument, and do not write it into files. Call edgegap_validate_server_config before building.",
+        "description": "Get the push login for this organization's private Edgegap container registry (registry.edgegap.com) and the exact docker login, build and push commands for your image. Use this when the server image is not in a registry yet. Edgegap only hands these credentials to the quick-start token the Unity/Unreal plugins use; with a regular API token this tool cannot fetch them and instead returns the steps to copy them from the dashboard's Container Registry page — ask the developer for them then, do not retry. When it does return a token, it is registry-scoped (push/pull images in this project), not the org API token: pass it to docker login via --password-stdin, never as a command-line argument, and do not write it into files. Call edgegap_validate_server_config before building. Any other registry Edgegap can pull from (Docker Hub, GHCR, ECR, GitLab) works too: then skip this tool and pass that registry and its pull login to edgegap_create_app_version.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1340,14 +1345,14 @@
           "type": "object",
           "properties": {
             "limit": {
-              "description": "Results per page. Default 50.",
+              "description": "Results per page, 1-100. Default 50.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "page": {
               "type": "integer",
-              "minimum": 1,
+              "minimum": -9007199254740991,
               "maximum": 9007199254740991
             }
           },
@@ -1487,10 +1492,10 @@
               }
             },
             "limit": {
-              "description": "Default 50.",
+              "description": "1-100. Default 50.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1700,7 +1705,7 @@
       {
         "name": "edgegap_list_registry_tags",
         "title": "List image tags in the Edgegap registry",
-        "description": "List the tags pushed for one image in this organization's Edgegap container registry, with push time and size. Call it after docker push to confirm the tag landed before edgegap_create_app_version, which otherwise fails later with an image-pull error.",
+        "description": "List the tags pushed for one image in this organization's Edgegap container registry, with push time and size. Call it after docker push to confirm the tag landed before edgegap_create_app_version, which otherwise fails later with an image-pull error. An image that was never pushed comes back as status \"not_found\" with no tags, not as an error. Only for registry.edgegap.com: images in Docker Hub, GHCR or another registry are not listed here.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1715,10 +1720,10 @@
               "maximum": 9007199254740991
             },
             "limit": {
-              "description": "Default 20.",
+              "description": "1-100. Default 20.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [
@@ -2263,10 +2268,10 @@
               "description": "The request_id returned by edgegap_deploy."
             },
             "timeout_seconds": {
-              "description": "How long to wait before giving up. Default 180.",
+              "description": "How long to wait before giving up, 5-600. Default 180.",
               "type": "integer",
-              "minimum": 5,
-              "maximum": 600
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "required": [

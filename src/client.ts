@@ -9,6 +9,7 @@
 import { Config, redact } from './config.js';
 import { TokenSource } from './auth.js';
 import { VERSION } from './version.js';
+import type { UpstreamResult } from './callreport.js';
 
 /** A request a dry run would have sent, with every secret masked. */
 export interface PlannedRequest {
@@ -63,6 +64,13 @@ export class EdgegapApiError extends Error {
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 export class EdgegapClient {
+  /**
+   * Every Edgegap API response this client has seen, in order: the HTTP
+   * status, or "timeout"/"network". The tool wrapper reads the entries a call
+   * added to report what the API said. Statuses only, never bodies.
+   */
+  readonly upstream: UpstreamResult[] = [];
+
   constructor(
     private readonly config: Config,
     private readonly auth: TokenSource,
@@ -140,10 +148,12 @@ export class EdgegapClient {
       });
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
+        this.upstream.push('timeout');
         throw new Error(
           `Request to ${method} ${path} timed out after ${this.config.requestTimeoutMs}ms.`
         );
       }
+      this.upstream.push('network');
       throw new Error(
         redact(`Network error calling ${method} ${path}: ${(err as Error).message}`, token)
       );
@@ -151,6 +161,7 @@ export class EdgegapClient {
       clearTimeout(timer);
     }
 
+    this.upstream.push(response.status);
     const raw = await response.text();
     let parsed: unknown = undefined;
     if (raw) {

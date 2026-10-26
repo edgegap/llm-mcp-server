@@ -100,7 +100,7 @@ function main(): void {
     }
 
     const { token, problem } = extractToken(req.headers.authorization);
-    const auth = new StaticTokenProvider(token, problem ? unavailableMessage(problem) : undefined);
+    const auth = new StaticTokenProvider(token, problem ? unavailableMessage(problem) : undefined, problem);
 
     const server = new McpServer(
       { name: 'edgegap', version: VERSION },

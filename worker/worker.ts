@@ -122,7 +122,8 @@ export default {
       // without a credential.
       const auth = new StaticTokenProvider(
         token,
-        problem ? unavailableMessage(problem) : undefined
+        problem ? unavailableMessage(problem) : undefined,
+        problem
       );
       registerTools(
         server as unknown as McpServerV1,
@@ -134,7 +135,10 @@ export default {
         }),
         config,
         auth,
-        { skillsCheck: skillsCheckFromEnv({ EDGEGAP_SKILLS_CHECK: env.EDGEGAP_SKILLS_CHECK }) }
+        {
+          skillsCheck: skillsCheckFromEnv({ EDGEGAP_SKILLS_CHECK: env.EDGEGAP_SKILLS_CHECK }),
+          onToolCall: analytics ? (report) => analytics.recordToolCall(report) : undefined,
+        }
       );
 
       // After registration, so the SDK sees every tool.

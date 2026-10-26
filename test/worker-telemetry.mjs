@@ -54,6 +54,8 @@ async function startWorker(extraVars = []) {
     '--var', 'POSTHOG_API_KEY:phc_test_key',
     '--var', `POSTHOG_HOST:http://127.0.0.1:${posthog.address().port}`,
     '--var', 'TELEMETRY_SALT:test-salt',
+    // The test token's id (npm run telemetry:id), so its events are internal.
+    '--var', 'TELEMETRY_INTERNAL_IDS:org_6c67f77e145367bacecdb6cecee6384d',
     ...extraVars.flatMap((v) => ['--var', v]),
   ], { stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' });
   const base = `http://127.0.0.1:${port}`;
@@ -98,6 +100,9 @@ try {
   await w.rpc('tools/call', { name: 'edgegap_list_deployments', arguments: {} }, { Authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGllbnQifQ.clientsig' });
   await w.rpc('tools/call', { name: 'edgegap_get_registry_credentials', arguments: {} }, { Authorization: `Bearer ${OPAQUE}` });
   await w.rpc('tools/call', { name: 'edgegap_get_skill', arguments: { skill: 'no-such-skill' } });
+  await w.rpc('tools/call', { name: 'edgegap_validate_server_config', arguments: { dockerfile: 'FROM ubuntu:22.04\nCMD ["/srv"]' } }, auth);
+
+  await w.rpc('tools/call', { name: '__verifymcp_ping', arguments: {} });
   await w.rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'sentinel-probe', version: '1.0' } });
   await settle();
 
@@ -146,16 +151,37 @@ try {
   check('a scanner client is flagged probe', of('$mcp_initialize').some((e) => props(e).$mcp_client_name === 'sentinel-probe' && props(e).probe === true));
   check('a real client is not', of('$mcp_initialize').every((e) => props(e).$mcp_client_name === 'sentinel-probe' || !('probe' in props(e))));
 
+  console.log('\nper-call facts (src/callreport.ts)');
+  const calls = of('$mcp_tool_call');
+  check('every tool call: tool_name, success, latency_ms, transport, server_version', calls.length > 5 && calls.every((e) => typeof props(e).tool_name === 'string' && typeof props(e).success === 'boolean' && typeof props(e).latency_ms === 'number' && props(e).transport === 'streamable_http' && typeof props(e).server_version === 'string'), JSON.stringify(calls.map((e) => [props(e).tool_name, props(e).success, props(e).latency_ms])));
+  check('every failed call: error_code and failed_stage', calls.filter((e) => props(e).success === false).every((e) => typeof props(e).error_code === 'string' && typeof props(e).failed_stage === 'string'), JSON.stringify(calls.filter((e) => props(e).success === false).map((e) => [props(e).tool_name, props(e).error_code, props(e).failed_stage])));
+  check('no token: AUTH_ABSENT, pre_flight, upstream_status null', props(noHeader).error_code === 'AUTH_ABSENT' && props(noHeader).failed_stage === 'pre_flight' && props(noHeader).upstream_status === null, JSON.stringify(props(noHeader)));
+  check('foreign bearer: AUTH_FOREIGN', props(foreign).error_code === 'AUTH_FOREIGN');
+  check('refused stop: GUARDRAIL_REFUSED or VALIDATION_FAILED at pre_flight', ['GUARDRAIL_REFUSED', 'VALIDATION_FAILED'].includes(props(stopped).error_code) && props(stopped).failed_stage === 'pre_flight', JSON.stringify(props(stopped)));
+  const validated = calls.find((e) => props(e).tool_name === 'edgegap_validate_server_config');
+  check('validate_server_config: validation_result and issue_count', ['pass', 'fail'].includes(props(validated).validation_result) && typeof props(validated).issue_count === 'number', JSON.stringify(props(validated)));
+  check('get_skill: skill_name', props(skill).skill_name === 'edgegap-unity');
+  check('error_message on failures, sanitized and at most 300 characters', calls.filter((e) => props(e).success === false).every((e) => typeof props(e).error_message === 'string' && props(e).error_message.length <= 300));
+
+  check('token calls: org_id_hash equals the distinct_id, is_internal from TELEMETRY_INTERNAL_IDS', withToken.every((e) => props(e).org_id_hash === e.distinct_id && props(e).is_internal === true));
+  check('no-token calls: org_id_hash null, is_internal false', props(noHeader).org_id_hash === null && props(noHeader).is_internal === false);
+  const probeCall = calls.find((e) => props(e).tool_name === '__verifymcp_ping');
+  check('a made-up tool without a token: is_probe', props(probeCall).is_probe === true, JSON.stringify(props(probeCall)));
+  check('a real client call is not is_probe', !('is_probe' in props(skill)));
+  const started = of('mcp_session_started');
+  check('mcp_session_started per initialize, with client_name and client_version', started.some((e) => props(e).client_name === 'claude-code' && props(e).client_version === '2.1.0' && props(e).transport === 'streamable_http'), JSON.stringify(started.map(props)));
+  check('prompt reads carry prompt_name', of('$mcp_prompt_get').some((e) => props(e).prompt_name === 'edgegap-unreal'));
+
   console.log('\nprivacy');
   const everything = raws.join('\n');
   check('a foreign bearer is never sent', !everything.includes('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjbGllbnQifQ.clientsig') && !everything.includes(OPAQUE));
   check('the API token is never sent', !everything.includes(TOKEN) && !everything.includes(TOKEN.replace(/-/g, '')));
-  check('tool argument values are never sent (IP, env value, app name)', !everything.includes(SECRET_IP) && !everything.includes(SECRET_ENV) && !everything.includes(SECRET_APP));
+  check('tool argument values are never sent (IP, env value, app name), not even in error_message', !everything.includes(SECRET_IP) && !everything.includes(SECRET_ENV) && !everything.includes(SECRET_APP));
   check('no $mcp_parameters, $mcp_response or error text', events.every((e) => !('$mcp_parameters' in props(e)) && !('$mcp_response' in props(e)) && !('$mcp_error_message' in props(e))));
   check('no $exception events', of('$exception').length === 0);
   check('no skill document content in any event', !everything.includes('Pack version:'));
   check('GeoIP disabled on every event', events.every((e) => props(e).$geoip_disable === true));
-  check('only allowlisted event names', events.every((e) => ['$mcp_initialize', '$mcp_tools_list', '$mcp_tool_call', '$mcp_resources_list', '$mcp_resource_read', '$mcp_prompt_get', '$identify'].includes(e.event)), [...new Set(events.map((e) => e.event))].join(', '));
+  check('only allowlisted event names', events.every((e) => ['$mcp_initialize', '$mcp_tools_list', '$mcp_tool_call', '$mcp_resources_list', '$mcp_resource_read', '$mcp_prompt_get', '$identify', 'mcp_session_started'].includes(e.event) || e.event.startsWith('mcp_milestone_')), [...new Set(events.map((e) => e.event))].join(', '));
 
   console.log('\nopt-out');
   const before = events.length;

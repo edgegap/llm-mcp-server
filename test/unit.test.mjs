@@ -7,6 +7,8 @@ import { badTag, badImage, looksSecret } from '../dist/image.js';
 import { parseBaseUrl, stripTokenPrefix, redact, loadConfig, ConfigError } from '../dist/config.js';
 import { maskSecrets } from '../dist/client.js';
 import { argumentError } from '../dist/tools.js';
+import { sanitizeErrorMessage, codeForStatus, finishReport } from '../dist/callreport.js';
+import { isListable } from '../dist/skills.js';
 import { z } from 'zod';
 
 test('argumentError reads both SDK wordings and lists the parameters', () => {
@@ -20,6 +22,47 @@ test('argumentError reads both SDK wordings and lists the parameters', () => {
     assert.match(out, /Required: application, version\. Optional: dry_run\./);
   }
   assert.equal(argumentError('Something else broke', inputs), undefined);
+});
+
+test('sanitizeErrorMessage masks the token, credentials, IPs and argument values, and caps the length', () => {
+  const token = '0f8b3c1e-e458-4592-b607-c2c28afd8b62';
+  const text =
+    `[api.edgegap.com]\nEdgegap API 400: bad token ${token} or ${token.replace(/-/g, '')}; ` +
+    'password: hunter2, token=abc123, ip 203.0.113.9, jwt eyJhbGciOiJ.eyJzdWIi.sig, key ' + 'A'.repeat(40) +
+    ' app my-secret-game\n\nNOTE: hosted relay notice';
+  const out = sanitizeErrorMessage(text, token, { application: 'my-secret-game', users: { ip_addresses: ['198.51.100.1'] } });
+  for (const leak of [token, token.replace(/-/g, ''), 'hunter2', 'abc123', '203.0.113.9', 'eyJhbGciOiJ', 'A'.repeat(40), 'my-secret-game', 'NOTE:', '[api.edgegap.com]']) {
+    assert.ok(!out.includes(leak), leak);
+  }
+  assert.match(out, /<application>/);
+  assert.ok(sanitizeErrorMessage('x'.repeat(1000)).length <= 300);
+  assert.equal(sanitizeErrorMessage(''), undefined);
+});
+
+test('codeForStatus maps statuses to stable codes, per resource', () => {
+  assert.equal(codeForStatus(404, 'DEPLOYMENT_NOT_FOUND'), 'DEPLOYMENT_NOT_FOUND');
+  assert.equal(codeForStatus(400, 'LOGS_NOT_FOUND'), 'LOGS_NOT_FOUND');
+  assert.equal(codeForStatus(400), 'UPSTREAM_REJECTED');
+  assert.equal(codeForStatus(401), 'AUTH_REJECTED');
+  assert.equal(codeForStatus(403, undefined, 'NO_RELAY_ACCESS'), 'NO_RELAY_ACCESS');
+  assert.equal(codeForStatus(403, undefined, undefined, 'Deployment quota reached for your plan'), 'QUOTA_REACHED');
+  assert.equal(codeForStatus(503), 'UPSTREAM_ERROR');
+});
+
+test('finishReport infers the stage from the API calls a failure made', () => {
+  const base = { tool: 't', text: 'x', latencyMs: 1 };
+  assert.equal(finishReport({ ...base, isError: true, upstream: [] }).failed_stage, 'pre_flight');
+  assert.equal(finishReport({ ...base, isError: true, upstream: [200, 404] }).failed_stage, 'upstream');
+  assert.equal(finishReport({ ...base, isError: true, upstream: [200] }).failed_stage, 'post_process');
+  assert.equal(finishReport({ ...base, isError: true, upstream: ['timeout'] }).error_code, 'TIMEOUT');
+  const ok = finishReport({ ...base, isError: false, upstream: [200], meta: { milestones: ['image_pushed', 'image_pushed'] } });
+  assert.deepEqual([ok.success, ok.upstream_status, ok.milestones], [true, 200, ['image_pushed']]);
+  assert.deepEqual(finishReport({ ...base, isError: true, upstream: [], meta: { milestones: ['image_pushed'] } }).milestones, []);
+});
+
+test('Unity .meta files are bundled but never listed', () => {
+  assert.equal(isListable('assets/unity/EdgegapSettings.cs.meta'), false);
+  assert.equal(isListable('assets/unity/EdgegapSettings.cs'), true);
 });
 
 test('badTag accepts build tags', () => {
