@@ -3,18 +3,29 @@
   "name": "dev.edgegap/mcp",
   "title": "Edgegap",
   "description": "Deploy and operate multiplayer game servers on Edgegap's global edge network.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "repository": {
-    "url": "https://github.com/edgegap/edgegap-mcp",
+    "url": "https://github.com/edgegap/llm-mcp-server",
     "source": "github"
   },
   "websiteUrl": "https://edgegap.com",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/edgegap/llm-mcp-server/main/icon.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "256x256"
+      ]
+    }
+  ],
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@edgegap/mcp",
-      "version": "0.10.0",
-      "transport": { "type": "stdio" },
+      "version": "0.11.0",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "EDGEGAP_API_TOKEN",

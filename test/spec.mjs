@@ -30,12 +30,9 @@ const UNPUBLISHED = new Set([
   'POST /v1/wizard/init-quick-start',
 ]);
 
-// Body fields sent although the spec does not list them, each flagged to the
-// agent where it is sent. "resources" is edgegap_deploy's cpu/memory
-// override: the v2 DeploymentCreate schema has no such field, so the deploy
-// result warns it may be ignored. Remove it here once the API documents it
-// (or drop the override if it never worked).
-const UNPUBLISHED_FIELDS = { 'POST /deployments': ['resources'] };
+// Body fields sent although the spec does not list them, each with the reason.
+// Empty since spec 2026.08.05 documented DeploymentV2.resources.
+const UNPUBLISHED_FIELDS = {};
 
 function resolve(spec, schema, depth = 0) {
   if (!schema || depth > 8) return schema ?? {};
@@ -100,6 +97,7 @@ const full = {
   edgegap_update_app_version: {
     application: 'my-game', version: 'v1', is_active: true, docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b2',
     registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, force_cache: true, verify_image: true, termination_grace_period_seconds: 10,
+    ports, env,
   },
   edgegap_deploy: { application: 'my-game', version: 'v1', users: { ip_addresses: ['203.0.113.1'], geo_coordinates: [{ latitude: 45, longitude: -73 }] }, env, tags: ['ci'], cpu_units: 512, memory_mb: 1024 },
   edgegap_stop_deployment: { request_id: '7e709a0d8efd' },

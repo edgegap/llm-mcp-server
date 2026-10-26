@@ -96,7 +96,17 @@ do {
   cursor = page.nextCursor;
 } while (cursor);
 const skillRes = all.filter((x) => x.uri.startsWith('edgegap-skill://'));
-check('one resource per bundled file', skillRes.length === totalFiles, `${skillRes.length} vs ${totalFiles}`);
+check('one listed resource per skill (its SKILL.md)', skillRes.length === SKILLS_PACK.skills.length && skillRes.every((x) => x.uri.endsWith('/SKILL.md')), `${skillRes.length} listed`);
+const { resourceTemplates } = await c.listResourceTemplates();
+check('every other file is reachable through a template', resourceTemplates.some((t) => t.uriTemplate === 'edgegap-skill://{skill}/{+path}'), JSON.stringify(resourceTemplates.map((t) => t.uriTemplate)));
+let unread = 0;
+for (const s of SKILLS_PACK.skills) for (const f of s.files) {
+  const got = await c.readResource({ uri: `edgegap-skill://${s.name}/${f.path}` }).catch(() => undefined);
+  if (got?.contents?.[0]?.text !== f.content) unread++;
+}
+check(`all ${totalFiles} bundled files read back unchanged`, unread === 0, `${unread} failed`);
+const missing = await c.readResource({ uri: 'edgegap-skill://edgegap-unreal/nope.md' }).then(() => 'resolved', (e) => e.message);
+check('an unknown file is refused and the real files are listed', /not a file in the edgegap-unreal skill/.test(missing) && /SKILL\.md/.test(missing), missing.slice(0, 120));
 const dockerfile = SKILLS_PACK.skills.find((s) => s.name === 'edgegap-unreal').files.find((f) => f.path === 'assets/docker/Dockerfile');
 const read = await c.readResource({ uri: 'edgegap-skill://edgegap-unreal/assets/docker/Dockerfile' });
 check('reading a resource returns the file', read.contents[0].text === dockerfile.content);

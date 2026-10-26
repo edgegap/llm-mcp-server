@@ -1,7 +1,7 @@
 {
   "name": "@edgegap/mcp",
   "mcpName": "dev.edgegap/mcp",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Check, push, and deploy game servers on Edgegap from your coding agent, with relays for P2P games. Runs locally; your API token never leaves your machine.",
   "scripts": {
     "prebuild": "rm -rf dist",
@@ -34,15 +34,15 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edgegap/edgegap-mcp.git"
+    "url": "git+https://github.com/edgegap/llm-mcp-server.git"
   },
-  "homepage": "https://github.com/edgegap/edgegap-mcp#readme",
+  "homepage": "https://github.com/edgegap/llm-mcp-server#readme",
   "bugs": {
-    "url": "https://github.com/edgegap/edgegap-mcp/issues"
+    "url": "https://github.com/edgegap/llm-mcp-server/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "zod": "^4.6.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260911.1",

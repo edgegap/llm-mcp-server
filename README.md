@@ -78,9 +78,15 @@ claude mcp add --transport http edgegap https://mcp.edgegap.dev/mcp \
 
 #### ChatGPT Codex
 
-```bash
-codex mcp add edgegap --url https://mcp.edgegap.dev/mcp
+Codex reads the token from an environment variable and sends it as `Authorization: Bearer <token>`, which the hosted endpoint accepts. In `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.edgegap]
+url = "https://mcp.edgegap.dev/mcp"
+bearer_token_env_var = "EDGEGAP_API_TOKEN"
 ```
+
+Then set `EDGEGAP_API_TOKEN` to your token in the environment Codex starts from.
 
 #### Claude Desktop and claude.ai
 
@@ -161,14 +167,14 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.10.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.11.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `EDGEGAP_API_TOKEN` | *(prompted)* | API token. Optional: omit it and you're asked at first use. The `token ` prefix is added for you. Never pass it as a command-line argument. |
-| `EDGEGAP_READ_ONLY` | `0` | Set to `1` and the eight mutating tools are never registered, so the agent cannot be talked into calling them. |
+| `EDGEGAP_READ_ONLY` | `0` | Set to `1` and the tools that change something (marked ● in [Tools](#-tools)) are never registered, so the agent cannot be talked into calling them. |
 | `EDGEGAP_APP_ALLOWLIST` | *(empty)* | Comma-separated application names. Limits what the agent can create and deploy into. Reading (listing apps and versions) is not limited, and neither is touching deployments once running. See [DESIGN.md](DESIGN.md#scope-of-the-allowlist). |
 | `EDGEGAP_MAX_DURATION_MINUTES` | `60` | Ceiling on `max_duration` the agent may set on a version. |
 | `EDGEGAP_MAX_AGENT_DEPLOYMENTS` | `5` | `edgegap_deploy` refuses while this many deployments tagged `edgegap-mcp` are running. `0` turns the cap off. |
@@ -201,7 +207,7 @@ They're served three ways, so every MCP client can reach them:
 
 - **Tools:** `edgegap_list_skills` and `edgegap_get_skill`, which loads a skill's `SKILL.md`, or one of its reference documents or templates with `file`.
 - **Prompts:** one per skill, named after it. In Claude Code they show up as slash commands, e.g. `/mcp__edgegap__edgegap-unity`.
-- **Resources:** one per file, at `edgegap-skill://<skill>/<path>`, e.g. `edgegap-skill://edgegap-unity/references/deploy.md`.
+- **Resources:** each skill's `SKILL.md` is listed, at `edgegap-skill://<skill>/SKILL.md`; every other file is read through the `edgegap-skill://{skill}/{+path}` template, e.g. `edgegap-skill://edgegap-unity/references/deploy.md`.
 
 Each release bundles the skills at the commit pinned in `scripts/skills-pin.txt`; `edgegap_context` reports which pack is loaded. `edgegap_list_skills` also reads the latest pack version from GitHub (one version number, cached for an hour; `EDGEGAP_SKILLS_CHECK=off` turns it off) and says when a newer one is out, and `edgegap_get_skill` adds the same note under a skill's header.
 
@@ -235,7 +241,7 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_list_app_versions` | Lists versions with their image, resources, ports (with TLS Upgrade), and whether a registry login is set. |
 | `edgegap_get_app_version` | Reads one version in full: image, resources, ports, max duration, image caching, restart policy, and env var names (never values). |
 | `edgegap_create_app_version` ● | Registers a container image as a deployable version. Supports TLS Upgrade on WS and HTTP ports, which browser (WebGL) clients need for `wss://`. |
-| `edgegap_update_app_version` ● | Changes an existing version: a new image tag, on/off, max duration, registry login, image caching (`force_cache`), shutdown grace period. Only the fields passed change; running deployments keep the old settings. |
+| `edgegap_update_app_version` ● | Changes an existing version: a new image tag, on/off, max duration, registry login, image caching (`force_cache`), shutdown grace period, ports, env vars. Only the fields passed change, but `ports` and `env` replace the whole list. Running deployments keep the old settings. |
 | `edgegap_list_locations` | Lists the cities Edgegap deploys to, or, for one version, only those with capacity right now. |
 | `edgegap_list_ping_beacons` | Lists the ping beacons game clients measure latency against before matchmaking. |
 | `edgegap_deploy` ● | Deploys an authoritative dedicated server close to your players. Always tagged `edgegap-mcp`, and reports when Edgegap will stop it. |
@@ -342,10 +348,10 @@ docker run --rm -p 8080:8080 edgegap-mcp
 
 Clients connect to `http://<host>:8080/mcp` with their own `Authorization` header, the same way they connect to the hosted endpoint. The image holds no credential, and `/health` answers without one. `PORT`, `HOST`, `EDGEGAP_READ_ONLY`, `EDGEGAP_APP_ALLOWLIST`, `EDGEGAP_MAX_DURATION_MINUTES` and `EDGEGAP_MAX_AGENT_DEPLOYMENTS` apply. Read [worker/DECISION.md](worker/DECISION.md) before exposing it beyond a private network.
 
-Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/edgegap/edgegap-mcp`, tagged `main` and `sha-<commit>` on every push to `main`, plus the version on `v*` tags:
+Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/edgegap/llm-mcp-server` (and, for existing setups, the old name `ghcr.io/edgegap/edgegap-mcp`), tagged `main` and `sha-<commit>` on every push to `main`, plus the version on `v*` tags:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/edgegap/edgegap-mcp:main
+docker run --rm -p 8080:8080 ghcr.io/edgegap/llm-mcp-server:main
 ```
 
 ## Development

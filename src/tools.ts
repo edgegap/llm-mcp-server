@@ -9,7 +9,7 @@
  */
 
 import { z } from 'zod';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { EdgegapClient, EdgegapApiError, DeploymentStatus, RelaySession, PlannedRequest, AppVersionRecord, MetricSeries } from './client.js';
 import { Config, assertAppAllowed, redact, hostLabel } from './config.js';
 import { VERSION } from './version.js';
@@ -22,6 +22,7 @@ import {
 import { generateDockerfile, DockerfileInputError } from './dockerfile.js';
 import { buildMatchmakerConfig, DASHBOARD_URL } from './matchmaker.js';
 import { badImage, badTag, looksSecret, TAG_FIX } from './image.js';
+import { OUTPUT } from './outputs.js';
 import { SKILLS_PACK, findSkill, findSkillFile, fileIndex, mimeType, skillUri } from './skills.js';
 import {
   SKILL_NAME_RE,
@@ -143,8 +144,13 @@ type ToolResult = {
   isError?: boolean;
 };
 
+/** JSON.stringify replacer: null fields are left out, like undefined ones. The
+ *  API sends many (fqdn before a deployment is placed, unset error_detail), and
+ *  an absent field reads the same to an agent at fewer tokens. */
+const dropNulls = (_key: string, value: unknown) => (value === null ? undefined : value);
+
 function ok(payload: unknown, notice?: string): ToolResult {
-  const body = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+  const body = typeof payload === 'string' ? payload : JSON.stringify(payload, dropNulls, 2);
   const structured =
     payload !== null && typeof payload === 'object' && !Array.isArray(payload)
       ? (JSON.parse(body) as Record<string, unknown>)
@@ -572,6 +578,42 @@ function autoStop(maxDuration: number | undefined): Record<string, unknown> {
   };
 }
 
+/**
+ * Rewrites the SDK's "Input validation error: Invalid arguments for tool X:
+ * a: Invalid input: expected string, received undefined, b: ..." into one line
+ * per argument, plus the tool's required and optional parameters, so the agent
+ * can fix the call in one try. Undefined for any other message.
+ */
+export function argumentError(message: string, inputs: Map<string, Record<string, z.ZodType>>): string | undefined {
+  const m = message.match(/Input validation error: Invalid arguments for tool (\S+?): ([\s\S]*)$/);
+  if (!m) return undefined;
+  const [, toolName, detail] = m;
+  // Two wordings: SDK v1 (local) "expected string, received number at application",
+  // one per line; SDK v2 (hosted) "application: expected string, received number",
+  // comma-joined.
+  const problems = detail
+    .split('\n')
+    .flatMap((line) => line.split(/,\s+(?=[\w.[\]]+: )/))
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => {
+      const v2 = p.match(/^([\w.[\]]+): (?:Invalid input: )?expected (\w+), received (\w+)$/);
+      const v1 = p.match(/^(?:Invalid input: )?expected (\w+), received (\w+) at ([\w.[\]]+)$/);
+      const [field, want, got] = v2 ? [v2[1], v2[2], v2[3]] : v1 ? [v1[3], v1[1], v1[2]] : [];
+      if (!field) return `- ${p}`;
+      return got === 'undefined' ? `- ${field}: missing (required)` : `- ${field}: must be ${want} (got ${got})`;
+    });
+  const shape = inputs.get(toolName) ?? {};
+  const required = Object.keys(shape).filter((k) => !shape[k].safeParse(undefined).success);
+  const optional = Object.keys(shape).filter((k) => !required.includes(k));
+  return (
+    `Invalid arguments for ${toolName}. Nothing was sent.\n${problems.join('\n')}\n\n` +
+    `Required: ${required.join(', ') || 'none'}.` +
+    (optional.length ? ` Optional: ${optional.join(', ')}.` : '') +
+    ' Fix the arguments and call again.'
+  );
+}
+
 /** Prepends "[api.edgegap.com]" (or "[custom · host]") to a tool result. */
 function withHost(result: ToolResult, label: string): ToolResult {
   return { ...result, content: [{ type: 'text', text: `[${label}]` }, ...result.content] };
@@ -609,9 +651,25 @@ export function registerTools(
   // at a custom EDGEGAP_BASE_URL can never be mistaken for production.
   const label = hostLabel(config);
   // ...and never carries the API token, whatever the API echoed back.
-  const tool = ((name: string, def: unknown, cb: (...a: unknown[]) => Promise<ToolResult>) =>
-    server.registerTool(name, def as never, (async (...a: unknown[]) =>
-      withHost(scrubToken(await cb(...a), auth.current), label)) as never)) as unknown as typeof server.registerTool;
+  const inputs = new Map<string, Record<string, z.ZodType>>();
+  const tool = ((name: string, def: unknown, cb: (...a: unknown[]) => Promise<ToolResult>) => {
+    inputs.set(name, ((def as { inputSchema?: Record<string, z.ZodType> }).inputSchema) ?? {});
+    return server.registerTool(name, def as never, (async (...a: unknown[]) =>
+      withHost(scrubToken(await cb(...a), auth.current), label)) as never);
+  }) as unknown as typeof server.registerTool;
+
+  // Errors the SDK raises itself (bad arguments, a handler that throws) skip
+  // the wrapper above. Both SDK versions route them through createToolError,
+  // so give those the same host label and token scrub, and turn argument
+  // errors into a list the agent can act on.
+  const sdk = server as unknown as { createToolError?: (message: string) => ToolResult };
+  const sdkToolError = sdk.createToolError?.bind(server);
+  if (sdkToolError) {
+    sdk.createToolError = (message: string) => {
+      const friendly = argumentError(message, inputs);
+      return withHost(scrubToken(friendly ? fail(friendly) : sdkToolError(message), auth.current), label);
+    };
+  }
 
   // ---------------------------------------------------------------- 0 ----
   // No token, no network: describes this server's own configuration, so an
@@ -627,6 +685,7 @@ export function registerTools(
         'dry_run. Call it first when unsure what this session is allowed to do, or before ' +
         'anything billable. Makes no API call and never shows the token.',
       inputSchema: {},
+      outputSchema: OUTPUT.context,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
     async () => {
@@ -684,6 +743,7 @@ export function registerTools(
         limit: z.number().int().min(1).max(100).optional().describe('Results per page. Default 50.'),
         page: z.number().int().min(1).optional(),
       },
+      outputSchema: OUTPUT.listApps,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ limit, page }) =>
@@ -784,6 +844,7 @@ export function registerTools(
       inputSchema: {
         application: z.string().describe('Application name, as returned by edgegap_list_apps.'),
       },
+      outputSchema: OUTPUT.listAppVersions,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ application }) =>
@@ -810,6 +871,7 @@ export function registerTools(
         application: z.string().describe('Application name.'),
         version: z.string().describe('Version name, as listed by edgegap_list_app_versions.'),
       },
+      outputSchema: OUTPUT.getAppVersion,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ application, version }) =>
@@ -1030,8 +1092,10 @@ export function registerTools(
           'the shutdown grace period. Only the fields you pass change. Deployments already running ' +
           'keep their old settings; new deployments get the new ones. Same refusals as ' +
           'edgegap_create_app_version: "latest" or empty tags, a docker_image holding a host or ' +
-          'tag, and the API token in the registry login. Resources, ports and env vars cannot be ' +
-          'changed here; create a new version for those.',
+          'tag, and the API token in the registry login or env vars. ports and env REPLACE the ' +
+          'version\'s whole list (per the API): read the current ones with edgegap_get_app_version ' +
+          'and pass every port or variable to keep. CPU and memory cannot be changed here; create a ' +
+          'new version, or override them per deployment in edgegap_deploy.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().describe('Version name to change.'),
@@ -1055,6 +1119,23 @@ export function registerTools(
             .max(3600)
             .optional()
             .describe('Seconds between SIGTERM and SIGKILL when a deployment stops.'),
+          ports: z
+            .array(
+              z.object({
+                port: z.number().int().min(1).max(59999).describe('Port the server listens on.'),
+                protocol: z.string().describe(`One of ${PROTOCOLS.join(', ')}. Most game servers use UDP.`),
+                name: z.string().optional().describe('Label, e.g. "gameport".'),
+                to_check: z.boolean().optional().describe('Readiness check on this port. Default true.'),
+                tls_upgrade: z.boolean().optional().describe('wss:// / https:// for browser clients. WS and HTTP ports only.'),
+              })
+            )
+            .min(1)
+            .optional()
+            .describe('REPLACES every port on the version. Include the ports to keep, not only new ones.'),
+          env: z
+            .array(z.object({ key: z.string(), value: z.string() }))
+            .optional()
+            .describe('REPLACES every env var on the version; [] removes them all. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
         annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -1066,8 +1147,20 @@ export function registerTools(
           const leak = await tokenLeak(auth, args.dry_run, [
             ['registry_username', args.registry_username],
             ['registry_token', args.registry_token],
+            ...(args.env ?? []).flatMap((e): Array<[string, string]> => [
+              [`env var name "${e.key.slice(0, 40)}"`, e.key],
+              [`the value of env var "${e.key.slice(0, 40)}"`, e.value],
+            ]),
           ]);
           if (leak) return leak;
+
+          const badTls = args.ports?.find((p) => p.tls_upgrade && !TLS_PROTOCOLS.has(p.protocol.toUpperCase()));
+          if (badTls) {
+            return fail(
+              `Port ${badTls.port} is ${badTls.protocol}; tls_upgrade only works on WS and HTTP ports. ` +
+                'Use protocol "WS" for a WebSocket server, or drop tls_upgrade.'
+            );
+          }
 
           if (args.docker_tag !== undefined) {
             const tagProblem = badTag(args.docker_tag);
@@ -1093,6 +1186,14 @@ export function registerTools(
             force_cache: args.force_cache,
             verify_image: args.verify_image,
             termination_grace_period_seconds: args.termination_grace_period_seconds,
+            ports: args.ports?.map((p) => ({
+              port: p.port,
+              protocol: p.protocol,
+              name: p.name ?? 'gameport',
+              to_check: p.to_check ?? true,
+              tls_upgrade: p.tls_upgrade ?? false,
+            })),
+            envs: args.env?.map((e) => ({ key: e.key, value: e.value, is_hidden: looksSecret(e.key) })),
           };
           for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
           if (Object.keys(body).length === 0) {
@@ -1103,6 +1204,8 @@ export function registerTools(
             capped !== undefined && capped < (args.max_duration_minutes ?? 0)
               ? [`max_duration capped to ${capped} minutes by EDGEGAP_MAX_DURATION_MINUTES.`]
               : [];
+          if (args.ports) notes.push(`ports replaced: the version now has exactly these ${args.ports.length}.`);
+          if (args.env) notes.push(`env replaced: the version now has exactly these ${args.env.length} variables.`);
           if (args.dry_run) {
             const dry = client.dryRun();
             await dry.client.updateAppVersion(args.application, args.version, body);
@@ -1136,6 +1239,7 @@ export function registerTools(
         page: z.number().int().min(1).optional(),
         limit: z.number().int().min(1).max(200).optional().describe('Default 100.'),
       },
+      outputSchema: OUTPUT.listLocations,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ application, version, page, limit }) =>
@@ -1173,6 +1277,7 @@ export function registerTools(
         page: z.number().int().min(1).optional(),
         limit: z.number().int().min(1).max(200).optional().describe('Default 100.'),
       },
+      outputSchema: OUTPUT.listPingBeacons,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ page, limit }) =>
@@ -1225,10 +1330,16 @@ export function registerTools(
             .int()
             .min(256)
             .optional()
-            .describe('Override the version CPU (with memory_mb). Not in the published v2 spec, so the API may ignore it; a version with the size you need is the reliable way.'),
-          memory_mb: z.number().int().min(256).optional().describe('Override the version memory (with cpu_units). Same caveat as cpu_units.'),
+            .describe('Override the version\'s CPU for this deployment only, with memory_mb. 1024 = 1 vCPU.'),
+          memory_mb: z
+            .number()
+            .int()
+            .min(256)
+            .optional()
+            .describe('Override the version\'s memory for this deployment only, with cpu_units. At most 2x cpu_units.'),
           dry_run: dryRunParam,
         },
+        outputSchema: OUTPUT.deploy,
         annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
@@ -1269,7 +1380,17 @@ export function registerTools(
               is_hidden: looksSecret(e.key),
             }));
           }
-          if (args.cpu_units && args.memory_mb) {
+          // The v2 API takes both or neither (DeploymentV2.resources).
+          if ((args.cpu_units === undefined) !== (args.memory_mb === undefined)) {
+            return fail('Pass both cpu_units and memory_mb to override the version\'s resources, or neither to use the version\'s.');
+          }
+          if (args.cpu_units !== undefined && args.memory_mb !== undefined) {
+            if (args.memory_mb > args.cpu_units * 2) {
+              return fail(
+                `memory_mb (${args.memory_mb}) exceeds twice cpu_units (${args.cpu_units}). Edgegap rejects this. ` +
+                  `Lower memory_mb to ${args.cpu_units * 2} or raise cpu_units.`
+              );
+            }
             body.resources = { cpu_units: args.cpu_units, memory_mib: args.memory_mb };
           }
 
@@ -1318,13 +1439,7 @@ export function registerTools(
             status: 'starting',
             tags,
             ...autoStop(version.max_duration),
-            // "resources" is not in the published v2 deploy schema
-            // (test/spec.mjs). Say so rather than promise the override.
-            resources_note: body.resources
-              ? 'cpu_units/memory_mb were sent, but the published v2 API does not document a per-deployment ' +
-                'override, so the deployment may run with the version\'s size. For a different size, create a ' +
-                'version with it.'
-              : undefined,
+            resources: body.resources,
             next_step: `Call edgegap_wait_for_deployment with request_id ${res.request_id}.`,
           });
         })
@@ -1343,6 +1458,7 @@ export function registerTools(
       inputSchema: {
         request_id: z.string().describe('The request_id returned by edgegap_deploy.'),
       },
+      outputSchema: OUTPUT.deployment,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ request_id }) =>
@@ -1372,6 +1488,7 @@ export function registerTools(
           .optional()
           .describe('How long to wait before giving up. Default 180.'),
       },
+      outputSchema: OUTPUT.waitForDeployment,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
     async ({ request_id, timeout_seconds }) =>
@@ -1473,6 +1590,7 @@ export function registerTools(
           .describe('e.g. [{field:"created_at",order:"asc"}] for oldest first.'),
         limit: z.number().int().min(1).max(100).optional().describe('Default 50.'),
       },
+      outputSchema: OUTPUT.listDeployments,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ only_agent_deployments, filters: given, order_by, limit }) =>
@@ -1601,6 +1719,7 @@ export function registerTools(
         end_time: z.string().optional().describe('ISO 8601. Default: now, or when it stopped.'),
         step: z.string().optional().describe('Averaging step, e.g. "30s" or "5m". Default: the API\'s.'),
       },
+      outputSchema: OUTPUT.metrics,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ request_id, start_time, end_time, step }) =>
@@ -1780,6 +1899,7 @@ export function registerTools(
         docker_image: z.string().optional(),
         docker_tag: z.string().optional(),
       },
+      outputSchema: OUTPUT.validateServerConfig,
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
@@ -1930,6 +2050,7 @@ export function registerTools(
         page: z.number().int().min(1).optional(),
         limit: z.number().int().min(1).max(100).optional().describe('Default 20.'),
       },
+      outputSchema: OUTPUT.listRegistryTags,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ image_name, page, limit }) =>
@@ -2153,6 +2274,7 @@ export function registerTools(
         'and delete them with edgegap_delete_relay_session. Authorization tokens are not listed; ' +
         'read one session with edgegap_get_relay_session.',
       inputSchema: {},
+      outputSchema: OUTPUT.listRelaySessions,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () =>
@@ -2415,14 +2537,11 @@ function registerSkills(
       description:
         'List the Edgegap agent skills: tested, step-by-step workflows for getting a multiplayer ' +
         'game online on Edgegap, with templates (Dockerfiles, matchmaker configs, Unity C# and ' +
-        'Unreal C++ drop-ins) and known pitfalls. Before working on a game project, load the ' +
-        'matching skill with edgegap_get_skill: edgegap-ngo for Unity with Netcode for GameObjects, edgegap-fishnet for Unity with FishNet, ' +
-        'edgegap-purrnet for Unity with PurrNet, edgegap-fusion for Unity with Photon Fusion 2, edgegap-unity for other Unity projects, edgegap-unreal for Unreal Engine ' +
-        '(edgegap-eos-voice to add voice chat to it), edgegap-fusion-simplefps for the Photon Simple FPS sample, edgegap-godot for Godot 4 with a Godot server, ' +
-        'edgegap-colyseus for a Colyseus server, edgegap-nakama for a game with a Nakama backend, edgegap-playfab for a game that keeps PlayFab Matchmaking, ' +
-        'edgegap-threejs for a Three.js or other browser game with its own Node.js server, ' +
-        'edgegap-manus for a browser game built with Manus, edgegap for any other engine or platform questions; it routes to the rest. ' +
-        'Also says whether a newer skills pack is on GitHub (reads one version number, no Edgegap API call).',
+        'Unreal C++ drop-ins) and known pitfalls. Each entry says which engine, netcode or backend ' +
+        'it is for, and the server instructions map projects to skills. Before working on a game ' +
+        'project, load the matching skill with edgegap_get_skill; "edgegap" covers any other engine ' +
+        'and routes to the rest. Also says whether a newer skills pack is on GitHub (reads one ' +
+        'version number, no Edgegap API call).',
       inputSchema: {},
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
@@ -2452,13 +2571,9 @@ function registerSkills(
       title: 'Load an Edgegap agent skill',
       description:
         'Load one Edgegap agent skill: its SKILL.md (the workflow to follow) by default, or one of ' +
-        'its reference documents or templates with file. Load the matching skill before acting on ' +
-        'a game project — edgegap-ngo for Unity with Netcode for GameObjects, edgegap-fishnet for Unity with FishNet, ' +
-        'edgegap-purrnet for Unity with PurrNet, edgegap-fusion for Unity with Photon Fusion 2, edgegap-unity for other Unity projects, edgegap-unreal for Unreal Engine ' +
-        '(edgegap-eos-voice for voice chat), edgegap-fusion-simplefps for the Photon Simple FPS sample, edgegap-godot for Godot 4 with a Godot server, ' +
-        'edgegap-colyseus for a Colyseus server, edgegap-nakama for a Nakama backend, edgegap-playfab for PlayFab Matchmaking, ' +
-        'edgegap-threejs for a Three.js/browser game with a Node.js server, ' +
-        'edgegap-manus for a browser game built with Manus, edgegap otherwise — and fetch the references and templates it points to as you reach them. No API call.',
+        'its reference documents or templates with file. Load the skill that matches the project ' +
+        'before acting (the server instructions and edgegap_list_skills say which; "edgegap" when ' +
+        'unsure), then fetch the references and templates it points to as you reach them. No API call.',
       inputSchema: {
         // A string, not an enum: clients cache tool schemas, and a cached enum from an older
         // release would refuse a skill the router already points to. The handler checks the name.
@@ -2679,21 +2794,42 @@ function registerSkills(
       }
     );
 
-    // A resource per file.
-    for (const f of skill.files) {
-      const uri = skillUri(skill.name, f.path);
-      server.registerResource(
-        `${skill.name}/${f.path}`,
-        uri,
-        {
-          title: f.path === 'SKILL.md' ? `${skill.name} skill` : `${skill.name}: ${f.path}`,
-          description: f.path === 'SKILL.md' ? skill.description : undefined,
-          mimeType: mimeType(f.path),
-        },
-        async () => ({ contents: [{ uri, mimeType: mimeType(f.path), text: f.content }] })
-      );
-    }
+    // Only each skill's SKILL.md is listed: 21 entries instead of every file
+    // (257 in pack 0.15), which crowded clients' attach menus and resource
+    // lists. The other files are read through the template below.
+    const main = findSkillFile(skill)!;
+    const uri = skillUri(skill.name, main.path);
+    server.registerResource(
+      `${skill.name}/${main.path}`,
+      uri,
+      { title: `${skill.name} skill`, description: skill.description, mimeType: mimeType(main.path) },
+      async () => ({ contents: [{ uri, mimeType: mimeType(main.path), text: main.content }] })
+    );
   }
+
+  // Any file in any skill, e.g. edgegap-skill://edgegap-unreal/assets/docker/Dockerfile.
+  // {+path} keeps the slashes. Not listed (list: undefined): SKILL.md says
+  // which files exist, and edgegap_get_skill lists them too.
+  server.registerResource(
+    'edgegap-skill-file',
+    new ResourceTemplate(`${skillUri('{skill}', '').replace(/\/$/, '')}/{+path}`, { list: undefined }),
+    {
+      title: 'Edgegap skill file',
+      description: 'A reference document or template inside an Edgegap skill. SKILL.md lists the files it uses.',
+    },
+    async (uri, vars) => {
+      const skill = findSkill(String(vars.skill));
+      const file = skill ? findSkillFile(skill, String(vars.path)) : undefined;
+      if (!skill || !file) {
+        throw new Error(
+          skill
+            ? `"${vars.path}" is not a file in the ${skill.name} skill. Its files are: ${skill.files.map((f) => f.path).join(', ')}`
+            : `No skill named "${vars.skill}". The skills are: ${names.join(', ')}.`
+        );
+      }
+      return { contents: [{ uri: uri.href, mimeType: mimeType(file.path), text: file.content }] };
+    }
+  );
 }
 
 /**

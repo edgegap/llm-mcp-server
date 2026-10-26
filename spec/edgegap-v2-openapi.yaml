@@ -1,27 +1,61 @@
 openapi: 3.0.1
 info:
   title: Edgegap v2 API
-  description: 'Maintained by [Edgegap Technologies](https://edgegap.com/)'
-  version: 2026.03.16
-tags: []
+  description: >-
+    <h1>Introduction</h1>
+
+    <p>Learn more about Edgegap API through <a href="http://docs.edgegap.com"
+    target="_blank">the official documentation.</a> If you have any questions or
+    feature suggestions, <a href="http://discord.gg/NgCnkHbsGp"
+    target="_blank">contact us on Discord</a>.</p>
+  version: 2026.08.05
+  contact:
+    name: Contact
+    email: info@edgegap.com
+    url: https://edgegap.com
+  termsOfService: https://app.edgegap.com/terms-and-conditions
+tags:
+  - name: Deployments
+  - name: Dedicated Servers
+  - name: Private Fleets
 paths:
   /deployments:
     post:
       summary: '[v2] Deploy'
       deprecated: false
       description: >-
-        <strong>[Rate Limit: 40/seconds]</strong> Initiate a new deployment. A
-        deployment is a containerized server instance of an application version
-        running on the Edgegap platform.
-      operationId: deployment-create
-      tags: []
-      parameters: []
+        [Rate Limit: 40 req/s] Create a new deployment - containerized instance
+        of an application version.
+      operationId: v2-deployment-create
+      tags:
+        - Deployments
+        - Dedicated Servers
+      parameters:
+        - name: Accept
+          in: header
+          description: ''
+          example: '*/*'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: ''
+          required: true
+          example: application/json
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeploymentCreate'
-            examples: {}
+              $ref: '#/components/schemas/DeploymentV2'
+            example:
+              application: my-game-server
+              version: production
+              users:
+                - user_type: ip_address
+                  user_data:
+                    ip_address: 75.28.35.192
       responses:
         '202':
           description: Deployment Request Accepted
@@ -33,7 +67,7 @@ paths:
                 properties:
                   request_id:
                     type: string
-                    description: Request ID. Unique identifier of the deployment request
+                    description: ID of your deployment, also referred to as request ID.
                     example: a69f8e3e0555
                 required:
                   - request_id
@@ -116,7 +150,7 @@ paths:
                   - message
           headers: {}
       security:
-        - api-token: []
+        - apiKey1: []
   /private-fleets/{fleet-name}/hosts:
     get:
       summary: List Private Fleet Hosts
@@ -125,7 +159,9 @@ paths:
         <strong>[Rate Limit: 10/seconds]</strong> List all hosts in a private
         fleet.
       operationId: private-fleet-hosts-list
-      tags: []
+      tags:
+        - Dedicated Servers
+        - Private Fleets
       parameters:
         - name: fleet-name
           in: path
@@ -134,6 +170,19 @@ paths:
           schema:
             type: string
             example: test-fleet
+        - name: Accept
+          in: header
+          description: ''
+          example: '*/*'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: ''
+          required: true
+          example: application/json
+          schema:
+            type: string
       responses:
         '200':
           description: ''
@@ -342,8 +391,52 @@ paths:
                         - updated_at
                         - centroid
                         - fleet_host_specifications
+                  total_count:
+                    type: integer
+                    minimum: 0
+                    example: 100
+                  pagination:
+                    type: object
+                    properties:
+                      number:
+                        type: integer
+                        minimum: 1
+                        example: 1
+                      next_page_number:
+                        type: integer
+                        minimum: 1
+                        nullable: true
+                        example: 2
+                      previous_page_number:
+                        type: integer
+                        minimum: 1
+                        nullable: true
+                      paginator:
+                        type: object
+                        properties:
+                          num_pages:
+                            type: integer
+                            minimum: 1
+                            example: 10
+                        required:
+                          - num_pages
+                      has_next:
+                        type: boolean
+                        default: true
+                      has_previous:
+                        type: boolean
+                        default: false
+                    required:
+                      - number
+                      - next_page_number
+                      - previous_page_number
+                      - paginator
+                      - has_next
+                      - has_previous
                 required:
                   - data
+                  - total_count
+                  - pagination
           headers: {}
         '400':
           description: ''
@@ -403,7 +496,7 @@ paths:
                   - message
           headers: {}
       security:
-        - api-token: []
+        - apiKey1: []
   /private-fleets/deployments:
     post:
       summary: Deploy to Fleet
@@ -413,13 +506,152 @@ paths:
         deployment. A deployment is a containerized server instance of an
         application version running on the Edgegap platform.
       operationId: private-fleets-deployment-create
-      tags: []
-      parameters: []
+      tags:
+        - Deployments
+        - Dedicated Servers
+        - Private Fleets
+      parameters:
+        - name: Accept
+          in: header
+          description: ''
+          example: '*/*'
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          description: ''
+          required: true
+          example: application/json
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PrivateFleetDeploymentCreate'
+              type: object
+              properties:
+                private_host_ids:
+                  type: array
+                  items:
+                    type: string
+                    example: alpha-north-america-95fab093
+                  description: >-
+                    Preferred and prioritized Private Host IDs to try before
+                    overflowing to cloud.
+                  minItems: 1
+                  uniqueItems: true
+                application:
+                  type: string
+                  description: Name of the application that will be deployed
+                  example: my-game-server
+                version:
+                  type: string
+                  description: >-
+                    Name of the version within the application that will be
+                    deployed
+                  example: 25.05.30-16.45.19-04
+                resources:
+                  type: object
+                  properties:
+                    cpu_units:
+                      type: integer
+                      description: >-
+                        Amount of vCPU units assigned to deployment. (1024 units
+                        = 1 vCPU).
+                      minimum: 256
+                      example: 1536
+                    memory_mib:
+                      type: integer
+                      description: >-
+                        Amount of memory MB assigned to deployment, at most
+                        double your vCPU units. (1024 MB = 1 GB).
+                      minimum: 256
+                      example: 3072
+                  required:
+                    - cpu_units
+                    - memory_mib
+                  description: Overrides app version resource specification if supplied.
+                require_cached_locations:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Deploy faster by limiting placement to locations with cached
+                    image.
+                  nullable: true
+                users:
+                  type: array
+                  description: >-
+                    List of users. These users will be used to select the
+                    locations for the deployment
+                  minItems: 1
+                  items:
+                    type: object
+                    properties:
+                      user_type:
+                        type: string
+                        description: Type of user (e.g., ip_address or geo_coordinates)
+                      user_data:
+                        type: object
+                        description: Dynamic user data depending on user_type
+                        properties: {}
+                        example:
+                          ip_address: 75.28.35.192
+                    required:
+                      - user_data
+                      - user_type
+                  example:
+                    - user_type: ip_address
+                      user_data:
+                        ip_address: 75.28.35.192
+                    - user_type: geo_coordinates
+                      user_data:
+                        latitude: 45.508888
+                        longitude: -73.561668
+                environment_variables:
+                  type: array
+                  description: List of environment variables to inject into the deployment
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                        description: Environment variable key
+                        example: MY_ENVIRONMENT_VARIABLE
+                      value:
+                        type: string
+                        description: Environment variable value
+                        example: my-value
+                      is_hidden:
+                        type: boolean
+                        description: An hidden environment variable is not shown in the UI
+                        example: false
+                    required:
+                      - is_hidden
+                      - key
+                      - value
+                tags:
+                  type: array
+                  description: List of tags to associate with the deployment
+                  items:
+                    type: string
+                    example: my-custom-tag
+                webhook_on_ready:
+                  description: Webhook to call when the deployment is ready
+                  allOf:
+                    - $ref: '#/components/schemas/BasicWebhook'
+                webhook_on_error:
+                  description: Webhook to call when the deployment is in error
+                  allOf:
+                    - $ref: '#/components/schemas/BasicWebhook'
+                webhook_on_terminated:
+                  description: Webhook to call when the deployment is terminated
+                  allOf:
+                    - $ref: '#/components/schemas/BasicWebhook'
+              required:
+                - private_host_ids
+                - application
+                - version
+                - users
             examples: {}
       responses:
         '202':
@@ -432,7 +664,7 @@ paths:
                 properties:
                   request_id:
                     type: string
-                    description: Request ID. Unique identifier of the deployment request
+                    description: ID of your deployment, also referred to as request ID.
                     example: a69f8e3e0555
                 required:
                   - request_id
@@ -472,7 +704,7 @@ paths:
                 $ref: '#/components/schemas/Error'
           headers: {}
       security:
-        - api-token: []
+        - apiKey1: []
 components:
   schemas:
     DeploymentResponse:
@@ -481,7 +713,7 @@ components:
       properties:
         request_id:
           type: string
-          description: Request ID. Unique identifier of the deployment request
+          description: ID of your deployment, also referred to as request ID.
           example: a69f8e3e0555
       type: object
     ParameterError422:
@@ -511,168 +743,163 @@ components:
           description: Additional error details
           properties: {}
       type: object
-    PrivateFleetDeploymentCreate:
+    PaginatedResponse:
       type: object
       properties:
-        application:
-          type: string
-          description: Name of the application that will be deployed
-          example: my-app
-        version:
-          type: string
-          description: Name of the version within the application that will be deployed
-          example: 25.05.30-16.45.19-04
-        require_cached_locations:
-          type: boolean
-          default: false
-          description: Deploy faster by limiting placement to locations with cached image.
-          nullable: true
-        private_host_ids:
-          type: array
-          items:
-            type: string
-            example: alpha-north-america-95fab093
-          description: >-
-            Preferred and prioritized Private Host IDs to try before overflowing
-            to cloud.
-          minItems: 1
-          uniqueItems: true
-        users:
-          type: array
-          description: >-
-            List of users. These users will be used to select the locations for
-            the deployment
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/User'
-          example:
-            - user_type: ip_address
-              user_data:
-                ip_address: 75.28.35.192
-            - user_type: geo_coordinates
-              user_data:
-                latitude: 45.508888
-                longitude: -73.561668
-        environment_variables:
-          type: array
-          description: List of environment variables to inject into the deployment
-          items:
-            $ref: '#/components/schemas/DeploymentEnvironmentVariable'
-        tags:
-          type: array
-          description: List of tags to associate with the deployment
-          items:
-            type: string
-            example: my-custom-tag
-        webhook_on_ready:
-          description: Webhook to call when the deployment is ready
-          allOf:
-            - $ref: '#/components/schemas/BasicWebhook'
-        webhook_on_error:
-          description: Webhook to call when the deployment is in error
-          allOf:
-            - $ref: '#/components/schemas/BasicWebhook'
-        webhook_on_terminated:
-          description: Webhook to call when the deployment is terminated
-          allOf:
-            - $ref: '#/components/schemas/BasicWebhook'
-      required:
-        - application
-        - users
-        - version
-        - private_host_ids
-    DeploymentCreate:
-      required:
-        - application
-        - users
-        - version
-      properties:
-        application:
-          type: string
-          description: Name of the application that will be deployed
-          example: my-app
-        version:
-          type: string
-          description: Name of the version within the application that will be deployed
-          example: 25.05.30-16.45.19-04
-        require_cached_locations:
-          type: boolean
-          default: false
-          description: Deploy faster by limiting placement to locations with cached image.
-          nullable: true
-        users:
-          type: array
-          description: >-
-            List of users. These users will be used to select the locations for
-            the deployment
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/User'
-          example:
-            - user_type: ip_address
-              user_data:
-                ip_address: 75.28.35.192
-            - user_type: geo_coordinates
-              user_data:
-                latitude: 45.508888
-                longitude: -73.561668
-        environment_variables:
-          type: array
-          description: List of environment variables to inject into the deployment
-          items:
-            $ref: '#/components/schemas/DeploymentEnvironmentVariable'
-        tags:
-          type: array
-          description: List of tags to associate with the deployment
-          items:
-            type: string
-            example: my-custom-tag
-        webhook_on_ready:
-          description: Webhook to call when the deployment is ready
-          allOf:
-            - $ref: '#/components/schemas/BasicWebhook'
-        webhook_on_error:
-          description: Webhook to call when the deployment is in error
-          allOf:
-            - $ref: '#/components/schemas/BasicWebhook'
-        webhook_on_terminated:
-          description: Webhook to call when the deployment is terminated
-          allOf:
-            - $ref: '#/components/schemas/BasicWebhook'
-      type: object
-    User:
-      required:
-        - user_data
-        - user_type
-      properties:
-        user_type:
-          type: string
-          description: Type of user (e.g., ip_address or geo_coordinates)
-        user_data:
+        total_count:
+          type: integer
+          minimum: 0
+          example: 100
+        pagination:
           type: object
-          description: Dynamic user data depending on user_type
-          properties: {}
-          example:
-            ip_address: 75.28.35.192
-      type: object
-    DeploymentEnvironmentVariable:
+          properties:
+            number:
+              type: integer
+              minimum: 1
+              example: 1
+            next_page_number:
+              type: integer
+              minimum: 1
+              nullable: true
+              example: 2
+            previous_page_number:
+              type: integer
+              minimum: 1
+              nullable: true
+            paginator:
+              type: object
+              properties:
+                num_pages:
+                  type: integer
+                  minimum: 1
+                  example: 10
+              required:
+                - num_pages
+            has_next:
+              type: boolean
+              default: true
+            has_previous:
+              type: boolean
+              default: false
+          required:
+            - number
+            - next_page_number
+            - previous_page_number
+            - paginator
+            - has_next
+            - has_previous
       required:
-        - is_hidden
-        - key
-        - value
+        - total_count
+        - pagination
+    DeploymentV2:
+      required:
+        - application
+        - users
+        - version
       properties:
-        key:
+        application:
           type: string
-          description: Environment variable key
-          example: MY_ENVIRONMENT_VARIABLE
-        value:
+          description: Name of the application that will be deployed
+          example: my-game-server
+        version:
           type: string
-          description: Environment variable value
-          example: my-value
-        is_hidden:
+          description: Name of the version within the application that will be deployed
+          example: 25.05.30-16.45.19-04
+        resources:
+          type: object
+          properties:
+            cpu_units:
+              type: integer
+              description: >-
+                Amount of vCPU units assigned to deployment. (1024 units = 1
+                vCPU).
+              minimum: 256
+              example: 1536
+            memory_mib:
+              type: integer
+              description: >-
+                Amount of memory MB assigned to deployment, at most double your
+                vCPU units. (1024 MB = 1 GB).
+              minimum: 256
+              example: 3072
+          required:
+            - cpu_units
+            - memory_mib
+          description: Overrides app version resource specification if supplied.
+        require_cached_locations:
           type: boolean
-          description: An hidden environment variable is not shown in the UI
-          example: false
+          default: false
+          description: Deploy faster by limiting placement to locations with cached image.
+          nullable: true
+        users:
+          type: array
+          description: >-
+            List of users. These users will be used to select the locations for
+            the deployment
+          minItems: 1
+          items:
+            type: object
+            properties:
+              user_type:
+                type: string
+                description: Type of user (e.g., ip_address or geo_coordinates)
+              user_data:
+                type: object
+                description: Dynamic user data depending on user_type
+                properties: {}
+                example:
+                  ip_address: 75.28.35.192
+            required:
+              - user_data
+              - user_type
+          example:
+            - user_type: ip_address
+              user_data:
+                ip_address: 75.28.35.192
+            - user_type: geo_coordinates
+              user_data:
+                latitude: 45.508888
+                longitude: -73.561668
+        environment_variables:
+          type: array
+          description: List of environment variables to inject into the deployment
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                description: Environment variable key
+                example: MY_ENVIRONMENT_VARIABLE
+              value:
+                type: string
+                description: Environment variable value
+                example: my-value
+              is_hidden:
+                type: boolean
+                description: An hidden environment variable is not shown in the UI
+                example: false
+            required:
+              - is_hidden
+              - key
+              - value
+        tags:
+          type: array
+          description: List of tags to associate with the deployment
+          items:
+            type: string
+            example: my-custom-tag
+        webhook_on_ready:
+          description: Webhook to call when the deployment is ready
+          allOf:
+            - $ref: '#/components/schemas/BasicWebhook'
+        webhook_on_error:
+          description: Webhook to call when the deployment is in error
+          allOf:
+            - $ref: '#/components/schemas/BasicWebhook'
+        webhook_on_terminated:
+          description: Webhook to call when the deployment is terminated
+          allOf:
+            - $ref: '#/components/schemas/BasicWebhook'
       type: object
     BasicWebhook:
       required:
@@ -685,12 +912,15 @@ components:
       type: object
   responses: {}
   securitySchemes:
-    api-token:
+    apiKey1:
       type: apiKey
       in: header
       name: Authorization
+      description: >-
+        [Manage API tokens in
+        dashboard.](https://app.edgegap.com/user-settings?tab=tokens)
 servers:
   - url: https://api.edgegap.com/v2
-    description: Edgegap V2
+    description: v2
 security:
-  - api-token: []
+  - apiKey1: []

@@ -34,7 +34,13 @@ check('the command runs the stdio server', pkg.bin?.['edgegap-mcp'] === 'dist/in
 for (const workerOnly of ['agents', '@modelcontextprotocol/server', 'wrangler', '@posthog/mcp', 'posthog-node']) {
   check(`${workerOnly} is not a runtime dependency`, !(workerOnly in (pkg.dependencies ?? {})));
 }
-check('repository field set, so npm links to the source', /github\.com\/edgegap\/edgegap-mcp/.test(pkg.repository?.url ?? ''));
+// The repository was renamed from edgegap/edgegap-mcp. GitHub redirects the
+// old name, but npm and the MCP registry show whatever is published.
+check('repository field set, so npm links to the source', /github\.com\/edgegap\/llm-mcp-server\.git$/.test(pkg.repository?.url ?? ''), pkg.repository?.url);
+check('homepage and bugs use the current repository name', [pkg.homepage, pkg.bugs?.url].every((u) => /github\.com\/edgegap\/llm-mcp-server\b/.test(u ?? '')));
+// The registry and directories show this icon; the same file is the one-click bundle's.
+check('server.json has an https icon that is the repo icon.png', server.icons?.[0]?.src === 'https://raw.githubusercontent.com/edgegap/llm-mcp-server/main/icon.png' && server.icons[0].mimeType === 'image/png', JSON.stringify(server.icons));
+check('server.json names the current repository', server.repository?.url === 'https://github.com/edgegap/llm-mcp-server', server.repository?.url);
 check('mcpName matches the registry name', pkg.mcpName === server.name, `${pkg.mcpName} vs ${server.name}`);
 
 // The version is hardcoded in five places; a release with them out of step

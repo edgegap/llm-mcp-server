@@ -153,6 +153,42 @@
           "properties": {},
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "server": {
+              "type": "string"
+            },
+            "transport": {
+              "type": "string"
+            },
+            "api_host": {
+              "type": "string"
+            },
+            "api_base_url": {
+              "type": "string"
+            },
+            "read_only": {
+              "type": "boolean"
+            },
+            "max_duration_ceiling_minutes": {
+              "type": "number"
+            },
+            "skills_pack": {
+              "type": "string"
+            },
+            "forced_deploy_tag": {
+              "type": "string"
+            },
+            "guardrails": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {}
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -512,13 +548,13 @@
               }
             },
             "cpu_units": {
-              "description": "Override the version CPU (with memory_mb). Not in the published v2 spec, so the API may ignore it; a version with the size you need is the reliable way.",
+              "description": "Override the version's CPU for this deployment only, with memory_mb. 1024 = 1 vCPU.",
               "type": "integer",
               "minimum": 256,
               "maximum": 9007199254740991
             },
             "memory_mb": {
-              "description": "Override the version memory (with cpu_units). Same caveat as cpu_units.",
+              "description": "Override the version's memory for this deployment only, with cpu_units. At most 2x cpu_units.",
               "type": "integer",
               "minimum": 256,
               "maximum": 9007199254740991
@@ -534,6 +570,49 @@
             "users"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "auto_stop_after_minutes": {
+              "type": "number"
+            },
+            "auto_stop": {
+              "type": "string"
+            },
+            "warning": {
+              "type": "string"
+            },
+            "resources": {
+              "type": "object",
+              "properties": {
+                "cpu_units": {
+                  "type": "number"
+                },
+                "memory_mib": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "next_step": {
+              "type": "string"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
         },
         "annotations": {
           "destructiveHint": false,
@@ -652,6 +731,97 @@
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "active": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": "string"
+            },
+            "registry_credentials_set": {
+              "type": "boolean"
+            },
+            "cpu_units": {
+              "type": "number"
+            },
+            "memory_mb": {
+              "type": "number"
+            },
+            "max_duration_minutes": {
+              "type": "number"
+            },
+            "ports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "port": {
+                    "type": "number"
+                  },
+                  "protocol": {
+                    "type": "string"
+                  },
+                  "tls_upgrade": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "force_cache": {
+              "type": "boolean"
+            },
+            "caching_percent": {
+              "type": "number"
+            },
+            "verify_image": {
+              "type": "boolean"
+            },
+            "restart_policy": {
+              "type": "string"
+            },
+            "termination_grace_period_seconds": {
+              "type": "number"
+            },
+            "env": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "hidden": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "auto_stop_after_minutes": {
+              "type": "number"
+            },
+            "auto_stop": {
+              "type": "string"
+            },
+            "warning": {
+              "type": "string"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -673,6 +843,76 @@
             "request_id"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "running": {
+              "type": "boolean"
+            },
+            "ready": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": "boolean"
+            },
+            "error_detail": {
+              "type": "string"
+            },
+            "fqdn": {
+              "type": "string"
+            },
+            "public_ip": {
+              "type": "string"
+            },
+            "application": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "elapsed_seconds": {
+              "type": "number"
+            },
+            "ports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "connect": {
+                    "type": "string"
+                  },
+                  "external": {
+                    "type": "number"
+                  },
+                  "internal": {
+                    "type": "number"
+                  },
+                  "protocol": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "next_step": {
+              "type": "string"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
         },
         "annotations": {
           "readOnlyHint": true,
@@ -736,6 +976,187 @@
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string"
+            },
+            "cpu": {
+              "type": "object",
+              "properties": {
+                "latest": {
+                  "type": "number"
+                },
+                "average": {
+                  "type": "number"
+                },
+                "peak": {
+                  "type": "number"
+                },
+                "samples": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "cpu_throttle_rate": {
+              "type": "object",
+              "properties": {
+                "latest": {
+                  "type": "number"
+                },
+                "average": {
+                  "type": "number"
+                },
+                "peak": {
+                  "type": "number"
+                },
+                "samples": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "memory": {
+              "type": "object",
+              "properties": {
+                "latest": {
+                  "type": "number"
+                },
+                "average": {
+                  "type": "number"
+                },
+                "peak": {
+                  "type": "number"
+                },
+                "samples": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "network_receive": {
+              "type": "object",
+              "properties": {
+                "latest": {
+                  "type": "number"
+                },
+                "average": {
+                  "type": "number"
+                },
+                "peak": {
+                  "type": "number"
+                },
+                "samples": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "network_transmit": {
+              "type": "object",
+              "properties": {
+                "latest": {
+                  "type": "number"
+                },
+                "average": {
+                  "type": "number"
+                },
+                "peak": {
+                  "type": "number"
+                },
+                "samples": {
+                  "type": "number"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "totals": {
+              "type": "object",
+              "properties": {
+                "received": {
+                  "type": "number"
+                },
+                "transmitted": {
+                  "type": "number"
+                },
+                "disk_read": {
+                  "type": "number"
+                },
+                "disk_written": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": {}
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -792,7 +1213,7 @@
       {
         "name": "edgegap_get_skill",
         "title": "Load an Edgegap agent skill",
-        "description": "Load one Edgegap agent skill: its SKILL.md (the workflow to follow) by default, or one of its reference documents or templates with file. Load the matching skill before acting on a game project — edgegap-ngo for Unity with Netcode for GameObjects, edgegap-fishnet for Unity with FishNet, edgegap-purrnet for Unity with PurrNet, edgegap-fusion for Unity with Photon Fusion 2, edgegap-unity for other Unity projects, edgegap-unreal for Unreal Engine (edgegap-eos-voice for voice chat), edgegap-fusion-simplefps for the Photon Simple FPS sample, edgegap-godot for Godot 4 with a Godot server, edgegap-colyseus for a Colyseus server, edgegap-nakama for a Nakama backend, edgegap-playfab for PlayFab Matchmaking, edgegap-threejs for a Three.js/browser game with a Node.js server, edgegap-manus for a browser game built with Manus, edgegap otherwise — and fetch the references and templates it points to as you reach them. No API call.",
+        "description": "Load one Edgegap agent skill: its SKILL.md (the workflow to follow) by default, or one of its reference documents or templates with file. Load the skill that matches the project before acting (the server instructions and edgegap_list_skills say which; \"edgegap\" when unsure), then fetch the references and templates it points to as you reach them. No API call.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -833,6 +1254,79 @@
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "type": "string"
+            },
+            "total": {
+              "type": "number"
+            },
+            "showing": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "versions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "registry_credentials_set": {
+                    "type": "boolean"
+                  },
+                  "cpu_units": {
+                    "type": "number"
+                  },
+                  "memory_mb": {
+                    "type": "number"
+                  },
+                  "max_duration_minutes": {
+                    "type": "number"
+                  },
+                  "ports": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "port": {
+                          "type": "number"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "tls_upgrade": {
+                          "type": "boolean"
+                        }
+                      },
+                      "additionalProperties": {}
+                    }
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -858,6 +1352,43 @@
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "showing": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "applications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "last_updated": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
         },
         "annotations": {
           "readOnlyHint": true,
@@ -964,6 +1495,52 @@
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "showing": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "deployments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "request_id": {
+                    "type": "string"
+                  },
+                  "ready": {
+                    "type": "boolean"
+                  },
+                  "fqdn": {
+                    "type": "string"
+                  },
+                  "started": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -997,6 +1574,61 @@
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "filtered_for": {
+              "type": "string"
+            },
+            "total": {
+              "type": "number"
+            },
+            "showing": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "city": {
+                    "type": "string"
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "type": "string"
+                  },
+                  "continent": {
+                    "type": "string"
+                  },
+                  "latitude": {
+                    "type": "number"
+                  },
+                  "longitude": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "messages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -1022,6 +1654,43 @@
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "beacons": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "udp_port": {
+                    "type": "number"
+                  },
+                  "tcp_port": {
+                    "type": "number"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "type": "string"
+                  },
+                  "continent": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
         },
         "annotations": {
           "readOnlyHint": true,
@@ -1057,6 +1726,52 @@
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "image_name": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            },
+            "total": {
+              "type": "number"
+            },
+            "showing": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "tag": {
+                    "type": "string"
+                  },
+                  "pushed": {
+                    "type": "string"
+                  },
+                  "size_mb": {
+                    "type": "number"
+                  },
+                  "digest": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -1071,6 +1786,55 @@
           "properties": {},
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "total": {
+              "type": "number"
+            },
+            "showing": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "sessions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "ready": {
+                    "type": "boolean"
+                  },
+                  "linked": {
+                    "type": "boolean"
+                  },
+                  "players": {
+                    "type": "number"
+                  },
+                  "relay": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "openWorldHint": true
@@ -1079,7 +1843,7 @@
       {
         "name": "edgegap_list_skills",
         "title": "List the Edgegap agent skills",
-        "description": "List the Edgegap agent skills: tested, step-by-step workflows for getting a multiplayer game online on Edgegap, with templates (Dockerfiles, matchmaker configs, Unity C# and Unreal C++ drop-ins) and known pitfalls. Before working on a game project, load the matching skill with edgegap_get_skill: edgegap-ngo for Unity with Netcode for GameObjects, edgegap-fishnet for Unity with FishNet, edgegap-purrnet for Unity with PurrNet, edgegap-fusion for Unity with Photon Fusion 2, edgegap-unity for other Unity projects, edgegap-unreal for Unreal Engine (edgegap-eos-voice to add voice chat to it), edgegap-fusion-simplefps for the Photon Simple FPS sample, edgegap-godot for Godot 4 with a Godot server, edgegap-colyseus for a Colyseus server, edgegap-nakama for a game with a Nakama backend, edgegap-playfab for a game that keeps PlayFab Matchmaking, edgegap-threejs for a Three.js or other browser game with its own Node.js server, edgegap-manus for a browser game built with Manus, edgegap for any other engine or platform questions; it routes to the rest. Also says whether a newer skills pack is on GitHub (reads one version number, no Edgegap API call).",
+        "description": "List the Edgegap agent skills: tested, step-by-step workflows for getting a multiplayer game online on Edgegap, with templates (Dockerfiles, matchmaker configs, Unity C# and Unreal C++ drop-ins) and known pitfalls. Each entry says which engine, netcode or backend it is for, and the server instructions map projects to skills. Before working on a game project, load the matching skill with edgegap_get_skill; \"edgegap\" covers any other engine and routes to the rest. Also says whether a newer skills pack is on GitHub (reads one version number, no Edgegap API call).",
         "inputSchema": {
           "type": "object",
           "properties": {},
@@ -1187,7 +1951,7 @@
       {
         "name": "edgegap_update_app_version",
         "title": "Update an application version",
-        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login. Resources, ports and env vars cannot be changed here; create a new version for those.",
+        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep. CPU and memory cannot be changed here; create a new version, or override them per deployment in edgegap_deploy.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1241,6 +2005,61 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 3600
+            },
+            "ports": {
+              "description": "REPLACES every port on the version. Include the ports to keep, not only new ones.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 59999,
+                    "description": "Port the server listens on."
+                  },
+                  "protocol": {
+                    "type": "string",
+                    "description": "One of UDP, TCP, TCP/UDP, HTTP, HTTPS, WS, WSS. Most game servers use UDP."
+                  },
+                  "name": {
+                    "description": "Label, e.g. \"gameport\".",
+                    "type": "string"
+                  },
+                  "to_check": {
+                    "description": "Readiness check on this port. Default true.",
+                    "type": "boolean"
+                  },
+                  "tls_upgrade": {
+                    "description": "wss:// / https:// for browser clients. WS and HTTP ports only.",
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "port",
+                  "protocol"
+                ]
+              }
+            },
+            "env": {
+              "description": "REPLACES every env var on the version; [] removes them all. Values are never echoed back.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "value"
+                ]
+              }
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -1365,6 +2184,67 @@
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string"
+            },
+            "engine": {
+              "type": "string"
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "severity": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "warnings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "severity": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "fix": {
+                    "type": "string"
+                  },
+                  "line": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
+        },
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -1393,6 +2273,79 @@
             "request_id"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "running": {
+              "type": "boolean"
+            },
+            "ready": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": "boolean"
+            },
+            "error_detail": {
+              "type": "string"
+            },
+            "fqdn": {
+              "type": "string"
+            },
+            "public_ip": {
+              "type": "string"
+            },
+            "application": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "elapsed_seconds": {
+              "type": "number"
+            },
+            "ports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "connect": {
+                    "type": "string"
+                  },
+                  "external": {
+                    "type": "number"
+                  },
+                  "internal": {
+                    "type": "number"
+                  },
+                  "protocol": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            },
+            "next_step": {
+              "type": "string"
+            },
+            "waited_seconds": {
+              "type": "number"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "additionalProperties": {}
         },
         "annotations": {
           "readOnlyHint": true,

@@ -773,6 +773,28 @@ r = json(await acall('edgegap_update_app_version', { application: 'my-game', ver
 let patch = calls.find((x) => x.method === 'PATCH');
 check('update_app_version: PATCH with only the passed fields', patch?.url === '/v1/app/my-game/version/build-42' && JSON.stringify(Object.keys(patch.body).sort()) === JSON.stringify(['docker_tag', 'force_cache', 'max_duration']), JSON.stringify(patch?.body));
 check('update_app_version: max_duration capped to the ceiling', patch?.body?.max_duration === 60 && r.notes?.some((n) => /capped/.test(n)));
+// ports and env replace the whole list (spec 2026.10.23: "Updating replaces all current values")
+calls.length = 0;
+r = json(await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', ports: [{ port: 7777, protocol: 'UDP' }, { port: 7778, protocol: 'WS', tls_upgrade: true }], env: [{ key: 'GAME_MODE', value: 'ffa' }, { key: 'STEAM_API_KEY', value: 'k' }] }));
+patch = calls.find((x) => x.method === 'PATCH');
+check('update_app_version: ports sent in full, with defaults', JSON.stringify(patch?.body?.ports) === JSON.stringify([{ port: 7777, protocol: 'UDP', name: 'gameport', to_check: true, tls_upgrade: false }, { port: 7778, protocol: 'WS', name: 'gameport', to_check: true, tls_upgrade: true }]), JSON.stringify(patch?.body?.ports));
+check('update_app_version: env sent as envs, secret-named ones hidden', JSON.stringify(patch?.body?.envs?.map((e) => [e.key, e.is_hidden])) === JSON.stringify([['GAME_MODE', false], ['STEAM_API_KEY', true]]));
+check('update_app_version: the result says the lists were replaced', r.notes?.some((n) => /ports replaced/.test(n)) && r.notes?.some((n) => /env replaced/.test(n)));
+check('update_app_version: the description warns ports/env replace the list', /REPLACE/.test((await ac.listTools()).tools.find((t) => t.name === 'edgegap_update_app_version')?.description ?? ''));
+for (const [label, extra] of [['tls_upgrade on UDP', { ports: [{ port: 7777, protocol: 'UDP', tls_upgrade: true }] }], ['token in an env value', { env: [{ key: 'X', value: REAL }] }]]) {
+  calls.length = 0;
+  res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', ...extra });
+  check(`update_app_version, ${label}: refused, nothing sent`, res.isError && calls.length === 0, text(res).slice(0, 120));
+}
+// deploy resources override: documented in v2 (DeploymentV2.resources), both or neither, ratio checked
+calls.length = 0;
+r = json(await acall('edgegap_deploy', { ...dep, cpu_units: 1024, memory_mb: 2048 }));
+check('deploy: resources override sent as cpu_units/memory_mib and reported', JSON.stringify(calls.find((x) => x.method === 'POST')?.body?.resources) === JSON.stringify({ cpu_units: 1024, memory_mib: 2048 }) && r.resources?.cpu_units === 1024 && r.resources_note === undefined);
+for (const [label, extra] of [['only cpu_units', { cpu_units: 1024 }], ['memory over 2x cpu', { cpu_units: 512, memory_mb: 2048 }]]) {
+  calls.length = 0;
+  res = await acall('edgegap_deploy', { ...dep, ...extra });
+  check(`deploy, ${label}: refused, nothing deployed`, res.isError && !calls.some((x) => x.method === 'POST'), text(res).slice(0, 120));
+}
 for (const [label, extra] of [['"latest"', { docker_tag: 'latest' }], ['host in docker_image', { docker_image: 'docker.io/me/srv:v1' }], ['token as registry login', { registry_token: REAL }], ['nothing to change', {}]]) {
   calls.length = 0;
   res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', ...extra });
@@ -836,6 +858,13 @@ res = await acall('edgegap_list_locations', {});
 check('results carry structuredContent equal to the JSON text', res.structuredContent?.locations?.length === 2 && JSON.stringify(res.structuredContent) === JSON.stringify(JSON.parse(res.content.at(-1).text)));
 res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42' });
 check('errors carry no structuredContent', res.isError && res.structuredContent === undefined);
+// ------------------------------------------------ 13. argument errors ----
+console.log('\n13. argument errors the agent can act on');
+res = await acall('edgegap_deploy', { application: 1 });
+t = text(res);
+check('bad arguments: host label first, like every result', res.isError && res.content[0].text.startsWith('['), res.content[0].text);
+check('bad arguments: one line per problem, in plain words', /- application: must be string \(got number\)/.test(t) && /- version: missing \(required\)/.test(t) && /- users: missing \(required\)/.test(t), t);
+check('bad arguments: lists required and optional parameters', /Required: application, version, users\./.test(t) && /Optional: .*dry_run/.test(t), t);
 await ac.close();
 
 // ------------------------------------------------- token prefix in env ----

@@ -2,6 +2,20 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.11.0
+
+- `edgegap_update_app_version` takes `ports` and `env`. Edgegap's spec (2026.10.23) now says updating them **replaces all current values**, so the description, the parameters and the result all say so. `env` gets the same token refusal and secret-name hiding as create; `ports` gets the same `tls_upgrade` check.
+- `edgegap_deploy`'s `cpu_units`/`memory_mb` override is documented by Edgegap now (v2 `DeploymentV2.resources`), so the "may be ignored" warning is gone. Passing only one of the two is refused instead of silently dropped, memory over twice the CPU is refused locally, and the result reports the `resources` that were sent.
+- `spec/` refreshed to the latest Edgegap specs (v1 2026.10.23, v2 2026.08.05).
+- Lighter connection:
+  - `edgegap_list_skills` and `edgegap_get_skill` no longer repeat the engine-to-skill routing; the server instructions carry it once.
+  - Resources list each skill's `SKILL.md` only (21 instead of 257). Every other file is read through the new `edgegap-skill://{skill}/{+path}` template, on the local and hosted servers alike.
+- Output schemas on 14 tools: context, apps and versions, locations and beacons, deploy, deployments, metrics, registry tags, relay sessions, and the config validator. They're loose (optional fields, extra fields allowed), so they document the result rather than reject it. Results also leave out `null` fields.
+- Bad arguments get the API host label like every other result, one plain line per problem ("version: missing (required)", "application: must be string (got number)"), and the tool's required and optional parameters. Errors the SDK raises itself now go through the token scrub too.
+- The repository is `edgegap/llm-mcp-server`: `package.json`, `server.json` and the README use the new name. The Docker image is published as `ghcr.io/edgegap/llm-mcp-server`, and still as `ghcr.io/edgegap/edgegap-mcp` for existing hosts.
+- The MCP registry entry has an icon (the repository's `icon.png`).
+- Dependencies: `zod` ^4.6.7, plus `body-parser` 2.4.0 and `fast-uri` 3.1.9 in the lockfile, for GHSA advisories (zod memory exhaustion, body-parser DoS, fast-uri URI spoofing). They affected the Docker image, the hosted Worker and the `.mcpb` bundle, which install from the lockfile. `npx` installs already resolved the fixed versions. `npm audit --omit=dev` is clean. Dev-only `wrangler` 4.152.0 still carries a Cloudflare-pinned `undici` advisory.
+
 ## 0.10.0 (2026-10-22)
 
 From a review of the hosted server's PostHog errors: several "errors" were expected answers, and some real ones did not say what to do.

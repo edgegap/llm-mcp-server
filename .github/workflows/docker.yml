@@ -3,6 +3,11 @@
 # workflow's own GITHUB_TOKEN; no repository secrets needed.
 #
 # Tags pushed: sha-<commit> and main on every push to main; <version> on v* tags.
+#
+# Published under the repository's name, ghcr.io/edgegap/llm-mcp-server, and
+# still under the old one, ghcr.io/edgegap/edgegap-mcp, so hosts that already
+# pull it (the support agent VM) keep getting updates. Drop the old name once
+# nothing pulls it.
 
 name: Docker image
 
@@ -16,8 +21,6 @@ permissions:
   contents: read
   packages: write
 
-env:
-  IMAGE: ghcr.io/edgegap/edgegap-mcp
 
 jobs:
   push:
@@ -28,7 +31,9 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ env.IMAGE }}
+          images: |
+            ghcr.io/edgegap/llm-mcp-server
+            ghcr.io/edgegap/edgegap-mcp
           tags: |
             type=sha,prefix=sha-
             type=ref,event=branch
