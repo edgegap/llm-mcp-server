@@ -34,11 +34,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/edgegap/edgegap-mcp.git"
+    "url": "git+https://github.com/edgegap/llm-mcp-server.git"
   },
-  "homepage": "https://github.com/edgegap/edgegap-mcp#readme",
+  "homepage": "https://github.com/edgegap/llm-mcp-server#readme",
   "bugs": {
-    "url": "https://github.com/edgegap/edgegap-mcp/issues"
+    "url": "https://github.com/edgegap/llm-mcp-server/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
