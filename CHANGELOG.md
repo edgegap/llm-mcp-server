@@ -2,6 +2,14 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.13.1
+
+Hosted analytics fixes, found in the first day of 0.12.0 data. No tool behavior changes.
+
+- Refusals (a token in an env var, the `latest` tag, the encrypted-secret placeholder, a wildcard stop) are recorded as `error_code: GUARDRAIL_REFUSED`. They were recorded as `VALIDATION_FAILED`, because the check looked for "Refused" at the start of the result, which begins with the `[api.edgegap.com]` host label.
+- `client_name` and `client_version` are set on every event. The hosted server is stateless, so the SDK only knew the MCP client on the `initialize` request and most tool calls had no client name. Later requests now name the client from their `User-Agent` (`claude-code/2.1.310 (cli)` → `claude-code` 2.1.310); the new `client_name_source` says which: `client_info` or `user_agent`.
+- Tests: `test/unit.test.mjs` (refusals after the host label), `test/reports.mjs` and `test/worker-telemetry.mjs` require `GUARDRAIL_REFUSED` exactly, and check the User-Agent fallback.
+
 ## 0.13.0
 
 The Edgegap API never returns stored secrets: reading a version gives the literal string "This value is set and encrypted" for `private_username`, `private_token` and every secret env value (found 2026-10-26). An agent that copied a version's settings sent the placeholder back, it replaced the real login, and image pulls failed with "Unable to login".

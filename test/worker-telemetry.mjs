@@ -157,7 +157,10 @@ try {
   check('every failed call: error_code and failed_stage', calls.filter((e) => props(e).success === false).every((e) => typeof props(e).error_code === 'string' && typeof props(e).failed_stage === 'string'), JSON.stringify(calls.filter((e) => props(e).success === false).map((e) => [props(e).tool_name, props(e).error_code, props(e).failed_stage])));
   check('no token: AUTH_ABSENT, pre_flight, upstream_status null', props(noHeader).error_code === 'AUTH_ABSENT' && props(noHeader).failed_stage === 'pre_flight' && props(noHeader).upstream_status === null, JSON.stringify(props(noHeader)));
   check('foreign bearer: AUTH_FOREIGN', props(foreign).error_code === 'AUTH_FOREIGN');
-  check('refused stop: GUARDRAIL_REFUSED or VALIDATION_FAILED at pre_flight', ['GUARDRAIL_REFUSED', 'VALIDATION_FAILED'].includes(props(stopped).error_code) && props(stopped).failed_stage === 'pre_flight', JSON.stringify(props(stopped)));
+  check('refused stop: GUARDRAIL_REFUSED at pre_flight', props(stopped).error_code === 'GUARDRAIL_REFUSED' && props(stopped).failed_stage === 'pre_flight', JSON.stringify(props(stopped)));
+  // The stateless Worker only learns clientInfo on initialize: later calls name the client from User-Agent.
+  check('tool calls without clientInfo: client_name from the User-Agent', calls.filter((e) => props(e).client_name_source === 'user_agent').length > 0 && calls.every((e) => typeof props(e).client_name === 'string' && ['client_info', 'user_agent'].includes(props(e).client_name_source)) && calls.filter((e) => props(e).client_name_source === 'user_agent').every((e) => props(e).client_name === 'telemetry-test' && props(e).client_version === '1.0'), JSON.stringify(calls.map((e) => [props(e).tool_name, props(e).client_name, props(e).client_name_source])));
+  check('initialize keeps the clientInfo name', of('mcp_session_started').some((e) => props(e).client_name === 'claude-code' && props(e).client_name_source === 'client_info'));
   const validated = calls.find((e) => props(e).tool_name === 'edgegap_validate_server_config');
   check('validate_server_config: validation_result and issue_count', ['pass', 'fail'].includes(props(validated).validation_result) && typeof props(validated).issue_count === 'number', JSON.stringify(props(validated)));
   check('get_skill: skill_name', props(skill).skill_name === 'edgegap-unity');

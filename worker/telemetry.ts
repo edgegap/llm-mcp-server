@@ -118,7 +118,7 @@ const PROPERTIES = new Set([
   // Ours: request facts (eventProperties).
   'read_only', 'has_token', 'auth_problem', 'country', 'skill', 'dry_run', 'prompt', 'prompt_name',
   'error_cause', 'probe', 'is_probe', 'org_id_hash', 'is_internal', 'transport', 'server_version',
-  'client_name', 'client_version',
+  'client_name', 'client_version', 'client_name_source',
   // Ours: what the call did (src/callreport.ts).
   'tool_name', 'success', 'error_code', 'error_message', 'upstream_status', 'upstream_calls',
   'failed_stage', 'latency_ms', 'request_id_hash',
@@ -183,11 +183,30 @@ const AGENT_PROPERTIES = ['$mcp_intent', '$mcp_intent_source', '$mcp_llm_model',
 type Event = Parameters<BeforeSendFn>[0];
 
 /**
+ * The client named by a User-Agent header: its first product token,
+ * "claude-code/2.1.310 (cli)" → claude-code 2.1.310. Undefined when there is
+ * none to read.
+ */
+export function clientFromUserAgent(userAgent: string | null | undefined): { name: string; version?: string } | undefined {
+  const m = userAgent?.trim().match(/^([A-Za-z0-9][\w.@-]*)(?:\/([\w.+-]+))?/);
+  if (!m) return undefined;
+  return { name: m[1].slice(0, 80), ...(m[2] ? { version: m[2].slice(0, 40) } : {}) };
+}
+
+/**
  * Keeps only allowlisted properties, then derives the fields every event
  * should have from what the SDK set: tool_name, success, latency_ms,
  * client_name, and for errors the tool layer never saw, error_code.
+ *
+ * client_name comes from MCP clientInfo when the SDK has it. The Worker is
+ * stateless (one server per HTTP request), so the SDK only knows clientInfo on
+ * the initialize request; every later request falls back to the client named
+ * by its User-Agent, and client_name_source says which one it was.
  */
-export function allowlist(agentFields: boolean): (event: Event) => Event | null {
+export function allowlist(
+  agentFields: boolean,
+  userAgentClient?: { name: string; version?: string }
+): (event: Event) => Event | null {
   const allowed = new Set([...PROPERTIES, ...(agentFields ? AGENT_PROPERTIES : [])]);
   return (event) => {
     if (!EVENTS.has(event.event)) return null;
@@ -196,10 +215,21 @@ export function allowlist(agentFields: boolean): (event: Event) => Event | null 
     for (const [k, v] of Object.entries(raw)) {
       if (allowed.has(k)) properties[k] = v;
     }
-    const clientName = typeof raw.$mcp_client_name === 'string' ? raw.$mcp_client_name : undefined;
-    if (clientName && properties.client_name === undefined) properties.client_name = clientName.slice(0, 80);
-    if (typeof raw.$mcp_client_version === 'string' && properties.client_version === undefined) {
-      properties.client_version = raw.$mcp_client_version.slice(0, 40);
+    const clientName = typeof raw.$mcp_client_name === 'string' && raw.$mcp_client_name ? raw.$mcp_client_name : undefined;
+    if (properties.client_name === undefined) {
+      if (clientName) {
+        properties.client_name = clientName.slice(0, 80);
+        properties.client_name_source = 'client_info';
+        if (typeof raw.$mcp_client_version === 'string' && properties.client_version === undefined) {
+          properties.client_version = raw.$mcp_client_version.slice(0, 40);
+        }
+      } else if (userAgentClient) {
+        properties.client_name = userAgentClient.name;
+        properties.client_name_source = 'user_agent';
+        if (userAgentClient.version && properties.client_version === undefined) properties.client_version = userAgentClient.version;
+      }
+    } else if (properties.client_name_source === undefined) {
+      properties.client_name_source = 'client_info';
     }
     if (event.event === '$mcp_tool_call') {
       if (properties.tool_name === undefined && typeof raw.$mcp_tool_name === 'string') properties.tool_name = raw.$mcp_tool_name.slice(0, 80);
@@ -218,7 +248,7 @@ export function allowlist(agentFields: boolean): (event: Event) => Event | null 
           sanitizeErrorMessage(typeof raw.$mcp_error_message === 'string' ? raw.$mcp_error_message : undefined) ?? null;
       }
     }
-    const probeClient = clientName !== undefined && PROBE_CLIENTS.test(clientName);
+    const probeClient = typeof properties.client_name === 'string' && PROBE_CLIENTS.test(properties.client_name);
     if (probeClient) properties.probe = true;
     const unauthenticated = properties.has_token === false;
     const fakeTool = typeof properties.tool_name === 'string' && PROBE_TOOLS.test(properties.tool_name);
@@ -281,7 +311,7 @@ export function createAnalytics(
   const host = (env.POSTHOG_HOST?.trim() || 'https://us.i.posthog.com').replace(/\/+$/, '');
   const posthog = client(key, host);
   const agentFields = env.POSTHOG_AGENT_FIELDS === '1';
-  const filter = allowlist(agentFields);
+  const filter = allowlist(agentFields, clientFromUserAgent(request.headers.get('User-Agent')));
 
   const salt = env.TELEMETRY_SALT?.trim();
   const distinctId: Promise<string | undefined> =
@@ -334,6 +364,7 @@ export function createAnalytics(
             org_id_hash: p.org_id_hash ?? null,
             is_internal: p.is_internal ?? false,
             client_name: p.client_name,
+            client_name_source: p.client_name_source,
             transport: TRANSPORT,
             server_version: context.serverVersion,
             $geoip_disable: true,

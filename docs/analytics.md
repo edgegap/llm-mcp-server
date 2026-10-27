@@ -41,7 +41,8 @@ There are no OAuth events (`mcp_auth_started`/`completed`/`failed`): the hosted 
 | `is_internal` | `true` when `org_id_hash` is in `TELEMETRY_INTERNAL_IDS`. |
 | `transport` | `streamable_http` (the only transport that sends analytics). |
 | `server_version` | e.g. `0.12.0`. Also `$mcp_server_version`. |
-| `client_name`, `client_version` | From MCP `clientInfo`, when the SDK knows it. Also `$mcp_client_name`, `$mcp_client_version`. |
+| `client_name`, `client_version` | From MCP `clientInfo` on `initialize`. The server is stateless, so later requests take them from the `User-Agent` header's first product (`claude-code/2.1.310 (cli)` → `claude-code`, `2.1.310`). Raw values: `$mcp_client_name`, `$mcp_client_version`, `$mcp_client_user_agent`. |
+| `client_name_source` | `client_info` or `user_agent`: where `client_name` came from. A User-Agent name can be a library (`node`, `python-httpx`) rather than the agent. |
 | `read_only`, `country` | Read-only mode; Cloudflare's country code (GeoIP is off). |
 | `probe` | `true` for known scanner clients (`sentinel-probe`, `verifymcp-probe`, `mcp-checkup-prober`). Kept for dashboards from 0.10.0. |
 | `is_probe` | `true` when there is no token and the client is a known scanner, or the tool name is made up (`__verifymcp_*`, an unknown tool). Events are kept, not dropped. |
