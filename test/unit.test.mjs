@@ -7,7 +7,7 @@ import { badTag, badImage, looksSecret, isEncryptedPlaceholder } from '../dist/i
 import { parseBaseUrl, stripTokenPrefix, redact, loadConfig, ConfigError } from '../dist/config.js';
 import { maskSecrets } from '../dist/client.js';
 import { argumentError } from '../dist/tools.js';
-import { sanitizeErrorMessage, codeForStatus, finishReport } from '../dist/callreport.js';
+import { sanitizeErrorMessage, codeForStatus, codeForToolFailure, finishReport } from '../dist/callreport.js';
 import { isListable } from '../dist/skills.js';
 import { z } from 'zod';
 
@@ -47,6 +47,15 @@ test('codeForStatus maps statuses to stable codes, per resource', () => {
   assert.equal(codeForStatus(403, undefined, 'NO_RELAY_ACCESS'), 'NO_RELAY_ACCESS');
   assert.equal(codeForStatus(403, undefined, undefined, 'Deployment quota reached for your plan'), 'QUOTA_REACHED');
   assert.equal(codeForStatus(503), 'UPSTREAM_ERROR');
+});
+
+test('codeForToolFailure reads refusals after the host label', () => {
+  // Every result reaches the report with the host label first (live bug in 0.12.0-0.13.0).
+  assert.equal(codeForToolFailure('[api.edgegap.com]\nRefused: registry_token is "x". Nothing was sent.'), 'GUARDRAIL_REFUSED');
+  assert.equal(codeForToolFailure('[custom · 127.0.0.1:1]\n"*" is not a single request_id. Wildcards, lists and empty IDs are refused.'), 'GUARDRAIL_REFUSED');
+  assert.equal(codeForToolFailure('[api.edgegap.com]\nNo skill named "x".'), 'SKILL_NOT_FOUND');
+  assert.equal(codeForToolFailure('[api.edgegap.com]\nInvalid arguments for edgegap_deploy. Nothing was sent.'), 'VALIDATION_FAILED');
+  assert.equal(codeForToolFailure('[api.edgegap.com]\nmemory_mb (900) exceeds twice cpu_units (256).'), 'VALIDATION_FAILED');
 });
 
 test('finishReport infers the stage from the API calls a failure made', () => {

@@ -165,9 +165,11 @@ export function codeForStatus(status: number, notFound?: ErrorCode, forbidden?: 
 
 /** The code for a tool's own refusal, read from its wording. */
 export function codeForToolFailure(text: string): ErrorCode {
-  if (/^Refused|refused/.test(text)) return 'GUARDRAIL_REFUSED';
-  if (/No skill named|is not a file in the/.test(text)) return 'SKILL_NOT_FOUND';
-  if (/^Invalid arguments|Input validation error/.test(text)) return 'VALIDATION_FAILED';
+  // Results reach the report with the "[api.edgegap.com]" host label first,
+  // so match the message itself, not the start of the whole text.
+  const message = text.replace(/^\[[^\]\n]+\]\n?/, '');
+  if (/^Refused\b|\brefused\b/im.test(message)) return 'GUARDRAIL_REFUSED';
+  if (/No skill named|is not a file in the/.test(message)) return 'SKILL_NOT_FOUND';
   return 'VALIDATION_FAILED';
 }
 

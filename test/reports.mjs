@@ -100,7 +100,7 @@ check('error_message: argument values masked, under 300 characters', !x.report.e
 x = await t.call('edgegap_list_deployments');
 check('API 500: UPSTREAM_ERROR at upstream', x.report.error_code === 'UPSTREAM_ERROR' && x.report.failed_stage === 'upstream' && x.report.upstream_status === 500);
 x = await t.call('edgegap_stop_deployment', { request_id: '*' });
-check('a refused stop: pre_flight, no API call', x.report.success === false && x.report.failed_stage === 'pre_flight' && x.report.upstream_status === null && x.report.upstream_calls === 0, JSON.stringify(x.report));
+check('a refused stop: GUARDRAIL_REFUSED at pre_flight, no API call', x.report.success === false && x.report.error_code === 'GUARDRAIL_REFUSED' && x.report.failed_stage === 'pre_flight' && x.report.upstream_status === null && x.report.upstream_calls === 0, JSON.stringify(x.report));
 x = await t.call('edgegap_deploy', { application: 1 });
 check('bad arguments (rejected by the SDK): VALIDATION_FAILED, pre_flight', x.report?.tool === 'edgegap_deploy' && x.report.error_code === 'VALIDATION_FAILED' && x.report.failed_stage === 'pre_flight', JSON.stringify(x.report));
 x = await t.call('edgegap_get_skill', { skill: 'no-such-skill' });
