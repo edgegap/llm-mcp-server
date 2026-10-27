@@ -12,15 +12,14 @@ Connect AI coding agents to Edgegap through our MCP server. Your agent can take 
 
 Use our MCP server when:
 
-* **Containerizing your game server** - your agent writes a Dockerfile for your build (or checks the one you have) against Edgegap's requirements, then pushes the image to your private Edgegap container registry.
-* **Deploying a dedicated server** - create an application and version, deploy close to your players, and get the connection address.
-* **Setting up matchmaking** - generate a matchmaker configuration that points at your deployed version, ready to upload in the dashboard.
-* **Running a host-client game** - create a relay session if your game is built with one player as host. See [Dedicated Servers or Relays?](#dedicated-servers-or-relays) first.
+* **Containerizing your game server** - your agent writes a Dockerfile for your build (or reviews the one you have) against best practices, pushes the image to our private container registry, and removes unused old image tags to reclaim registry capacity.
+* **Deploying a dedicated server** - create and update app versions, review available locations, deploy close to your players, and get server IP with ports to test client connection.
 * **Building a CI/CD pipeline** - test your deployments and teardown from a build system.
-* **Troubleshooting a game server issue** - inspect app versions and deployment status, read container logs, or reproduce a failed deployment.
+* **Troubleshooting a game server issue** - inspect app versions and deployment status, read container logs and CPU/memory utilization, or reproduce a failed deployment.
+* **Running client-host and peer-to-peer games** - create relay sessions providing NAT punchthrough and avoid connection blocking. Review [Orchestration Models](https://docs.edgegap.com/learn/orchestration/deployments#orchestration) and [Dedicated Servers or Relays?](#dedicated-servers-or-relays) before deciding.
 
 > [!WARNING]
-> Out of scope / not supported by MCP: creating or running a matchmaker (the MCP generates the configuration, you upload it in the dashboard); server browser; lobbies; managed clusters; private fleets; or billing.
+> Out of scope / not supported by MCP: building Linux server executable; creating, starting or stopping a matchmaker (upload the generated configuration in the dashboard); server browser; lobbies; managed clusters; private fleets; or billing.
 
 > [!NOTE]
 > If you need help, [please reach out to us over Discord](https://discord.gg/MmJf8fWjnt). For live games support see our [ticketing system](https://edgegap.atlassian.net/servicedesk/customer/portal/3).
@@ -297,7 +296,7 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_create_app_version` ● | Registers a container image as a deployable version. Supports TLS Upgrade on WS and HTTP ports, which browser (WebGL) clients need for `wss://`. |
 | `edgegap_update_app_version` ● | Changes an existing version: a new image tag, on/off, max duration, registry login, image caching (`force_cache`), shutdown grace period, ports, env vars. Only the fields passed change, but `ports` and `env` replace the whole list. Running deployments keep the old settings. |
 | `edgegap_list_locations` | Lists the cities Edgegap deploys to, or, for one version, only those with capacity right now. |
-| `edgegap_list_ping_beacons` | Lists the ping beacons game clients measure latency against before matchmaking. |
+| `edgegap_list_ping_beacons` | Lists the ping beacons game clients measure their latency to each region against. |
 | `edgegap_deploy` ● | Deploys an authoritative dedicated server close to your players. Always tagged `edgegap-mcp`, and reports when Edgegap will stop it. |
 | `edgegap_wait_for_deployment` | Waits until the server is ready and returns the connection address. |
 | `edgegap_get_deployment` | Reads a deployment's status. |
@@ -305,14 +304,6 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_get_deployment_logs` | Reads container logs and crash details while the deployment runs. After it stops, logs are only kept if Endpoint Storage was set up. |
 | `edgegap_get_deployment_metrics` | Summarises CPU, CPU throttling, memory and network use (latest, average, peak), to size a version or check a crash. |
 | `edgegap_stop_deployment` ● | Stops one deployment, by its exact request ID. No bulk stop. |
-
-### Matchmaking
-
-| Tool | What it does |
-| --- | --- |
-| `edgegap_build_matchmaker_config` | Generates a matchmaker configuration (teams, team size, optional latency rules and expansions) and checks that the version it deploys exists. Set `allowed_cors_origins` for browser (WebGL) clients. Upload the result in the dashboard to create your matchmaker, which starts a dedicated server for each match. |
-
-Learn more about the configuration in [Matchmaking](https://docs.edgegap.com/learn/matchmaking).
 
 ### Relays (Host-Client Games Only)
 
@@ -334,8 +325,8 @@ A relay is not a game server: it forwards traffic while one player's game hosts 
 
 * *"Write a Dockerfile for my Unity server build, then push it and deploy a server near me."*
 * *"Check my Dockerfile for Edgegap and fix any problems."*
-* *"Create a matchmaker config for 2v2 matches on my latest version."*
 * *"My deployment failed. Read the logs and tell me why."*
+* *"How much CPU and memory did my last match use? Size my version for it."*
 * *"My game uses host-client networking. Set up an Edgegap relay for two players."*
 
 ## 🛡️ Guardrails
@@ -368,6 +359,13 @@ Review common error codes and learn how to unlock your integration.
 
 Your MCP integration is most likely not including the Authorization header correctly.
 
+### Tool Call Failed
+
+Your client is missing an Edgegap token. This happens with claude.ai and Claude Desktop custom connectors, which can't send an `Authorization` header. See [Claude Desktop and claude.ai](#claude-desktop-and-claudeai) for the alternative.
+
+> [!WARNING]
+> This is a known limitation which will be resolved in the near term, stay tuned for updates!
+
 ### 403 Forbidden
 
 Your MCP integration is likely using the template token or a deleted token. Please validate that the token value used by your integration matches exactly the token displayed in dashboard.
@@ -388,7 +386,7 @@ Not an error. A list with nothing in it (no applications yet, no deployments run
 
 The skills (`edgegap_list_skills`, `edgegap_get_skill`), `edgegap_context`, `edgegap_generate_dockerfile` and `edgegap_validate_server_config` work without a token, so an agent can prepare the server build first. Create an account at [app.edgegap.com](https://app.edgegap.com) and a token under [User Settings → Tokens](https://app.edgegap.com/user-settings?tab=tokens). `edgegap_context` with `check_token: true` says whether the session's token is present and accepted, and shows its last four characters so you can find it on that page.
 
-### Server Starts Locally but Not on Edgegap
+### Starts Locally but Not on Edgegap
 
 Ask your agent to validate your server configuration, or to generate a new Dockerfile. The most common causes are an image built on Apple Silicon without `docker build --platform linux/amd64`, a server listening on a different port than the version exposes, or a UDP transport configured as TCP.
 
