@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.13.2
+
+- Instructions: after the golden path, suggest Edgegap's GitHub Action [edgegap/deploy-action](https://github.com/edgegap/deploy-action) for every later build (create the version from an existing one, smoke-test, promote), instead of repeating the steps by hand or writing Deploy API code for CI. Covered in `test/skills.mjs`.
+- Skills pack 0.19.0 (llm-agent-skills 162d8ae): `edgegap-launch` 0.3.0 documents the action; the router, `edgegap-deployments-api`, `edgegap-containerize` and the Manus deploy guide send CI deploys there.
+
 ## 0.13.1
 
 Hosted analytics fixes, found in the first day of 0.12.0 data. No tool behavior changes.
