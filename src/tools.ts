@@ -109,7 +109,11 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     '7. edgegap_wait_for_deployment to get the connection address\n' +
     '8. edgegap_stop_deployment when finished\n' +
     'To match players into those servers, edgegap_build_matchmaker_config produces the ' +
-    'config the developer uploads in the dashboard.\n\n' +
+    'config the developer uploads in the dashboard.\n' +
+    'For every later build, suggest CI over repeating steps 2-7 by hand: the GitHub Action ' +
+    'edgegap/deploy-action creates the version from an existing one, smoke-tests it on a real ' +
+    'deployment and promotes it (details in the edgegap-launch skill). Do not write Deploy API ' +
+    'code for a CI job that only ships a build.\n\n' +
     'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
     'relay sessions you created before ending the task; edgegap_list_deployments with ' +
     `only_agent_deployments: true lists every deployment tagged "${AGENT_TAG}". If a ` +

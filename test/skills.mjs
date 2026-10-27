@@ -131,6 +131,7 @@ const instructions = c.getInstructions() ?? '';
 check('instructions open with the skills line', instructions.startsWith('Before acting, read edgegap-skill://edgegap/SKILL.md'), instructions.slice(0, 80));
 const linked = [...new Set(instructions.match(/edgegap-skill:\/\/[^\s),]+/g) ?? [])];
 check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Three.js and Manus skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-threejs'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
+check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
 for (const uri of linked) {
   const got = await c.readResource({ uri }).catch(() => undefined);
   check(`linked resource ${uri} resolves`, Boolean(got?.contents?.[0]?.text?.includes('name: ')));
