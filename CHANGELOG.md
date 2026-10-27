@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.13.3
+
+- `edgegap_build_matchmaker_config`: an expansion that only repeats the initial `min_team_size` is left out, with a caution. Partial matches need no expansion: `min_team_size` below `max_team_size` allows them, and a short `ticket_expiration` (30s) keeps the wait short, while every expansion costs the matchmaker performance. The `expansions` parameter description says so. Covered in `test/unit.test.mjs`.
+- Skills pack 0.20.0 (llm-agent-skills 5661d8b, PR #31): the `casual` templates drop the `15` s expansion that only repeated `min_team_size`, the guidance says partial matches come from min < max plus the 30 s expiration, and `edgegap-purrnet` 0.2.0 listens on 7777 instead of 5000.
+
 ## 0.13.2
 
 - Instructions: after the golden path, suggest Edgegap's GitHub Action [edgegap/deploy-action](https://github.com/edgegap/deploy-action) for every later build (create the version from an existing one, smoke-test, promote), instead of repeating the steps by hand or writing Deploy API code for CI. Covered in `test/skills.mjs`.

@@ -9,6 +9,7 @@ import { maskSecrets } from '../dist/client.js';
 import { argumentError } from '../dist/tools.js';
 import { sanitizeErrorMessage, codeForStatus, codeForToolFailure, finishReport } from '../dist/callreport.js';
 import { isListable } from '../dist/skills.js';
+import { buildMatchmakerConfig } from '../dist/matchmaker.js';
 import { z } from 'zod';
 
 test('argumentError reads both SDK wordings and lists the parameters', () => {
@@ -156,4 +157,16 @@ test('loadConfig defaults and parses the guardrail settings', () => {
   assert.equal(c.maxAgentDeployments, 0);
   assert.equal(c.readOnly, true);
   assert.deepEqual(c.appAllowlist, ['a', 'b']);
+});
+
+test('buildMatchmakerConfig drops an expansion that only repeats min_team_size', () => {
+  const base = { profile_name: 'casual', application: 'a', version: 'v', team_count: 1, min_team_size: 2, max_team_size: 8 };
+  const r = buildMatchmakerConfig({ ...base, expansions: [{ after_seconds: 15, min_team_size: 2 }, { after_seconds: 20, min_team_size: 1 }] });
+  assert.deepEqual(r.config.profiles.casual.rules.expansions, { 20: { match_size: { min_team_size: 1 } } });
+  assert.ok(r.cautions.some((c) => c.includes('only repeats min_team_size 2')));
+  assert.deepEqual(r.problems, []);
+  // No expansions requested: none emitted, and no caution about partial matches.
+  const plain = buildMatchmakerConfig(base);
+  assert.deepEqual(plain.config.profiles.casual.rules.expansions, {});
+  assert.ok(!plain.cautions.some((c) => c.includes('expansion')));
 });

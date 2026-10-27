@@ -426,7 +426,7 @@ check('player_count rule', prof?.rules.initial.match_size.type === 'player_count
 check('latency rule and expansion', prof?.rules.initial.beacons.attributes.max_latency === 150 && prof.rules.expansions['20'].beacons.max_latency === 250);
 check('ticket expiration defaults to 30s', prof?.ticket_expiration_period === '30s', prof?.ticket_expiration_period);
 check('30s expiration raises no caution', !(r.cautions ?? []).some((s) => /is short/.test(s)), JSON.stringify(r.cautions));
-r = json(await c.callTool({ name: 'edgegap_build_matchmaker_config', arguments: { ...mm, min_team_size: 1, verify_version: false, expansions: [{ after_seconds: 30, min_team_size: 1 }] } }));
+r = json(await c.callTool({ name: 'edgegap_build_matchmaker_config', arguments: { ...mm, min_team_size: 2, verify_version: false, expansions: [{ after_seconds: 30, min_team_size: 1 }] } }));
 check('expansion at or after the expiration is flagged', (r.cautions ?? []).some((s) => /never applies/.test(s)), JSON.stringify(r.cautions));
 r = json(await c.callTool({ name: 'edgegap_build_matchmaker_config', arguments: { ...mm, verify_version: false, ticket_expiration: '10s' } }));
 check('expiration under 20s is flagged as short', (r.cautions ?? []).some((s) => /is short/.test(s)), JSON.stringify(r.cautions));

@@ -2815,7 +2815,7 @@ export function registerTools(
             })
           )
           .optional()
-          .describe('Rule relaxations after a player has waited this long, e.g. [{after_seconds: 20, min_team_size: 1}]. Keep each below ticket_expiration.'),
+          .describe('Rule relaxations after a player has waited this long, e.g. [{after_seconds: 20, min_team_size: 1}]. Keep each below ticket_expiration. Not needed for partial matches: min_team_size below max_team_size already allows them. Expansions cost the matchmaker performance, so add one only to relax a rule.'),
         ticket_expiration: z.string().optional().describe('Default "30s", so a developer testing alone is matched or told to retry within 30 s instead of waiting minutes. Raise it only for production queues.'),
         inspect: z.boolean().optional().describe('Expose the inspection API for debugging. Default true; turn off for production.'),
         verify_version: z.boolean().optional().describe('Look up the application version first. Default true.'),
