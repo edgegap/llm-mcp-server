@@ -87,6 +87,13 @@ export function buildMatchmakerConfig(input: MatchmakerInput) {
   let lastAfter = 0;
   for (const e of [...(input.expansions ?? [])].sort((a, b) => a.after_seconds - b.after_seconds)) {
     const step: Record<string, Record<string, number>> = {};
+    // A stage that only repeats the initial min_team_size changes nothing: partial
+    // matches already come from min < max and form by ticket expiry, and every
+    // expansion costs the matchmaker performance. Drop it rather than emit it.
+    if (e.min_team_size === input.min_team_size && e.max_latency_ms === undefined) {
+      cautions.push(`expansion at ${e.after_seconds}s only repeats min_team_size ${e.min_team_size}, so it was left out. Partial matches need no expansion: min_team_size below max_team_size allows them, and a short ticket_expiration (30s) keeps the wait short.`);
+      continue;
+    }
     if (e.min_team_size !== undefined) {
       if (e.min_team_size > input.max_team_size) {
         problems.push(`expansion at ${e.after_seconds}s sets min_team_size ${e.min_team_size} above max_team_size ${input.max_team_size}.`);
