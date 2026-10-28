@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.14.1
+
+- `edgegap_build_matchmaker_config` leaves `expansions` out of the profile when there are no expansion stages, instead of emitting `"expansions": {}`. The key is optional, and the empty object read as a slot to fill in (review feedback on the NGO Boss Room sample). Covered by `test/unit.test.mjs`.
+- Skills pack 0.21.1: the same empty `expansions` object is gone from every matchmaker template without an expansion stage.
+
 ## 0.14.0
 
 Gameye parity (gameye-mcp 0.4.0, 2026-10-25) for everything that needs no Edgegap platform change, and CPU and memory on versions. Every new endpoint and body field is in the public API spec ([edgegap/openapi-specification](https://github.com/edgegap/openapi-specification) 966ccc3, identical to `spec/`), checked by `test/spec.mjs`. New tools are tested against a mock API only.

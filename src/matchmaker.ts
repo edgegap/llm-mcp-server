@@ -139,7 +139,8 @@ export function buildMatchmakerConfig(input: MatchmakerInput) {
         ticket_removal_period: removal,
         group_inactivity_removal_period: '5m',
         application: { name: input.application, version: input.version },
-        rules: { initial: rules, expansions },
+        // The key is optional; an empty object only reads as a slot to fill in.
+        rules: { initial: rules, ...(Object.keys(expansions).length ? { expansions } : {}) },
       },
     },
   };
