@@ -226,6 +226,11 @@ Not exposed, on purpose: smart fleets, ACL/whitelist entries, DNS
 configuration, bulk stop, PATCH on a running deployment (marked as a warning
 in the spec), and matchmaker lifecycle (start, stop, delete).
 
+Moved into scope in 0.15.0, so test resources can be cleaned up without the
+dashboard (a live test left an Endpoint Storage behind): deleting one pull
+profile and one Endpoint Storage. They follow the delete rule below; an
+Endpoint Storage with pull profiles needs `max_pull_profiles`.
+
 Moved into scope in 0.14.0, to match what Gameye's MCP covers for its own
 platform and because agents reach them once a game runs: deployment tags,
 reporting a deployment, deleting one app or version, private fleet hosts and

@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.0
+
+- New `edgegap_delete_pull_profile` and `edgegap_delete_endpoint_storage`, so a test pull profile or storage can be cleaned up without the dashboard. One exact name per call, wildcards refused, `dry_run` supported. An Endpoint Storage with pull profiles is refused unless `max_pull_profiles` covers them, like `edgegap_delete_app` with `max_versions`. Neither touches the bucket. Covered by `test/newtools.mjs` and the spec parity check in `test/spec.mjs`.
+- First release published to npm by the `Publish to npm` workflow (trusted publishing, with provenance).
+
 ## 0.14.2
 
 Fixes from running the 0.14.0 tools against the live API (2026-10-28). Covered by `test/newtools.mjs`.
