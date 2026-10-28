@@ -27,6 +27,8 @@ Gameye parity (gameye-mcp 0.4.0, 2026-10-25) for everything that needs no Edgega
 
 **New tools** (10): `edgegap_tag_deployment` (the `edgegap-mcp` tag cannot be removed), `edgegap_report_deployment`, `edgegap_delete_app_version` and `edgegap_delete_app` (one exact name, refused while deployments run; an app with versions needs `max_versions`), `edgegap_list_fleet_hosts`, `edgegap_list_endpoint_storage`, `edgegap_create_endpoint_storage` (secret key masked in dry runs, never echoed), `edgegap_create_pull_profile`, `edgegap_link_pull_profile`. `edgegap_create_app_version` and `edgegap_update_app_version` take `endpoint_storage`. DESIGN.md's Scope and allowlist sections are updated.
 
+**Skills pack 0.21.0** (llm-agent-skills 02f2b96, PR #32): agents check the installed skills once per conversation with `edgegap_update_skills`, and get guidance for every tool above.
+
 **Repository**
 
 - CI: actions pinned by commit SHA, a Windows job (build and the stdio tests), and an `npm audit --omit=dev --audit-level=high` job. Dependabot proposes npm and Actions updates weekly (the MCP SDK is left out: `agents` pins it).
