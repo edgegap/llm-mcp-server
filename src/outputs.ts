@@ -81,6 +81,7 @@ const shapes = {
     verify_image: bool,
     restart_policy: str,
     termination_grace_period_seconds: num,
+    endpoint_storage: str,
     env: list({ key: str, hidden: bool }),
     auto_stop_after_minutes: num,
     auto_stop: str,
