@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "edgegap-mcp",
   "display_name": "Edgegap",
-  "version": "0.13.3",
+  "version": "0.14.0",
   "description": "Deploy and run multiplayer game servers on Edgegap from Claude: dedicated servers, matchmaking, relays and the Edgegap agent skills.",
   "long_description": "The Edgegap MCP server, running on your own computer. Check a server Dockerfile, push the image, create the app version, deploy dedicated game servers near your players, read their logs and metrics, build a matchmaker config, and load the Edgegap agent skills (Unity, NGO, FishNet, PurrNet, Photon Fusion, Unreal, Godot, Colyseus, Nakama, PlayFab, Three.js, Manus). Guardrails: dry_run on every write tool, a cap on agent deployments, a max_duration ceiling, refusal of \"latest\" image tags and of the API token in containers, and the token scrubbed from every result. Your token stays on this computer and is sent only to api.edgegap.com.",
   "author": {

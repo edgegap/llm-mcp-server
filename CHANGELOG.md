@@ -2,6 +2,15 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.14.0
+
+CPU and memory, checked against the public API spec ([edgegap/openapi-specification](https://github.com/edgegap/openapi-specification) 966ccc3, identical to `spec/`).
+
+- `edgegap_update_app_version` takes `cpu_units` and `memory_mb` (sent as `req_cpu`/`req_memory`, which the public spec's `PATCH /v1/app/{app}/version/{version}` accepts). Both or neither, and memory at most twice the CPU units, as on `edgegap_deploy`; otherwise refused with nothing sent. The description no longer says resources cannot be changed on a version.
+- `edgegap_deploy`'s per-deployment override is unchanged: `resources: {cpu_units, memory_mib}` per `DeploymentV2.resources`. Checked live 2026-10-28: a 512/1024 override on a 256/512 version deployed READY, and a 1024-vCPU override got 422 "Not enough space on locations", so the API reads the field rather than ignoring it.
+- The 422 hint ("could not allocate a server") names the tool parameters `cpu_units`/`memory_mb` instead of the API's `req_cpu`/`req_memory`.
+- Tests: `test/newtools.mjs` (PATCH body, both-or-neither and ratio refusals, description), `test/spec.mjs` (the new body fields are in the public spec).
+
 ## 0.13.3
 
 - `edgegap_build_matchmaker_config`: an expansion that only repeats the initial `min_team_size` is left out, with a caution. Partial matches need no expansion: `min_team_size` below `max_team_size` allows them, and a short `ticket_expiration` (30s) keeps the wait short, while every expansion costs the matchmaker performance. The `expansions` parameter description says so. Covered in `test/unit.test.mjs`.

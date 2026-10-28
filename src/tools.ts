@@ -368,7 +368,7 @@ function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string):
     case 409:
       return 'a resource with that name already exists. Pick a different name or reuse the existing one.';
     case 422:
-      return 'Edgegap could not allocate a server for the requested location or resources. Try different user coordinates, or lower req_cpu/req_memory.';
+      return 'Edgegap could not allocate a server for the requested location or resources. Try different user coordinates, or lower cpu_units/memory_mb.';
     case 424:
       return 'Edgegap could not pull the container image. Check docker_repository, docker_image, docker_tag, and registry credentials.';
     default:
@@ -1329,8 +1329,9 @@ export function registerTools(
           'version\'s whole list (per the API): read the current ones with edgegap_get_app_version ' +
           'and pass every port or variable to keep; secret env values are not readable, so get them ' +
           'from the developer. Refused, with nothing sent, for a registry login or env value equal to ' +
-          'the API\'s "' + ENCRYPTED_PLACEHOLDER + '" placeholder; leave the registry login out to keep it. CPU and memory cannot be changed here; create a ' +
-          'new version, or override them per deployment in edgegap_deploy.',
+          'the API\'s "' + ENCRYPTED_PLACEHOLDER + '" placeholder; leave the registry login out to keep it. cpu_units and memory_mb ' +
+          'change together (both or neither); to try other resources for one deployment only, override them in ' +
+          'edgegap_deploy instead.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().describe('Version name to change.'),
@@ -1345,6 +1346,18 @@ export function registerTools(
             .int()
             .optional()
             .describe('Auto-stop after this many minutes. Capped by EDGEGAP_MAX_DURATION_MINUTES.'),
+          cpu_units: z
+            .number()
+            .int()
+            .min(256)
+            .optional()
+            .describe('New vCPU units for later deployments, with memory_mb. 1024 = 1 vCPU.'),
+          memory_mb: z
+            .number()
+            .int()
+            .min(256)
+            .optional()
+            .describe('New memory in MB for later deployments, with cpu_units. At most 2x cpu_units.'),
           force_cache: z.boolean().optional().describe('Pre-load the image on Edgegap so deployments start faster.'),
           verify_image: z.boolean().optional().describe('Check Edgegap can pull the image when saving.'),
           termination_grace_period_seconds: z
@@ -1416,6 +1429,17 @@ export function registerTools(
             const imageProblem = badImage(args.docker_repository ?? '', args.docker_image);
             if (imageProblem) return fail(`Refused: ${imageProblem}`);
           }
+          // The PATCH takes req_cpu and req_memory separately, but the 2x
+          // ratio spans both, so take them together like edgegap_deploy does.
+          if ((args.cpu_units === undefined) !== (args.memory_mb === undefined)) {
+            return fail('Pass both cpu_units and memory_mb to change the version\'s resources, or neither to keep them.');
+          }
+          if (args.cpu_units !== undefined && args.memory_mb !== undefined && args.memory_mb > args.cpu_units * 2) {
+            return fail(
+              `memory_mb (${args.memory_mb}) exceeds twice cpu_units (${args.cpu_units}). Edgegap rejects this. ` +
+                `Lower memory_mb to ${args.cpu_units * 2} or raise cpu_units.`
+            );
+          }
 
           const capped =
             args.max_duration_minutes === undefined
@@ -1428,6 +1452,8 @@ export function registerTools(
             docker_tag: args.docker_tag,
             private_username: args.registry_username,
             private_token: args.registry_token,
+            req_cpu: args.cpu_units,
+            req_memory: args.memory_mb,
             max_duration: capped,
             force_cache: args.force_cache,
             verify_image: args.verify_image,

@@ -810,6 +810,17 @@ for (const [label, extra] of [['only cpu_units', { cpu_units: 1024 }], ['memory 
   res = await acall('edgegap_deploy', { ...dep, ...extra });
   check(`deploy, ${label}: refused, nothing deployed`, res.isError && !calls.some((x) => x.method === 'POST'), text(res).slice(0, 120));
 }
+// update_app_version resources: the public v1 spec's PATCH takes req_cpu/req_memory; both or neither, ratio checked
+calls.length = 0;
+r = json(await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', cpu_units: 1024, memory_mb: 2048 }));
+patch = calls.find((x) => x.method === 'PATCH');
+check('update_app_version: resources sent as req_cpu/req_memory', patch?.body?.req_cpu === 1024 && patch?.body?.req_memory === 2048 && Object.keys(patch.body).length === 2, JSON.stringify(patch?.body));
+check('update_app_version: the description no longer says resources cannot change', !/cannot be changed/.test((await ac.listTools()).tools.find((t) => t.name === 'edgegap_update_app_version')?.description ?? ''));
+for (const [label, extra] of [['only memory_mb', { memory_mb: 1024 }], ['memory over 2x cpu', { cpu_units: 512, memory_mb: 2048 }]]) {
+  calls.length = 0;
+  res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', ...extra });
+  check(`update_app_version, ${label}: refused, nothing sent`, res.isError && calls.length === 0, text(res).slice(0, 120));
+}
 for (const [label, extra] of [['"latest"', { docker_tag: 'latest' }], ['host in docker_image', { docker_image: 'docker.io/me/srv:v1' }], ['token as registry login', { registry_token: REAL }], ['nothing to change', {}]]) {
   calls.length = 0;
   res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', ...extra });

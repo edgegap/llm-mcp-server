@@ -96,7 +96,7 @@ const full = {
   },
   edgegap_update_app_version: {
     application: 'my-game', version: 'v1', is_active: true, docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b2',
-    registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, force_cache: true, verify_image: true, termination_grace_period_seconds: 10,
+    cpu_units: 512, memory_mb: 1024, registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, force_cache: true, verify_image: true, termination_grace_period_seconds: 10,
     ports, env,
   },
   edgegap_deploy: { application: 'my-game', version: 'v1', users: { ip_addresses: ['203.0.113.1'], geo_coordinates: [{ latitude: 45, longitude: -73 }] }, env, tags: ['ci'], cpu_units: 512, memory_mb: 1024 },

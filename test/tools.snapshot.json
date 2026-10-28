@@ -1956,7 +1956,7 @@
       {
         "name": "edgegap_update_app_version",
         "title": "Update an application version",
-        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep; secret env values are not readable, so get them from the developer. Refused, with nothing sent, for a registry login or env value equal to the API's \"This value is set and encrypted\" placeholder; leave the registry login out to keep it. CPU and memory cannot be changed here; create a new version, or override them per deployment in edgegap_deploy.",
+        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep; secret env values are not readable, so get them from the developer. Refused, with nothing sent, for a registry login or env value equal to the API's \"This value is set and encrypted\" placeholder; leave the registry login out to keep it. cpu_units and memory_mb change together (both or neither); to try other resources for one deployment only, override them in edgegap_deploy instead.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1995,6 +1995,18 @@
               "description": "Auto-stop after this many minutes. Capped by EDGEGAP_MAX_DURATION_MINUTES.",
               "type": "integer",
               "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cpu_units": {
+              "description": "New vCPU units for later deployments, with memory_mb. 1024 = 1 vCPU.",
+              "type": "integer",
+              "minimum": 256,
+              "maximum": 9007199254740991
+            },
+            "memory_mb": {
+              "description": "New memory in MB for later deployments, with cpu_units. At most 2x cpu_units.",
+              "type": "integer",
+              "minimum": 256,
               "maximum": 9007199254740991
             },
             "force_cache": {
