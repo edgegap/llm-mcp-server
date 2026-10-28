@@ -462,7 +462,7 @@
             "source": {
               "type": "string",
               "minLength": 1,
-              "description": "Path in the bucket, e.g. \"maps/\" or \"config/server.json\"."
+              "description": "Path in the bucket, starting with \"/\" and without a trailing \"/\", e.g. \"/maps\" or \"/config/server.json\". Letters, digits, \"_\", \"-\", \"+\" and \".\" only."
             },
             "source_type": {
               "type": "string",
@@ -759,7 +759,7 @@
               "maximum": 9007199254740991
             },
             "require_cached_locations": {
-              "description": "Only place it where the image is already cached: starts faster, fewer places to choose from.",
+              "description": "Only place it where the image is already cached: starts faster, fewer places to choose from. Needs force_cache on the version (edgegap_update_app_version); without it the API refuses the deploy.",
               "type": "boolean"
             },
             "webhook_on_ready": {
@@ -940,7 +940,7 @@
       {
         "name": "edgegap_get_app_version",
         "title": "Get one application version",
-        "description": "Read one version in full: image, resources, ports, max_duration, whether image caching (force_cache) and verify_image are on, restart policy, and the names of its env vars (values are never shown). Use it before edgegap_update_app_version or edgegap_deploy to check what a version will do.",
+        "description": "Read one version in full: image, resources, ports, max_duration, whether image caching (force_cache) and verify_image are on, restart policy, the Endpoint Storage its logs go to, and the names of its env vars (values are never shown). Use it before edgegap_update_app_version or edgegap_deploy to check what a version will do.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1021,6 +1021,9 @@
             },
             "termination_grace_period_seconds": {
               "type": "number"
+            },
+            "endpoint_storage": {
+              "type": "string"
             },
             "env": {
               "type": "array",

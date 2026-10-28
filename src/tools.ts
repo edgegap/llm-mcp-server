@@ -369,6 +369,14 @@ function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string):
     case 409:
       return 'a resource with that name already exists. Pick a different name or reuse the existing one.';
     case 422:
+      // require_cached_locations on a version without force_cache (live, 2026-10-28).
+      if (/caching disabled|enable caching/i.test(err.apiMessage)) {
+        return (
+          'require_cached_locations needs image caching on the version. Turn it on with edgegap_update_app_version ' +
+          'force_cache: true and wait for caching_percent (edgegap_get_app_version) to rise, or deploy without ' +
+          'require_cached_locations.'
+        );
+      }
       return 'Edgegap could not allocate a server for the requested location or resources. Try different user coordinates, or lower cpu_units/memory_mb.';
     case 424:
       return 'Edgegap could not pull the container image. Check docker_repository, docker_image, docker_tag, and registry credentials.';
@@ -475,10 +483,11 @@ function compactDeployment(d: DeploymentStatus) {
 
 /** The version fields every version tool shows. Never the registry token. */
 function compactVersion(v: AppVersionRecord) {
+  const ref = [v.docker_repository, v.docker_image].filter(Boolean).join('/');
   return {
     name: v.name,
     active: v.is_active,
-    image: [v.docker_repository, v.docker_image, v.docker_tag].filter(Boolean).join('/'),
+    image: v.docker_tag ? `${ref}:${v.docker_tag}` : ref,
     // Whether a login is set, never the login itself: the API returns the
     // registry token in version responses.
     registry_credentials_set: Boolean(v.private_username && v.private_token),
@@ -1109,8 +1118,8 @@ export function registerTools(
       title: 'Get one application version',
       description:
         'Read one version in full: image, resources, ports, max_duration, whether image caching ' +
-        '(force_cache) and verify_image are on, restart policy, and the names of its env vars ' +
-        '(values are never shown). Use it before edgegap_update_app_version or edgegap_deploy ' +
+        '(force_cache) and verify_image are on, restart policy, the Endpoint Storage its logs go to, and the names ' +
+        'of its env vars (values are never shown). Use it before edgegap_update_app_version or edgegap_deploy ' +
         'to check what a version will do.',
       inputSchema: {
         application: z.string().describe('Application name.'),
@@ -1130,6 +1139,7 @@ export function registerTools(
           verify_image: v.verify_image,
           restart_policy: v.restart_policy,
           termination_grace_period_seconds: v.termination_grace_period_seconds,
+          endpoint_storage: v.endpoint_storage || undefined,
           time_to_deploy_seconds: v.time_to_deploy,
           env: v.envs?.map((e) => ({ key: e.key, hidden: e.is_hidden ?? false })),
           ...autoStop(v.max_duration),
@@ -1659,7 +1669,10 @@ export function registerTools(
           require_cached_locations: z
             .boolean()
             .optional()
-            .describe('Only place it where the image is already cached: starts faster, fewer places to choose from.'),
+            .describe(
+              'Only place it where the image is already cached: starts faster, fewer places to choose from. Needs ' +
+                'force_cache on the version (edgegap_update_app_version); without it the API refuses the deploy.'
+            ),
           webhook_on_ready: z.string().optional().describe('https URL Edgegap POSTs to when the server is ready.'),
           webhook_on_error: z.string().optional().describe('https URL Edgegap POSTs to when the deployment fails.'),
           webhook_on_terminated: z.string().optional().describe('https URL Edgegap POSTs to when the deployment ends.'),
@@ -1764,20 +1777,27 @@ export function registerTools(
             );
           }
 
-          if (args.dry_run) {
+          // Edgegap has no per-deployment time limit: a deployment runs until
+          // stopped or until its version's max_duration (default 1440 minutes,
+          // a full day). Read it first so the agent knows how long an
+          // unstopped test server will keep billing. A dry run reads it too,
+          // so it previews the refusals below, but only with a token already
+          // in hand (a dry run must not trigger the token prompt); if the read
+          // fails, it still shows the request and says what it could not check.
+          let version: AppVersionRecord;
+          try {
+            if (args.dry_run && !auth.current) throw new Error('no API token in this session yet');
+            version = await client.getAppVersion(args.application, args.version);
+          } catch (err) {
+            if (!args.dry_run) throw err;
             const dry = client.dryRun();
             await send(dry.client);
             return dryRunResult(dry.requests, [
               `Tagged "${AGENT_TAG}" automatically.`,
-              'Auto-stop comes from the version\'s max_duration; a real deploy reports it.',
+              `Could not read the version (${err instanceof Error ? err.message.split('\n')[0] : String(err)}), so ` +
+                'the docker tag, max_duration and running-deployment checks did not run. A real deploy runs them.',
             ]);
           }
-
-          // Edgegap has no per-deployment time limit: a deployment runs until
-          // stopped or until its version's max_duration (default 1440 minutes,
-          // a full day). Read it first so the agent knows how long an
-          // unstopped test server will keep billing.
-          const version = await client.getAppVersion(args.application, args.version);
           if (version.docker_tag !== undefined && badTag(version.docker_tag)) {
             return fail(
               `Refused: version "${args.version}" uses docker_tag "${version.docker_tag}". ${TAG_FIX} ` +
@@ -1816,30 +1836,50 @@ export function registerTools(
             }
           }
 
-          deploysSent++;
+          if (args.dry_run) {
+            const dry = client.dryRun();
+            await send(dry.client);
+            const stop = autoStop(version.max_duration);
+            return dryRunResult(dry.requests, [
+              `Tagged "${AGENT_TAG}" automatically.`,
+              ...(longRunning ? ['long_running: allowed by allow_long_running.'] : []),
+              typeof stop.auto_stop_after_minutes === 'number'
+                ? `Auto-stop: after ${stop.auto_stop_after_minutes} minutes (the version's max_duration).`
+                : `Auto-stop: ${stop.auto_stop}.`,
+            ]);
+          }
+
+          // A refused deploy can still leave a deployment behind (a 422 "not
+          // enough space" did, 2026-10-28) with no request_id in the error.
+          // The lookup looks back a minute for clock skew, which also catches
+          // deploys of the same version made just before this one (live,
+          // 2026-10-28), so note those first and leave them out afterwards.
           const sentAt = new Date(Date.now() - 60_000).toISOString();
+          const recentQuery = {
+            query: JSON.stringify({
+              filters: [
+                { field: 'application', operator: 'eq', value: args.application },
+                { field: 'version', operator: 'eq', value: args.version },
+                { field: 'tags', operator: 'in', value: [AGENT_TAG] },
+                { field: 'created_at', operator: 'gte', value: sentAt },
+              ],
+            }),
+            limit: 100,
+          };
+          const recentIds = () =>
+            client
+              .listDeployments(recentQuery)
+              .then((r) => (r.data ?? []).map((d) => d.request_id).filter(Boolean))
+              .catch((): string[] => []);
+          const before = new Set(await recentIds());
+
+          deploysSent++;
           let res: { request_id: string };
           try {
             res = await send(client);
           } catch (err) {
-            // A refused deploy can still leave a deployment behind (a 422
-            // "not enough space" did, 2026-10-28) with no request_id in the
-            // error. Name it so the agent can stop it.
             if (!(err instanceof EdgegapApiError)) throw err;
-            const left = await client
-              .listDeployments({
-                query: JSON.stringify({
-                  filters: [
-                    { field: 'application', operator: 'eq', value: args.application },
-                    { field: 'version', operator: 'eq', value: args.version },
-                    { field: 'tags', operator: 'in', value: [AGENT_TAG] },
-                    { field: 'created_at', operator: 'gte', value: sentAt },
-                  ],
-                }),
-                limit: 10,
-              })
-              .then((r) => (r.data ?? []).map((d) => d.request_id).filter(Boolean))
-              .catch(() => []);
+            const left = (await recentIds()).filter((id) => !before.has(id));
             if (left.length === 0) throw err;
             throw new EdgegapApiError(
               err.status,
@@ -3058,7 +3098,13 @@ export function registerTools(
         inputSchema: {
           endpoint_storage: z.string().min(1).describe('Endpoint Storage name, from edgegap_list_endpoint_storage.'),
           name: z.string().min(1).describe('Name for the profile, e.g. "maps".'),
-          source: z.string().min(1).describe('Path in the bucket, e.g. "maps/" or "config/server.json".'),
+          source: z
+            .string()
+            .min(1)
+            .describe(
+              'Path in the bucket, starting with "/" and without a trailing "/", e.g. "/maps" or "/config/server.json". ' +
+                'Letters, digits, "_", "-", "+" and "." only.'
+            ),
           source_type: z.enum(['File', 'Folder']).describe('Whether source is a file or a folder.'),
           destination: z.string().min(1).describe('Absolute path in the container, e.g. "/data/maps".'),
           dry_run: dryRunParam,
@@ -3068,6 +3114,16 @@ export function registerTools(
       async (args) =>
         guard(auth, async () => {
           if (!args.destination.startsWith('/')) return fail('destination must be an absolute container path, e.g. "/data/maps".');
+          // The API's pattern is ^((\/{1}[A-z0-9-+.]+)*)*$ (live, 2026-10-28): "maps/" is refused.
+          const bucketPath = /^(\/[A-Za-z0-9_+.-]+)+$/;
+          if (!bucketPath.test(args.source)) {
+            const suggestion = `/${args.source.split('/').filter(Boolean).join('/')}`;
+            return fail(
+              `source "${args.source.slice(0, 80)}" is not a bucket path Edgegap accepts: start it with "/", drop any ` +
+                `trailing "/", and use only letters, digits, "_", "-", "+" and "." in each part` +
+                (bucketPath.test(suggestion) ? `, e.g. "${suggestion}".` : '.')
+            );
+          }
           const body = { name: args.name, source: args.source, source_type: args.source_type, destination: args.destination };
           if (args.dry_run) {
             const dry = client.dryRun();

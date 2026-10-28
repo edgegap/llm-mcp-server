@@ -2,6 +2,17 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.14.2
+
+Fixes from running the 0.14.0 tools against the live API (2026-10-28). Covered by `test/newtools.mjs`.
+
+- `edgegap_deploy`: when the API refuses a deploy but leaves a deployment behind, the result no longer names deployments of the same version started in the minute before (it named a healthy one live). It notes the recent ones before sending and leaves them out.
+- `edgegap_deploy` with `dry_run` now reads the version and runs the same checks as a real deploy (the `latest` tag, `max_duration` above the ceiling without `allow_long_running`, the agent deployment cap), and its notes give the auto-stop. Without a token in the session yet, it skips them and says so.
+- `edgegap_deploy`: a 422 for `require_cached_locations` on a version without image caching now says to turn on `force_cache` (or drop the option) instead of blaming server allocation. The parameter's description says it needs `force_cache`.
+- `edgegap_create_pull_profile`: `source` must start with `/` and have no trailing `/` (the API's pattern); the description's `"maps/"` example was wrong. Bad paths are refused before sending, with the corrected path.
+- Version tools show the image as `repository/image:tag` instead of `repository/image/tag`.
+- `edgegap_get_app_version` shows the version's `endpoint_storage`.
+
 ## 0.14.1
 
 - `edgegap_build_matchmaker_config` leaves `expansions` out of the profile when there are no expansion stages, instead of emitting `"expansions": {}`. The key is optional, and the empty object read as a slot to fill in (review feedback on the NGO Boss Room sample). Covered by `test/unit.test.mjs`.

@@ -534,6 +534,7 @@ export interface AppVersionRecord {
   time_to_deploy?: number;
   restart_policy?: string;
   termination_grace_period_seconds?: number;
+  endpoint_storage?: string | null;
   /** Values are not surfaced; names only. */
   envs?: Array<{ key: string; value?: string; is_hidden?: boolean }>;
   ports?: Array<{ port: number; protocol: string; name?: string; tls_upgrade?: boolean }>;
