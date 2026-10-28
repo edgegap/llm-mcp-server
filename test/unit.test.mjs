@@ -166,9 +166,13 @@ test('buildMatchmakerConfig drops an expansion that only repeats min_team_size',
   assert.deepEqual(r.config.profiles.casual.rules.expansions, { 20: { match_size: { min_team_size: 1 } } });
   assert.ok(r.cautions.some((c) => c.includes('only repeats min_team_size 2')));
   assert.deepEqual(r.problems, []);
-  // No expansions requested: none emitted, and no caution about partial matches.
+  // No expansions requested: the key is left out (an empty object reads as a slot to
+  // fill in), and no caution about partial matches.
   const plain = buildMatchmakerConfig(base);
-  assert.deepEqual(plain.config.profiles.casual.rules.expansions, {});
+  assert.ok(!('expansions' in plain.config.profiles.casual.rules));
+  // Every requested stage dropped: still no empty key.
+  const dropped = buildMatchmakerConfig({ ...base, expansions: [{ after_seconds: 15, min_team_size: 2 }] });
+  assert.ok(!('expansions' in dropped.config.profiles.casual.rules));
   assert.ok(!plain.cautions.some((c) => c.includes('expansion')));
 });
 
