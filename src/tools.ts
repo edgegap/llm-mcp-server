@@ -3175,6 +3175,86 @@ export function registerTools(
           });
         }, 'the Endpoint Storage, pull profile, application or version does not exist. Check them with edgegap_list_endpoint_storage and edgegap_list_app_versions.')
     );
+
+    tool(
+      'edgegap_delete_pull_profile',
+      {
+        title: 'Delete a pull profile',
+        description:
+          'Delete one pull profile from an Endpoint Storage, to clean up a test profile. Exactly one exact name. ' +
+          'Every version linked to it stops getting its files at boot (the API cannot list those links, so ask ' +
+          'the developer when the profile is not one this conversation created). The bucket and its files are not ' +
+          'touched. Cannot be undone.',
+        inputSchema: {
+          endpoint_storage: z.string().min(1).describe('Endpoint Storage name, from edgegap_list_endpoint_storage.'),
+          pull_profile: z.string().min(1).describe('The exact pull profile name to delete.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      },
+      async ({ endpoint_storage, pull_profile, dry_run }) =>
+        guard(auth, async () => {
+          const badName = exactName(endpoint_storage, 'Endpoint Storage') ?? exactName(pull_profile, 'pull profile');
+          if (badName) return badName;
+          if (dry_run) {
+            const dry = client.dryRun();
+            await dry.client.deletePullProfile(endpoint_storage, pull_profile);
+            return dryRunResult(dry.requests);
+          }
+          await client.deletePullProfile(endpoint_storage, pull_profile);
+          return ok({ endpoint_storage, deleted_pull_profile: pull_profile, bucket_kept: 'The bucket and its files were not touched.' });
+        }, `no pull profile "${pull_profile}" under Endpoint Storage "${endpoint_storage}". List them with edgegap_list_endpoint_storage.`)
+    );
+
+    tool(
+      'edgegap_delete_endpoint_storage',
+      {
+        title: 'Delete an Endpoint Storage',
+        description:
+          'Delete one Endpoint Storage, to clean up a test one. Exactly one exact name; refused when it still has ' +
+          'more pull profiles than max_pull_profiles (default 0: delete them first with edgegap_delete_pull_profile, ' +
+          'or raise max_pull_profiles after the developer agreed). Versions that export logs to it stop doing so, ' +
+          'so confirm with the developer when the storage is not one this conversation created. The bucket and the ' +
+          'logs already in it are not touched. Cannot be undone.',
+        inputSchema: {
+          endpoint_storage: z.string().min(1).describe('The exact Endpoint Storage name to delete.'),
+          max_pull_profiles: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe('Delete only if it has at most this many pull profiles, which go with it. Default 0.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      },
+      async ({ endpoint_storage, max_pull_profiles, dry_run }) =>
+        guard(auth, async () => {
+          const badName = exactName(endpoint_storage, 'Endpoint Storage');
+          if (badName) return badName;
+          if (dry_run) {
+            const dry = client.dryRun();
+            await dry.client.deleteEndpointStorage(endpoint_storage);
+            return dryRunResult(dry.requests, ['A real call first checks how many pull profiles it has.']);
+          }
+          const profiles = ((await client.listPullProfiles(endpoint_storage)).pull_profiles ?? []).map((p) => p.name);
+          const limit = max_pull_profiles ?? 0;
+          if (profiles.length > limit) {
+            return fail(
+              `Refused: Endpoint Storage "${endpoint_storage}" has ${profiles.length} pull profile` +
+                `${profiles.length === 1 ? '' : 's'} (${profiles.slice(0, 10).join(', ')}${profiles.length > 10 ? ', …' : ''}), ` +
+                `more than max_pull_profiles (${limit}). Nothing was deleted. Delete them with edgegap_delete_pull_profile, ` +
+                `or pass max_pull_profiles ${profiles.length} once the developer agreed to delete them all.`
+            );
+          }
+          await client.deleteEndpointStorage(endpoint_storage);
+          return ok({
+            deleted_endpoint_storage: endpoint_storage,
+            deleted_pull_profiles: profiles,
+            bucket_kept: 'The bucket and the logs already in it were not touched.',
+          });
+        }, `no Endpoint Storage named "${endpoint_storage}". List them with edgegap_list_endpoint_storage.`)
+    );
   }
 
   // ================================================== peer-to-peer relays ====

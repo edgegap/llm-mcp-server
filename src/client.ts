@@ -359,6 +359,18 @@ export class EdgegapClient {
     );
   }
 
+  deleteEndpointStorage(endpointName: string) {
+    return this.request<void>('DELETE', 'v1', `/v1/storage/endpoint/${encodeURIComponent(endpointName)}`);
+  }
+
+  deletePullProfile(endpointName: string, profileName: string) {
+    return this.request<void>(
+      'DELETE',
+      'v1',
+      `/v1/storage/endpoint/${encodeURIComponent(endpointName)}/pull-profile/${encodeURIComponent(profileName)}`
+    );
+  }
+
   /** PUT links, DELETE unlinks; the path is the same. */
   linkPullProfile(method: 'PUT' | 'DELETE', endpointName: string, profileName: string, appName: string, versionName: string) {
     return this.request<Record<string, unknown>>(

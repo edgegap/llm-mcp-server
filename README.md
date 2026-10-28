@@ -213,7 +213,7 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.14.2`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.15.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`:
 
@@ -332,6 +332,8 @@ Container logs disappear with the deployment unless they are exported to your ow
 | `edgegap_create_endpoint_storage` ● | Registers a bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces…) for log export. Set `endpoint_storage` on a version to turn export on. The secret key is never echoed back. |
 | `edgegap_create_pull_profile` ● | Copies a file or folder from the bucket into the container at boot (maps, configs, large assets). |
 | `edgegap_link_pull_profile` ● | Links a pull profile to a version, or unlinks it. |
+| `edgegap_delete_pull_profile` ● | Deletes one pull profile. The bucket and its files stay. |
+| `edgegap_delete_endpoint_storage` ● | Deletes one Endpoint Storage; refused while it has pull profiles unless `max_pull_profiles` allows them. The bucket and its logs stay. |
 
 ### Relays (Host-Client Games Only)
 

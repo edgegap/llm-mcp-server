@@ -196,6 +196,15 @@ const mock = http.createServer((req, res) => {
         const b = JSON.parse(body);
         return send(200, { name: b.name, endpoint: b.endpoint, bucket: b.bucket, access_key_id: b.access_key_id, output_format: 'TEXT', container_log_version: 'v1' });
       }
+      // Deletes (0.15.0). Both answer 204 (spec); empty-logs has no pull profiles.
+      case 'DELETE /v1/storage/endpoint/game-logs/pull-profile/maps':
+      case 'DELETE /v1/storage/endpoint/game-logs':
+      case 'DELETE /v1/storage/endpoint/empty-logs':
+        return send(204);
+      case 'GET /v1/storage/endpoint/empty-logs/pull-profiles':
+        return send(200, { pull_profiles: [], total_count: 0 });
+      case 'DELETE /v1/storage/endpoint/game-logs/pull-profile/ghost':
+        return send(404, { message: 'Pull profile not found' });
       case 'POST /v1/storage/endpoint/game-logs/pull-profile':
         return send(200, JSON.parse(body));
       case 'PUT /v1/storage/endpoint/game-logs/pull-profile/maps/app/my-game/version/build-42':
@@ -1092,6 +1101,23 @@ check('link_pull_profile unlink: DELETE on the same path', calls.at(-1)?.method 
 calls.length = 0;
 await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', endpoint_storage: 'game-logs' });
 check('update_app_version: endpoint_storage sent', calls.find((x) => x.method === 'PATCH')?.body?.endpoint_storage === 'game-logs');
+calls.length = 0;
+r = json(await acall('edgegap_delete_pull_profile', { endpoint_storage: 'game-logs', pull_profile: 'maps' }));
+check('delete_pull_profile: one DELETE on the profile path', calls.length === 1 && calls[0].method === 'DELETE' && calls[0].url === '/v1/storage/endpoint/game-logs/pull-profile/maps' && r.deleted_pull_profile === 'maps', JSON.stringify(calls));
+res = await acall('edgegap_delete_pull_profile', { endpoint_storage: 'game-logs', pull_profile: 'ghost' });
+check('delete_pull_profile: unknown profile gives a not-found hint', res.isError && /edgegap_list_endpoint_storage/.test(text(res)), text(res).slice(0, 200));
+calls.length = 0;
+res = await acall('edgegap_delete_pull_profile', { endpoint_storage: 'game-logs', pull_profile: 'map*' });
+check('delete_pull_profile: wildcard refused, nothing sent', res.isError && calls.length === 0);
+calls.length = 0;
+res = await acall('edgegap_delete_endpoint_storage', { endpoint_storage: 'game-logs' });
+check('delete_endpoint_storage: refused while it has pull profiles, nothing deleted', res.isError && /max_pull_profiles/.test(text(res)) && /maps/.test(text(res)) && !calls.some((x) => x.method === 'DELETE'), text(res).slice(0, 200));
+calls.length = 0;
+r = json(await acall('edgegap_delete_endpoint_storage', { endpoint_storage: 'game-logs', max_pull_profiles: 1 }));
+check('delete_endpoint_storage: with max_pull_profiles, deleted with its profiles', calls.some((x) => x.method === 'DELETE' && x.url === '/v1/storage/endpoint/game-logs') && JSON.stringify(r.deleted_pull_profiles) === '["maps"]');
+calls.length = 0;
+r = json(await acall('edgegap_delete_endpoint_storage', { endpoint_storage: 'empty-logs' }));
+check('delete_endpoint_storage: no pull profiles, deleted by default', calls.some((x) => x.method === 'DELETE' && x.url === '/v1/storage/endpoint/empty-logs') && r.deleted_endpoint_storage === 'empty-logs');
 
 // ------------------------------------------------ 13. argument errors ----
 console.log('\n13. argument errors the agent can act on');

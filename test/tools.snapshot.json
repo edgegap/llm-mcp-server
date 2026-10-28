@@ -612,6 +612,74 @@
         }
       },
       {
+        "name": "edgegap_delete_endpoint_storage",
+        "title": "Delete an Endpoint Storage",
+        "description": "Delete one Endpoint Storage, to clean up a test one. Exactly one exact name; refused when it still has more pull profiles than max_pull_profiles (default 0: delete them first with edgegap_delete_pull_profile, or raise max_pull_profiles after the developer agreed). Versions that export logs to it stop doing so, so confirm with the developer when the storage is not one this conversation created. The bucket and the logs already in it are not touched. Cannot be undone.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "endpoint_storage": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The exact Endpoint Storage name to delete."
+            },
+            "max_pull_profiles": {
+              "description": "Delete only if it has at most this many pull profiles, which go with it. Default 0.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "endpoint_storage"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_delete_pull_profile",
+        "title": "Delete a pull profile",
+        "description": "Delete one pull profile from an Endpoint Storage, to clean up a test profile. Exactly one exact name. Every version linked to it stops getting its files at boot (the API cannot list those links, so ask the developer when the profile is not one this conversation created). The bucket and its files are not touched. Cannot be undone.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "endpoint_storage": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Endpoint Storage name, from edgegap_list_endpoint_storage."
+            },
+            "pull_profile": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The exact pull profile name to delete."
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "endpoint_storage",
+            "pull_profile"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_delete_registry_tag",
         "title": "Delete one image tag from the Edgegap registry",
         "description": "Delete one tag, and the image it points to, from this organization's Edgegap container registry, to clean up old builds. Takes exactly one image name and one exact tag; wildcards, lists and \"latest\" are refused, and there is no bulk delete. A version that still uses the tag can no longer start deployments, so check edgegap_list_app_versions first. Cannot be undone.",

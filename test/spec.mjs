@@ -111,6 +111,8 @@ const full = {
   edgegap_create_endpoint_storage: { name: 'logs', endpoint: 'https://s3.example.com', bucket: 'b', access_key_id: 'k', secret_access_key: 's', output_format: 'NDJSON', container_log_version: 'v2' },
   edgegap_create_pull_profile: { endpoint_storage: 'logs', name: 'maps', source: '/maps', source_type: 'Folder', destination: '/data/maps' },
   edgegap_link_pull_profile: { endpoint_storage: 'logs', pull_profile: 'maps', application: 'my-game', version: 'v1' },
+  edgegap_delete_pull_profile: { endpoint_storage: 'logs', pull_profile: 'maps' },
+  edgegap_delete_endpoint_storage: { endpoint_storage: 'logs' },
   edgegap_delete_registry_tag: { image_name: 'srv', tag: 'b1' },
   edgegap_create_relay_session: { user_ips: ['203.0.113.1'], webhook_url: 'https://hooks.example.com/relay' },
   edgegap_authorize_relay_user: { session_id: 'abc123-S', user_ip: '203.0.113.2' },
