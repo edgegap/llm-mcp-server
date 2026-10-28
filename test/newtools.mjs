@@ -191,7 +191,7 @@ const mock = http.createServer((req, res) => {
       case 'GET /v1/storage/endpoints':
         return send(200, { endpoints: [{ name: 'game-logs', endpoint: 'https://s3.us-east-1.amazonaws.com', bucket: 'my-logs', access_key_id: 'AKIAEXAMPLE', output_format: 'TEXT', container_log_version: 'v1' }], total_count: 1 });
       case 'GET /v1/storage/endpoint/game-logs/pull-profiles':
-        return send(200, { pull_profiles: [{ name: 'maps', source: 'maps/', source_type: 'Folder', destination: '/data/maps' }], total_count: 1 });
+        return send(200, { pull_profiles: [{ name: 'maps', source: '/maps', source_type: 'Folder', destination: '/data/maps' }], total_count: 1 });
       case 'POST /v1/storage/endpoint': {
         const b = JSON.parse(body);
         return send(200, { name: b.name, endpoint: b.endpoint, bucket: b.bucket, access_key_id: b.access_key_id, output_format: 'TEXT', container_log_version: 'v1' });
