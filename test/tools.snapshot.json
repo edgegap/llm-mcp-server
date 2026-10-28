@@ -328,6 +328,11 @@
               "description": "Verify Edgegap can pull the image before accepting the version.",
               "type": "boolean"
             },
+            "endpoint_storage": {
+              "description": "Endpoint Storage name (edgegap_list_endpoint_storage) to export container logs to when deployments end.",
+              "type": "string",
+              "minLength": 1
+            },
             "env": {
               "description": "Environment variables injected into the container. Values are never echoed back.",
               "type": "array",
@@ -361,6 +366,128 @@
             "cpu_units",
             "memory_mb",
             "ports"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_create_endpoint_storage",
+        "title": "Create an Endpoint Storage (S3 bucket for logs)",
+        "description": "Register an S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, ...) as Endpoint Storage, so container logs are exported there when deployments end. The developer supplies the bucket, endpoint URL and an access key pair scoped to that bucket; never invent or reuse other credentials, and never pass the Edgegap API token. The secret key is sent once and never echoed back. Then set endpoint_storage on the version (edgegap_update_app_version) to turn log export on.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name for this storage, e.g. \"game-logs\"."
+            },
+            "endpoint": {
+              "type": "string",
+              "description": "https URL of the S3 endpoint, without the bucket, e.g. \"https://s3.us-east-1.amazonaws.com\"."
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Bucket name."
+            },
+            "access_key_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Access key ID for the bucket."
+            },
+            "secret_access_key": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Secret access key for the bucket. Never echoed back."
+            },
+            "output_format": {
+              "description": "Log file format. Default TEXT.",
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "NDJSON"
+              ]
+            },
+            "container_log_version": {
+              "description": "v1 (default) writes one file per deployment; v2 streams chunks while it runs.",
+              "type": "string",
+              "enum": [
+                "v1",
+                "v2"
+              ]
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "endpoint",
+            "bucket",
+            "access_key_id",
+            "secret_access_key"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_create_pull_profile",
+        "title": "Create a pull profile (copy bucket files into containers)",
+        "description": "Create a pull profile under an Endpoint Storage: at boot, Edgegap copies a file or folder from the bucket into the container (maps, configs, large assets kept out of the image). It does nothing until linked to a version with edgegap_link_pull_profile. Avoid destination paths the image already uses.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "endpoint_storage": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Endpoint Storage name, from edgegap_list_endpoint_storage."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Name for the profile, e.g. \"maps\"."
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Path in the bucket, e.g. \"maps/\" or \"config/server.json\"."
+            },
+            "source_type": {
+              "type": "string",
+              "enum": [
+                "File",
+                "Folder"
+              ],
+              "description": "Whether source is a file or a folder."
+            },
+            "destination": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Absolute path in the container, e.g. \"/data/maps\"."
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "endpoint_storage",
+            "name",
+            "source",
+            "source_type",
+            "destination"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
@@ -414,6 +541,73 @@
         "annotations": {
           "destructiveHint": false,
           "idempotentHint": false,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_delete_app",
+        "title": "Delete an application and all its versions",
+        "description": "Delete one application and every version under it, to clean up a test application. Exactly one exact name; refused while any of its deployments is running, and refused when it has more versions than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise max_versions after the developer agreed). Registry images are not touched. Cannot be undone.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The exact application name to delete."
+            },
+            "max_versions": {
+              "description": "Delete only if it has at most this many versions. Default 0.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "application"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_delete_app_version",
+        "title": "Delete one application version",
+        "description": "Delete one version of an application, to clean up test versions. Exactly one exact version name; refused while any deployment of that version is running. The container image stays in the registry (edgegap_delete_registry_tag removes it). Cannot be undone, so confirm with the developer when the version is not one this conversation created.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "type": "string",
+              "description": "Application name."
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The exact version name to delete."
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "application",
+            "version"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": true,
+          "idempotentHint": true,
           "openWorldHint": true
         }
       },
@@ -480,7 +674,7 @@
       {
         "name": "edgegap_deploy",
         "title": "Deploy a game server",
-        "description": "Start one authoritative dedicated game server from an application version, placed near the players you specify. This is the recommended way to host a multiplayer match: the server owns the game state, so no player hosts it. Returns immediately with a request_id; the server is still starting and has no connection details yet. Follow this call with edgegap_wait_for_deployment to get the address players connect to. Always stop deployments you started for testing. Every deployment is tagged \"edgegap-mcp\" in addition to any tags you pass, so edgegap_list_deployments with only_agent_deployments: true finds them all. Runs until stopped or until the version's max_duration, which the result reports. Refused, with nothing sent, if the API token appears in an env var or tag, if the version uses the \"latest\" docker tag, or when too many agent deployments are already running (EDGEGAP_MAX_AGENT_DEPLOYMENTS, default 5): stop finished ones first. Env vars named like secrets are hidden in the dashboard.",
+        "description": "Start one authoritative dedicated game server from an application version, placed near the players you specify. This is the recommended way to host a multiplayer match: the server owns the game state, so no player hosts it. Returns immediately with a request_id; the server is still starting and has no connection details yet. Follow this call with edgegap_wait_for_deployment to get the address players connect to. Always stop deployments you started for testing. Every deployment is tagged \"edgegap-mcp\" in addition to any tags you pass, so edgegap_list_deployments with only_agent_deployments: true finds them all. Runs until stopped or until the version's max_duration, which the result reports. Refused, with nothing sent, if the API token appears in an env var or tag, if the version uses the \"latest\" docker tag, or when too many agent deployments are already running (EDGEGAP_MAX_AGENT_DEPLOYMENTS, default 5): stop finished ones first. Also refused when the version's max_duration is unlimited or above EDGEGAP_MAX_DURATION_MINUTES, unless allow_long_running is true (ask the developer first), and on the local server after EDGEGAP_MAX_DEPLOYS_PER_RUN deploys (default 20). Env vars named like secrets are hidden in the dashboard. Optional: webhooks Edgegap calls when the server is ready, errors or ends (instead of polling), require_cached_locations for faster starts, and private_host_ids to place it on your private fleet first.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -563,6 +757,35 @@
               "type": "integer",
               "minimum": 256,
               "maximum": 9007199254740991
+            },
+            "require_cached_locations": {
+              "description": "Only place it where the image is already cached: starts faster, fewer places to choose from.",
+              "type": "boolean"
+            },
+            "webhook_on_ready": {
+              "description": "https URL Edgegap POSTs to when the server is ready.",
+              "type": "string"
+            },
+            "webhook_on_error": {
+              "description": "https URL Edgegap POSTs to when the deployment fails.",
+              "type": "string"
+            },
+            "webhook_on_terminated": {
+              "description": "https URL Edgegap POSTs to when the deployment ends.",
+              "type": "string"
+            },
+            "private_host_ids": {
+              "description": "Private fleet host IDs to try first, in order (from edgegap_list_fleet_hosts); Edgegap overflows to its cloud when they are full. Omit for a normal cloud deployment.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allow_long_running": {
+              "description": "Deploy even though the version's max_duration is unlimited or above EDGEGAP_MAX_DURATION_MINUTES. Only after the developer agreed: the server bills until it is stopped or that limit.",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -1243,6 +1466,54 @@
         }
       },
       {
+        "name": "edgegap_link_pull_profile",
+        "title": "Link or unlink a pull profile and a version",
+        "description": "Link a pull profile to an application version, so its new deployments get the bucket files at boot, or unlink it (unlink: true). Running deployments are not changed.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "endpoint_storage": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Endpoint Storage name."
+            },
+            "pull_profile": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Pull profile name."
+            },
+            "application": {
+              "type": "string",
+              "description": "Application name."
+            },
+            "version": {
+              "type": "string",
+              "description": "Version name."
+            },
+            "unlink": {
+              "description": "true removes the link instead.",
+              "type": "boolean"
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "endpoint_storage",
+            "pull_profile",
+            "application",
+            "version"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_list_app_versions",
         "title": "List versions of an application",
         "description": "List the versions under an application, with their container image, resources, ports (including whether TLS Upgrade is on, which browser/WebGL clients need for wss://) and whether a registry login is set for pulling the image. Use this to find the version name to deploy, to check a version is ready before deploying, or to copy the non-secret settings (image, resources, ports) of a working version when creating a new one. The registry login and secret env values are never readable: the API returns \"This value is set and encrypted\" for them, so get them from the dashboard's Container Registry page or the developer.",
@@ -1545,6 +1816,43 @@
           },
           "$schema": "http://json-schema.org/draft-07/schema#",
           "additionalProperties": {}
+        },
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_list_endpoint_storage",
+        "title": "List Endpoint Storage and pull profiles",
+        "description": "List the organization's Endpoint Storage: S3-compatible buckets Edgegap exports container logs to when a deployment ends (so logs survive the deployment), and the pull profiles under each, which copy files from the bucket into a container at boot. Secret keys are never returned. A version uses a storage for logs through edgegap_create_app_version / edgegap_update_app_version endpoint_storage, and a pull profile through edgegap_link_pull_profile.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_list_fleet_hosts",
+        "title": "List the hosts of a private fleet",
+        "description": "List the hosts in one of the organization's private fleets (dedicated machines Edgegap manages for you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to edgegap_deploy as private_host_ids to place a server on them first. Organizations without private fleets get an error from the API.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "fleet_name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The private fleet name, as shown in the dashboard."
+            }
+          },
+          "required": [
+            "fleet_name"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
           "readOnlyHint": true,
@@ -1861,6 +2169,50 @@
         }
       },
       {
+        "name": "edgegap_report_deployment",
+        "title": "Report a deployment to Edgegap",
+        "description": "Report a problem with one deployment to Edgegap (the API's \"Report a Deployment\", meant for a studio's moderation backend), with a short reason and optional key/value details. It does not stop the deployment. Use it only when the developer asks to report a deployment; for a crash, read edgegap_get_deployment_logs first.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "description": "The exact request_id of the deployment."
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "description": "Why it is reported, 1-255 characters."
+            },
+            "metadata": {
+              "description": "Extra key/value details, e.g. {\"match_id\": \"m-42\"}.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "request_id",
+            "reason"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": false,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_revoke_relay_user",
         "title": "Remove a player from a relay session",
         "description": "Revoke one player's access to a relay session, by that player's authorization token (from edgegap_get_relay_session or edgegap_authorize_relay_user). The player loses the relay connection; the session and the other players stay.",
@@ -1917,6 +2269,51 @@
         },
         "annotations": {
           "destructiveHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_tag_deployment",
+        "title": "Add or remove tags on a running deployment",
+        "description": "Add tags to, or remove tags from, one running deployment, e.g. to mark the match it serves or that a test is done, so edgegap_list_deployments can filter on them. Tags are labels only: the game server does not see the change. The \"edgegap-mcp\" tag cannot be removed, since it is how agent deployments are found and cleaned up. Returns the tags now on the deployment.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "request_id": {
+              "type": "string",
+              "description": "The exact request_id of the deployment."
+            },
+            "add": {
+              "description": "Tags to add, at most 40 characters each.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              }
+            },
+            "remove": {
+              "description": "Tags to remove.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              }
+            },
+            "dry_run": {
+              "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "request_id"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
         }
@@ -2017,6 +2414,11 @@
               "description": "Check Edgegap can pull the image when saving.",
               "type": "boolean"
             },
+            "endpoint_storage": {
+              "description": "Endpoint Storage name (edgegap_list_endpoint_storage) to export container logs to when deployments end.",
+              "type": "string",
+              "minLength": 1
+            },
             "termination_grace_period_seconds": {
               "description": "Seconds between SIGTERM and SIGKILL when a deployment stops.",
               "type": "integer",
@@ -2098,7 +2500,7 @@
       {
         "name": "edgegap_update_skills",
         "title": "Check and update the installed Edgegap skills",
-        "description": "Check whether the Edgegap agent skills installed in the developer's agent are the latest, and update them. Finds installs made with the skills CLI (user-wide or this project), the Claude Code plugin edgegap@edgegap, and skills copied by hand into an agent's skills folder, and compares each skill with the latest on GitHub. Without apply it only checks and changes nothing. With apply=true it runs each outdated install's own updater (npx skills update for the Edgegap skills only, or claude plugin update) and rewrites hand-copied skills from the files bundled in this server; ask the developer before applying. Skill text is never downloaded by this tool. The skills served by edgegap_get_skill need no update here.",
+        "description": "Check whether the Edgegap agent skills installed in the developer's agent are the latest, and update them. Finds installs made with the skills CLI (user-wide or this project), the Claude Code plugin edgegap@edgegap, and skills copied by hand into an agent's skills folder, and compares each skill with the latest on GitHub. Without apply it only checks and changes nothing. With apply=true it rewrites hand-copied skills from the files bundled in this server, and runs each outdated install's own updater (npx skills@1.7.4 update for the Edgegap skills only, or claude plugin update) only when the operator started the server with EDGEGAP_ENABLE_SKILLS_UPDATE=1; otherwise it lists those commands for the developer to run. Ask the developer before applying. Skill text is never downloaded by this tool. The skills served by edgegap_get_skill need no update here.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2386,6 +2788,8 @@
       "edgegap_list_app_versions",
       "edgegap_list_apps",
       "edgegap_list_deployments",
+      "edgegap_list_endpoint_storage",
+      "edgegap_list_fleet_hosts",
       "edgegap_list_locations",
       "edgegap_list_ping_beacons",
       "edgegap_list_registry_tags",

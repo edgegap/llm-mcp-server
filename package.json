@@ -5,7 +5,7 @@
   "description": "Check, push, and deploy game servers on Edgegap from your coding agent, with relays for P2P games. Runs locally; your API token never leaves your machine.",
   "scripts": {
     "prebuild": "rm -rf dist",
-    "build": "tsc && chmod +x dist/index.js dist/http.js",
+    "build": "tsc && node scripts/chmod-bin.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:worker": "tsc -p worker/tsconfig.json --noEmit",
     "test": "node --test test/unit.test.mjs && node test/package.mjs && node test/skills.mjs && node test/updateskills.mjs && node test/smoke.mjs && node test/guards.mjs && node test/elicit.mjs && node test/newtools.mjs && node test/emptystates.mjs && node test/reports.mjs && node test/http.mjs && node test/spec.mjs && node test/snapshot.mjs",

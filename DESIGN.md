@@ -73,10 +73,11 @@ they do not remove it.
 
 ### Scope of the allowlist
 
-`EDGEGAP_APP_ALLOWLIST` is enforced by the four tools that create something in, or
-deploy from, an application: `edgegap_create_app`, `edgegap_create_app_version`,
-`edgegap_deploy`, and `edgegap_build_matchmaker_config` (whose config tells a
-matchmaker which version to deploy).
+`EDGEGAP_APP_ALLOWLIST` is enforced by the tools that create something in, change,
+delete or deploy from an application: `edgegap_create_app`, `edgegap_create_app_version`,
+`edgegap_update_app_version`, `edgegap_delete_app_version`, `edgegap_delete_app`,
+`edgegap_link_pull_profile`, `edgegap_deploy`, and `edgegap_build_matchmaker_config`
+(whose config tells a matchmaker which version to deploy).
 
 Reads are not covered: `edgegap_list_apps` and `edgegap_list_app_versions` work on
 any application. Until 0.3.3 `edgegap_list_app_versions` was blocked too, which
@@ -95,6 +96,11 @@ any of them — including deployments belonging to applications outside the list
 So the allowlist scopes what an agent can **create and deploy into**, not what it
 can **touch once running**. That is narrower than earlier versions of this
 document implied.
+
+The tools added in 0.14.0 keyed on `request_id` (`edgegap_tag_deployment`,
+`edgegap_report_deployment`) are not covered either. `EDGEGAP_STOP_OWN_ONLY=1`
+narrows the stop part of this gap: the stop tool then refuses any deployment
+without the `edgegap-mcp` tag, whichever application it belongs to.
 
 For a stronger guarantee today, use `EDGEGAP_READ_ONLY=1`, which never registers
 the mutating tools at all, or point the agent at a separate non-production
@@ -216,9 +222,19 @@ the API rejects. The field and operator lists come from the
 
 ## Scope
 
-Not exposed, on purpose: private fleets, smart fleets, endpoint storage,
-ACL/whitelist entries, deployment tags, DNS configuration, deleting apps or
-versions, and matchmaker lifecycle (start, stop, delete).
+Not exposed, on purpose: smart fleets, ACL/whitelist entries, DNS
+configuration, bulk stop, PATCH on a running deployment (marked as a warning
+in the spec), and matchmaker lifecycle (start, stop, delete).
+
+Moved into scope in 0.14.0, to match what Gameye's MCP covers for its own
+platform and because agents reach them once a game runs: deployment tags,
+reporting a deployment, deleting one app or version, private fleet hosts and
+deploying onto them (`private_host_ids` on `edgegap_deploy`, so a fleet deploy
+gets every deploy guardrail), deploy webhooks and `require_cached_locations`,
+and Endpoint Storage with pull profiles (logs that outlive a deployment).
+Deletes follow the stop rule: one exact name per call, no wildcards, refused
+while a deployment of it runs; an application with versions needs
+`max_versions`. The `edgegap-mcp` tag cannot be removed from a deployment.
 
 Moved into scope in 0.7.0, because agents reach them while sizing and cleaning
 up a first game: deployment metrics, locations and ping beacons, updating a

@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { badTag, badImage, looksSecret, isEncryptedPlaceholder } from '../dist/image.js';
 import { parseBaseUrl, stripTokenPrefix, redact, loadConfig, ConfigError } from '../dist/config.js';
 import { maskSecrets } from '../dist/client.js';
-import { argumentError } from '../dist/tools.js';
+import { argumentError, webhookProblem } from '../dist/tools.js';
+import { updaterEnv } from '../dist/skillsinstall.js';
 import { sanitizeErrorMessage, codeForStatus, codeForToolFailure, finishReport } from '../dist/callreport.js';
 import { isListable } from '../dist/skills.js';
 import { buildMatchmakerConfig } from '../dist/matchmaker.js';
@@ -169,4 +170,31 @@ test('buildMatchmakerConfig drops an expansion that only repeats min_team_size',
   const plain = buildMatchmakerConfig(base);
   assert.deepEqual(plain.config.profiles.casual.rules.expansions, {});
   assert.ok(!plain.cautions.some((c) => c.includes('expansion')));
+});
+
+test('updaterEnv passes what npm needs and never the Edgegap token or other secrets', () => {
+  const out = updaterEnv({
+    PATH: '/usr/bin', Path: 'C:\Windows', HOME: '/home/a', APPDATA: 'x', HTTPS_PROXY: 'http://proxy:3128', npm_config_registry: 'https://r',
+    EDGEGAP_API_TOKEN: 'tok', EDGEGAP_BASE_URL: 'https://api.edgegap.com', GITHUB_TOKEN: 'gh', NPM_CONFIG__AUTHTOKEN: 'npm', AWS_SECRET_ACCESS_KEY: 's',
+    ANTHROPIC_API_KEY: 'k', RANDOM_VAR: 'r', LC_ALL: 'C',
+  });
+  assert.deepEqual(Object.keys(out).sort(), ['APPDATA', 'HOME', 'HTTPS_PROXY', 'LC_ALL', 'PATH', 'Path', 'npm_config_registry'].sort());
+});
+
+test('webhookProblem: https only, no credentials', () => {
+  assert.equal(webhookProblem('https://hooks.example.com/ready'), undefined);
+  assert.match(webhookProblem('http://hooks.example.com') ?? '', /https/);
+  assert.match(webhookProblem('https://u:p@hooks.example.com') ?? '', /username or password/);
+  assert.match(webhookProblem('not a url') ?? '', /not a URL/);
+});
+
+test('loadConfig reads the new limits', () => {
+  const d = loadConfig({});
+  assert.equal(d.maxDeploysPerRun, 20);
+  assert.equal(d.stopOwnOnly, false);
+  assert.equal(d.enableSkillsUpdate, false);
+  const c = loadConfig({ EDGEGAP_MAX_DEPLOYS_PER_RUN: '0', EDGEGAP_STOP_OWN_ONLY: '1', EDGEGAP_ENABLE_SKILLS_UPDATE: 'true' });
+  assert.equal(c.maxDeploysPerRun, 0);
+  assert.equal(c.stopOwnOnly, true);
+  assert.equal(c.enableSkillsUpdate, true);
 });

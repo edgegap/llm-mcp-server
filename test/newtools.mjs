@@ -105,6 +105,8 @@ const mock = http.createServer((req, res) => {
       case 'GET /v1/app/my-game/version/latest-1':
         return send(200, { name: 'latest-1', docker_tag: 'latest', max_duration: 60 });
       case 'POST /v2/deployments':
+        // crowded-1: refused for capacity, yet a deployment record is created (live, 2026-10-28).
+        if (JSON.parse(body).version === 'crowded-1') return send(422, { message: 'Not enough space on locations or no locations available' });
         return send(200, { request_id: '7e709a0d8efd' });
       // A deployment that crashed on start, with its logs still readable.
       case 'GET /v1/status/faileddep001':
@@ -132,13 +134,63 @@ const mock = http.createServer((req, res) => {
         return send(200, { name: JSON.parse(body).name, is_active: true });
       case 'GET /v1/app/ghost-game/versions':
         return send(404, { message: 'App not found' });
-      case 'GET /v1/deployments':
+      case 'GET /v1/deployments': {
         // The deploy cap asks for agent-tagged deployments with limit 1 and
         // reads total_count.
         if (new URL(req.url, 'http://x').searchParams.get('limit') === '1') {
           return send(200, { data: [], total_count: agentRunning });
         }
+        const filters = JSON.parse(new URL(req.url, 'http://x').searchParams.get('query') ?? '{}').filters ?? [];
+        const f = (field) => filters.find((x) => x.field === field)?.value;
+        // After a refused deploy: the deployment the 422 still created.
+        if (f('created_at')) {
+          return send(200, f('version') === 'crowded-1' ? { data: [{ request_id: 'leftover0001' }], total_count: 1 } : { data: [], total_count: 0 });
+        }
+        // Delete checks: cleanup-game has nothing running, my-game build-42 has one.
+        if (f('application') === 'cleanup-game') return send(200, { data: [], total_count: 0 });
         return send(200, { data: [{ request_id: '7e709a0d8efd', ready: true, fqdn: '7e709a0d8efd.pr.edgegap.net', start_time: '2026-09-30T12:00:00Z', tags: [] }], total_count: 1 });
+      }
+      // --- Gameye-parity tools (0.14.0). Shapes from spec/edgegap-v1/v2-openapi.json.
+      case 'GET /v1/app/my-game/version/crowded-1':
+        return send(200, { name: 'crowded-1', docker_tag: 'crowded-1', max_duration: 60 });
+      case 'POST /v2/private-fleets/deployments':
+        return send(202, { request_id: 'fleetdep0001' });
+      case 'GET /v2/private-fleets/my-fleet/hosts':
+        return send(200, { data: [
+          { host_id: 'host-a', status: 'ACTIVE', ip_address: '203.0.113.10', city: 'Montreal', country: 'Canada', continent: 'North America' },
+          { host_id: 'host-b', status: 'PENDING', ip_address: null },
+        ] });
+      case 'GET /v2/private-fleets/empty-fleet/hosts':
+        return send(200, { data: [] });
+      case 'GET /v1/deployments/7e709a0d8efd/tags':
+        return send(200, { tags: [{ name: 'edgegap-mcp' }, { name: 'match-1' }], total_count: 2 });
+      case 'GET /v1/deployments/othersdep001/tags':
+        return send(200, { tags: [{ name: 'prod' }], total_count: 1 });
+      case 'POST /v1/deployments/7e709a0d8efd/tags':
+        return send(200, { name: JSON.parse(body).name });
+      case 'DELETE /v1/deployments/7e709a0d8efd/tags/match-1':
+        return send(204);
+      case 'POST /v1/deployments/7e709a0d8efd:report':
+        return send(200, {});
+      case 'GET /v1/app/cleanup-game/versions':
+        return send(200, { versions: [{ name: 'old-1' }, { name: 'old-2' }], total_count: 2 });
+      case 'DELETE /v1/app/cleanup-game/version/old-1':
+        return send(200, { success: true, message: 'deleted' });
+      case 'DELETE /v1/app/cleanup-game':
+        return send(200, {});
+      case 'GET /v1/storage/endpoints':
+        return send(200, { endpoints: [{ name: 'game-logs', endpoint: 'https://s3.us-east-1.amazonaws.com', bucket: 'my-logs', access_key_id: 'AKIAEXAMPLE', output_format: 'TEXT', container_log_version: 'v1' }], total_count: 1 });
+      case 'GET /v1/storage/endpoint/game-logs/pull-profiles':
+        return send(200, { pull_profiles: [{ name: 'maps', source: 'maps/', source_type: 'Folder', destination: '/data/maps' }], total_count: 1 });
+      case 'POST /v1/storage/endpoint': {
+        const b = JSON.parse(body);
+        return send(200, { name: b.name, endpoint: b.endpoint, bucket: b.bucket, access_key_id: b.access_key_id, output_format: 'TEXT', container_log_version: 'v1' });
+      }
+      case 'POST /v1/storage/endpoint/game-logs/pull-profile':
+        return send(200, JSON.parse(body));
+      case 'PUT /v1/storage/endpoint/game-logs/pull-profile/maps/app/my-game/version/build-42':
+      case 'DELETE /v1/storage/endpoint/game-logs/pull-profile/maps/app/my-game/version/build-42':
+        return send(200, { app: 'my-game', app_version: 'build-42', endpoint: 'game-logs', pull_profile: 'maps' });
       // --- API coverage tools (0.7.0). Shapes from spec/edgegap-v1-openapi.json.
       case 'PATCH /v1/app/my-game':
         return send(200, { name: 'my-game', is_active: JSON.parse(body).is_active });
@@ -645,10 +697,15 @@ check('only_agent_deployments with a tags filter is refused', res.isError === tr
 console.log('\n4. auto-stop reported on every deploy');
 r = json(await call('edgegap_deploy', dep));
 check('60-minute version: reported, no warning', r.auto_stop_after_minutes === 60 && r.warning === undefined && r.request_id === '7e709a0d8efd');
-r = json(await call('edgegap_deploy', { ...dep, version: 'long-1' }));
-check('1440-minute version (the API default): warned', r.auto_stop_after_minutes === 1440 && /24 hours/.test(r.warning ?? ''));
-r = json(await call('edgegap_deploy', { ...dep, version: 'forever' }));
-check('no max_duration: warned it bills until stopped', r.auto_stop === 'none' && /until it is stopped/.test(r.warning ?? ''));
+calls.length = 0;
+res = await call('edgegap_deploy', { ...dep, version: 'long-1' });
+check('1440-minute version, above the 60-minute ceiling: refused, nothing deployed', res.isError && /allow_long_running/.test(text(res)) && !calls.some((x) => x.method === 'POST'), text(res).slice(0, 160));
+res = await call('edgegap_deploy', { ...dep, version: 'forever' });
+check('no max_duration: refused too', res.isError && /no time limit/.test(text(res)));
+r = json(await call('edgegap_deploy', { ...dep, version: 'long-1', allow_long_running: true }));
+check('1440-minute version with allow_long_running: deployed and warned', r.auto_stop_after_minutes === 1440 && /24 hours/.test(r.warning ?? '') && /allow_long_running/.test(r.long_running ?? ''));
+r = json(await call('edgegap_deploy', { ...dep, version: 'forever', allow_long_running: true }));
+check('no max_duration with allow_long_running: warned it bills until stopped', r.auto_stop === 'none' && /until it is stopped/.test(r.warning ?? ''));
 
 // ------------------------------------------------------ 5. strict stop ----
 console.log('\n5. strict stop');
@@ -908,6 +965,107 @@ res = await acall('edgegap_list_locations', {});
 check('results carry structuredContent equal to the JSON text', res.structuredContent?.locations?.length === 2 && JSON.stringify(res.structuredContent) === JSON.stringify(JSON.parse(res.content.at(-1).text)));
 res = await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42' });
 check('errors carry no structuredContent', res.isError && res.structuredContent === undefined);
+// ------------------------------------- 12b. Gameye-parity tools (0.14.0) ----
+console.log('\n12b. deploy options, limits and housekeeping tools');
+calls.length = 0;
+r = json(await acall('edgegap_deploy', { ...dep, require_cached_locations: true, webhook_on_ready: 'https://hooks.example.com/ready', webhook_on_terminated: 'https://hooks.example.com/end' }));
+let post = calls.find((x) => x.method === 'POST');
+check('deploy: require_cached_locations and webhooks sent as the v2 spec shapes', post?.body?.require_cached_locations === true && post?.body?.webhook_on_ready?.url === 'https://hooks.example.com/ready' && post?.body?.webhook_on_terminated?.url === 'https://hooks.example.com/end' && post?.body?.webhook_on_error === undefined, JSON.stringify(post?.body));
+for (const [label, extra] of [['http webhook', { webhook_on_ready: 'http://hooks.example.com/r' }], ['webhook with credentials', { webhook_on_error: 'https://u:p@hooks.example.com/e' }], ['token in a webhook URL', { webhook_on_ready: `https://hooks.example.com/?t=${REAL}` }]]) {
+  calls.length = 0;
+  res = await acall('edgegap_deploy', { ...dep, ...extra });
+  check(`deploy, ${label}: refused, nothing sent`, res.isError && !calls.some((x) => x.method === 'POST'), text(res).slice(0, 120));
+}
+calls.length = 0;
+r = json(await acall('edgegap_deploy', { ...dep, private_host_ids: ['host-a', 'host-a', 'host-b'] }));
+post = calls.find((x) => x.method === 'POST');
+check('deploy with private_host_ids: POST /v2/private-fleets/deployments, IDs de-duplicated, guardrails kept', post?.url === '/v2/private-fleets/deployments' && JSON.stringify(post.body.private_host_ids) === JSON.stringify(['host-a', 'host-b']) && post.body.tags.includes('edgegap-mcp') && r.request_id === 'fleetdep0001', JSON.stringify(post));
+calls.length = 0;
+res = await acall('edgegap_deploy', { ...dep, version: 'crowded-1' });
+check('deploy refused by the API (422): names the deployment it still created', res.isError && /leftover0001/.test(text(res)) && /edgegap_stop_deployment/.test(text(res)) && /Likely cause/.test(text(res)), text(res).slice(0, 300));
+check('...looked it up by application, version, agent tag and time', (() => { const q = calls.find((x) => x.method === 'GET' && x.url.startsWith('/v1/deployments?') && x.url.includes('created_at')); const fl = q && JSON.parse(new URL(q.url, 'http://x').searchParams.get('query')).filters; return fl && ['application', 'version', 'tags', 'created_at'].every((k) => fl.some((x) => x.field === k)); })());
+
+const capped = await connect({ EDGEGAP_API_TOKEN: REAL, EDGEGAP_MAX_DEPLOYS_PER_RUN: '2' });
+await capped.callTool({ name: 'edgegap_deploy', arguments: dep });
+await capped.callTool({ name: 'edgegap_deploy', arguments: { ...dep, version: 'crowded-1' } });
+calls.length = 0;
+res = await capped.callTool({ name: 'edgegap_deploy', arguments: dep });
+check('EDGEGAP_MAX_DEPLOYS_PER_RUN: the third deploy is refused (a failed one counts), nothing sent', res.isError && /EDGEGAP_MAX_DEPLOYS_PER_RUN=2/.test(text(res)) && calls.length === 0, text(res).slice(0, 160));
+res = await capped.callTool({ name: 'edgegap_deploy', arguments: { ...dep, dry_run: true } });
+check('...a dry run still works past the cap', !res.isError);
+await capped.close();
+
+const ownOnly = await connect({ EDGEGAP_API_TOKEN: REAL, EDGEGAP_STOP_OWN_ONLY: '1' });
+calls.length = 0;
+res = await ownOnly.callTool({ name: 'edgegap_stop_deployment', arguments: { request_id: 'othersdep001' } });
+check('EDGEGAP_STOP_OWN_ONLY: a deployment without the agent tag is refused, not stopped', res.isError && /EDGEGAP_STOP_OWN_ONLY/.test(text(res)) && !calls.some((x) => x.method === 'DELETE'), text(res).slice(0, 160));
+res = await ownOnly.callTool({ name: 'edgegap_stop_deployment', arguments: { request_id: '7e709a0d8efd' } });
+check('...an agent-tagged one is stopped', !res.isError && calls.some((x) => x.method === 'DELETE' && x.url === '/v1/stop/7e709a0d8efd'));
+await ownOnly.close();
+
+calls.length = 0;
+r = json(await acall('edgegap_tag_deployment', { request_id: '7e709a0d8efd', add: ['playtest', 'match-1'], remove: ['match-1x'] }));
+check('tag_deployment: adds only missing tags, notes the rest', calls.filter((x) => x.method === 'POST').map((x) => x.body.name).join() === 'playtest' && r.notes?.some((n) => /match-1" was already/.test(n)) && r.notes?.some((n) => /match-1x" was not/.test(n)), JSON.stringify(r));
+calls.length = 0;
+json(await acall('edgegap_tag_deployment', { request_id: '7e709a0d8efd', remove: ['match-1'] }));
+check('tag_deployment: removes a tag with DELETE', calls.some((x) => x.method === 'DELETE' && x.url === '/v1/deployments/7e709a0d8efd/tags/match-1'));
+for (const [label, extra] of [['removing edgegap-mcp', { remove: ['edgegap-mcp'] }], ['nothing to do', {}], ['token as a tag', { add: [REAL.slice(0, 36)] }]]) {
+  calls.length = 0;
+  res = await acall('edgegap_tag_deployment', { request_id: '7e709a0d8efd', ...extra });
+  check(`tag_deployment, ${label}: refused, nothing sent`, res.isError && calls.length === 0, text(res).slice(0, 120));
+}
+
+calls.length = 0;
+r = json(await acall('edgegap_report_deployment', { request_id: '7e709a0d8efd', reason: 'griefing', metadata: { match_id: 'm-42' } }));
+post = calls.find((x) => x.method === 'POST');
+check('report_deployment: POST :report with reason and metadata', post?.url === '/v1/deployments/7e709a0d8efd:report' && post.body.reason === 'griefing' && post.body.metadata.match_id === 'm-42' && r.reported === true);
+
+calls.length = 0;
+res = await acall('edgegap_delete_app_version', { application: 'my-game', version: 'build-42' });
+check('delete_app_version: refused while a deployment of it runs, nothing deleted', res.isError && /7e709a0d8efd/.test(text(res)) && !calls.some((x) => x.method === 'DELETE'), text(res).slice(0, 160));
+calls.length = 0;
+r = json(await acall('edgegap_delete_app_version', { application: 'cleanup-game', version: 'old-1' }));
+check('delete_app_version: deletes an idle version', r.deleted_version === 'old-1' && calls.some((x) => x.method === 'DELETE' && x.url === '/v1/app/cleanup-game/version/old-1'));
+res = await acall('edgegap_delete_app_version', { application: 'cleanup-game', version: 'old-*' });
+check('delete_app_version: a wildcard is refused', res.isError && /one exact version/.test(text(res)));
+calls.length = 0;
+res = await acall('edgegap_delete_app', { application: 'cleanup-game' });
+check('delete_app: refused while it has versions (default max_versions 0), nothing deleted', res.isError && /old-1, old-2/.test(text(res)) && !calls.some((x) => x.method === 'DELETE'), text(res).slice(0, 160));
+calls.length = 0;
+r = json(await acall('edgegap_delete_app', { application: 'cleanup-game', max_versions: 2 }));
+check('delete_app: with max_versions covering them, deleted', r.deleted_application === 'cleanup-game' && calls.some((x) => x.method === 'DELETE' && x.url === '/v1/app/cleanup-game'));
+res = await acall('edgegap_delete_app', { application: 'my-game', max_versions: 5 });
+check('delete_app: refused while a deployment runs', res.isError && /running deployments/.test(text(res)));
+
+r = json(await acall('edgegap_list_fleet_hosts', { fleet_name: 'my-fleet' }));
+check('list_fleet_hosts: hosts with status, ACTIVE counted', r.total === 2 && r.active === 1 && r.hosts[0].host_id === 'host-a');
+r = json(await acall('edgegap_list_fleet_hosts', { fleet_name: 'empty-fleet' }));
+check('list_fleet_hosts: an empty fleet is a status, not an error', r.status === 'empty' && /next_step|dashboard/.test(JSON.stringify(r)));
+
+r = json(await acall('edgegap_list_endpoint_storage', {}));
+check('list_endpoint_storage: endpoints with their pull profiles', r.endpoints?.[0]?.name === 'game-logs' && r.endpoints[0].pull_profiles?.[0]?.name === 'maps');
+calls.length = 0;
+res = await acall('edgegap_create_endpoint_storage', { name: 'game-logs', endpoint: 'https://s3.us-east-1.amazonaws.com', bucket: 'my-logs', access_key_id: 'AKIAEXAMPLE', secret_access_key: 'very-secret-key-123' });
+check('create_endpoint_storage: secret sent once, never in the result', calls.find((x) => x.method === 'POST')?.body?.secret_access_key === 'very-secret-key-123' && !text(res).includes('very-secret-key-123') && /endpoint_storage/.test(json(res).next_step));
+res = await acall('edgegap_create_endpoint_storage', { name: 'x', endpoint: 'https://s3.example.com', bucket: 'b', access_key_id: 'k', secret_access_key: 'very-secret-key-123', dry_run: true });
+check('create_endpoint_storage dry run: the secret key is masked', !text(res).includes('very-secret-key-123'), text(res).slice(0, 300));
+calls.length = 0;
+res = await acall('edgegap_create_endpoint_storage', { name: 'x', endpoint: 'http://s3.example.com', bucket: 'b', access_key_id: 'k', secret_access_key: 's' });
+check('create_endpoint_storage: a plain-http endpoint is refused, nothing sent', res.isError && calls.length === 0);
+calls.length = 0;
+r = json(await acall('edgegap_create_pull_profile', { endpoint_storage: 'game-logs', name: 'maps', source: 'maps/', source_type: 'Folder', destination: '/data/maps' }));
+check('create_pull_profile: POST with the spec fields', JSON.stringify(Object.keys(calls.find((x) => x.method === 'POST')?.body ?? {}).sort()) === JSON.stringify(['destination', 'name', 'source', 'source_type']) && /edgegap_link_pull_profile/.test(r.next_step));
+res = await acall('edgegap_create_pull_profile', { endpoint_storage: 'game-logs', name: 'maps', source: 'maps/', source_type: 'Folder', destination: 'data/maps' });
+check('create_pull_profile: a relative destination is refused', res.isError);
+calls.length = 0;
+r = json(await acall('edgegap_link_pull_profile', { endpoint_storage: 'game-logs', pull_profile: 'maps', application: 'my-game', version: 'build-42' }));
+check('link_pull_profile: PUT, linked', calls.at(-1)?.method === 'PUT' && r.linked === true);
+r = json(await acall('edgegap_link_pull_profile', { endpoint_storage: 'game-logs', pull_profile: 'maps', application: 'my-game', version: 'build-42', unlink: true }));
+check('link_pull_profile unlink: DELETE on the same path', calls.at(-1)?.method === 'DELETE' && calls.at(-1)?.url === '/v1/storage/endpoint/game-logs/pull-profile/maps/app/my-game/version/build-42' && r.linked === false);
+calls.length = 0;
+await acall('edgegap_update_app_version', { application: 'my-game', version: 'build-42', endpoint_storage: 'game-logs' });
+check('update_app_version: endpoint_storage sent', calls.find((x) => x.method === 'PATCH')?.body?.endpoint_storage === 'game-logs');
+
 // ------------------------------------------------ 13. argument errors ----
 console.log('\n13. argument errors the agent can act on');
 res = await acall('edgegap_deploy', { application: 1 });

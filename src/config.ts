@@ -18,6 +18,12 @@ export interface Config {
   maxDurationCeiling: number;
   /** Most agent-tagged deployments running at once before deploy refuses; 0 = no cap. */
   maxAgentDeployments: number;
+  /** Deploys this process may send in its lifetime; 0 or absent = no cap. Local only: the hosted server keeps no state between requests. */
+  maxDeploysPerRun?: number;
+  /** When true, edgegap_stop_deployment refuses deployments without the agent tag. */
+  stopOwnOnly?: boolean;
+  /** When true, edgegap_update_skills may run the skills CLI or claude to update installs. */
+  enableSkillsUpdate?: boolean;
   /** Timeout for a single HTTP call, ms. */
   requestTimeoutMs: number;
   /** "local" for the stdio server, "hosted" for the Worker and HTTP server. */
@@ -105,6 +111,9 @@ export function loadConfig(
     appAllowlist: parseList(env.EDGEGAP_APP_ALLOWLIST),
     maxDurationCeiling: parseIntEnv(env.EDGEGAP_MAX_DURATION_MINUTES, 60),
     maxAgentDeployments: parseIntEnv(env.EDGEGAP_MAX_AGENT_DEPLOYMENTS, 5),
+    maxDeploysPerRun: parseIntEnv(env.EDGEGAP_MAX_DEPLOYS_PER_RUN, 20),
+    stopOwnOnly: env.EDGEGAP_STOP_OWN_ONLY === '1' || env.EDGEGAP_STOP_OWN_ONLY === 'true',
+    enableSkillsUpdate: env.EDGEGAP_ENABLE_SKILLS_UPDATE === '1' || env.EDGEGAP_ENABLE_SKILLS_UPDATE === 'true',
     requestTimeoutMs: parseIntEnv(env.EDGEGAP_TIMEOUT_MS, 30_000),
   };
 }

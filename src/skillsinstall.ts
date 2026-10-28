@@ -14,7 +14,7 @@ import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { SKILLS_PACK } from './skills.js';
-import { SKILL_NAME_RE, compareVersions, skillVersionOf } from './skillsversion.js';
+import { SKILLS_CLI, SKILL_NAME_RE, compareVersions, skillVersionOf } from './skillsversion.js';
 import type { InstallKind, InstalledSkill, SkillsEnv, SkillsInstall } from './skillsversion.js';
 
 export type { InstallKind, InstalledSkill, SkillsEnv, SkillsInstall };
@@ -46,7 +46,7 @@ export function defaultSkillsEnv(): SkillsEnv {
           {
             cwd,
             shell: win,
-            env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', CI: '1' },
+            env: { ...updaterEnv(process.env), NO_COLOR: '1', FORCE_COLOR: '0', CI: '1' },
             timeout: 120_000,
             killSignal: 'SIGKILL',
             maxBuffer: 4 * 1024 * 1024,
@@ -62,6 +62,22 @@ export function defaultSkillsEnv(): SkillsEnv {
         child.stdin?.end();
       }),
   };
+}
+
+// What the updaters need to find node, npm and their config, and to get out
+// through a proxy. Nothing else: the Edgegap token and any other secret in
+// this server's environment must not reach a package manager it starts.
+const UPDATER_ENV = /^(PATH|PATHEXT|SYSTEMROOT|SYSTEMDRIVE|WINDIR|COMSPEC|HOME|USERPROFILE|HOMEDRIVE|HOMEPATH|APPDATA|LOCALAPPDATA|PROGRAMDATA|PROGRAMFILES|PROGRAMFILES\(X86\)|TEMP|TMP|TMPDIR|USER|USERNAME|LOGNAME|SHELL|LANG|LANGUAGE|LC_[A-Z]+|TZ|XDG_[A-Z_]+|HTTPS?_PROXY|NO_PROXY|ALL_PROXY|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE|SSL_CERT_DIR|NPM_CONFIG_[A-Z_]+|CLAUDE_CONFIG_DIR)$/i;
+const SECRET_NAME = /token|secret|passw|key|auth|credential|cookie|session/i;
+
+/** The allowlisted part of env, minus EDGEGAP_* and anything named like a secret. */
+export function updaterEnv(env: Record<string, string | undefined>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined || !UPDATER_ENV.test(k) || /^EDGEGAP_/i.test(k) || SECRET_NAME.test(k)) continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 const SOURCE_RE = /^(https:\/\/github\.com\/|git@github\.com:|github:)?edgegap\/(llm-agent-skills|edgegap-agent-skills)(\.git)?\/?$/i;
@@ -169,9 +185,9 @@ export function updateCommands(install: SkillsInstall, outdated: string[]): stri
   const names = outdated.filter((n) => SKILL_NAME_RE.test(n));
   switch (install.kind) {
     case 'skills-cli-global':
-      return [['npx', '-y', 'skills', 'update', ...names, '-g', '-y']];
+      return [['npx', '-y', SKILLS_CLI, 'update', ...names, '-g', '-y']];
     case 'skills-cli-project':
-      return [['npx', '-y', 'skills', 'update', ...names, '-p', '-y']];
+      return [['npx', '-y', SKILLS_CLI, 'update', ...names, '-p', '-y']];
     case 'claude-plugin':
       return [
         ['claude', 'plugin', 'marketplace', 'update', 'edgegap'],

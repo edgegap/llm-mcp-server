@@ -115,6 +115,23 @@ check('the git checkout makes the result an error', r.isError === true);
 check('reports the state after, and to start a new session', out.after?.[0].skills.find((s) => s.name === 'edgegap-unity')?.status === 'up to date' && /new session/.test(out.reload));
 await c.close();
 
+console.log('\nedgegap_update_skills: updaters are opt-in');
+// A skills CLI install of an old edgegap-colyseus: apply would run npx, which
+// needs EDGEGAP_ENABLE_SKILLS_UPDATE=1. Without it nothing is started.
+mkdirSync(join(home, '.agents', 'skills', 'edgegap-colyseus'), { recursive: true });
+writeFileSync(join(home, '.agents', 'skills', 'edgegap-colyseus', 'SKILL.md'), old('edgegap-colyseus'));
+writeFileSync(join(home, '.agents', '.skill-lock.json'), JSON.stringify({ skills: { 'edgegap-colyseus': { source: 'edgegap/llm-agent-skills' } } }));
+c = await connect();
+r = await c.callTool({ name: 'edgegap_update_skills', arguments: {} });
+out = json(r);
+check('the skills CLI command is pinned to skills@1.7.4', out.would_run?.some((w) => /^npx -y skills@1\.7\.4 update edgegap-colyseus -g -y$/.test(w)), JSON.stringify(out.would_run));
+r = await c.callTool({ name: 'edgegap_update_skills', arguments: { apply: true } });
+out = json(r);
+check('apply without EDGEGAP_ENABLE_SKILLS_UPDATE runs no updater and says how to', out.applied?.some((a) => /not run \(EDGEGAP_ENABLE_SKILLS_UPDATE/.test(a) && /skills@1\.7\.4/.test(a)) && readFileSync(join(home, '.agents', 'skills', 'edgegap-colyseus', 'SKILL.md'), 'utf8').includes('old body'), JSON.stringify(out.applied));
+check('the description says updaters are opt-in', /EDGEGAP_ENABLE_SKILLS_UPDATE=1/.test((await c.listTools()).tools.find((t) => t.name === 'edgegap_update_skills')?.description ?? ''));
+await c.close();
+rmSync(join(home, '.agents'), { recursive: true, force: true });
+
 console.log('\noff switch and read-only');
 const before = githubHits;
 c = await connect({ EDGEGAP_SKILLS_CHECK: 'off' });

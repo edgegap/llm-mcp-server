@@ -49,6 +49,7 @@ export interface Env extends TelemetryEnv {
   EDGEGAP_APP_ALLOWLIST?: string;
   EDGEGAP_MAX_DURATION_MINUTES?: string;
   EDGEGAP_MAX_AGENT_DEPLOYMENTS?: string;
+  EDGEGAP_STOP_OWN_ONLY?: string;
   EDGEGAP_READ_ONLY?: string;
   /** "off" stops the skill tools from reading the latest skills version on GitHub. */
   EDGEGAP_SKILLS_CHECK?: string;
@@ -71,6 +72,7 @@ function configForRequest(env: Env): Config {
       .filter(Boolean),
     maxDurationCeiling: Number.parseInt(env.EDGEGAP_MAX_DURATION_MINUTES ?? '60', 10) || 60,
     maxAgentDeployments: Number.parseInt(env.EDGEGAP_MAX_AGENT_DEPLOYMENTS ?? '5', 10) || 5,
+    stopOwnOnly: env.EDGEGAP_STOP_OWN_ONLY === '1',
     requestTimeoutMs: 25_000, // inside the Worker subrequest budget
     transport: 'hosted',
   };
