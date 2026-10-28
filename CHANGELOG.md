@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.1
+
+- Skills pack 0.22.0 (llm-agent-skills 88e6db9): `edgegap-godot` 0.2.0 builds the server with the Edgegap Godot plugin (buildtool-godot-plugin) instead of a hand-written preset, Dockerfile and registry login, and its settings template class is now `EdgegapGameSettings` (the plugin declares `EdgegapSettings`). Covered by `test/tools.snapshot.json` and the skills tests.
+
 ## 0.15.0
 
 - New `edgegap_delete_pull_profile` and `edgegap_delete_endpoint_storage`, so a test pull profile or storage can be cleaned up without the dashboard. One exact name per call, wildcards refused, `dry_run` supported. An Endpoint Storage with pull profiles is refused unless `max_pull_profiles` covers them, like `edgegap_delete_app` with `max_versions`. Neither touches the bucket. Covered by `test/newtools.mjs` and the spec parity check in `test/spec.mjs`.
