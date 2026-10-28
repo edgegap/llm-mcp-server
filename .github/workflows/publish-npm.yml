@@ -1,0 +1,54 @@
+# Publishes @edgegap/mcp to npm with trusted publishing (OIDC) and provenance,
+# for when npm stops accepting direct publishes from bypass-2FA tokens
+# (announced for January 2027). Not used yet: releases still run locally with
+# release.sh. It does nothing until npmjs.com lists this repository and this
+# workflow file as a trusted publisher of @edgegap/mcp (package settings →
+# Trusted publishing). No npm token is stored in GitHub.
+#
+# Run it by hand for a tag that is already on GitHub, e.g. v0.14.0.
+
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, e.g. v0.14.0
+        required: true
+
+permissions:
+  contents: write # attach the SBOM to the release
+  id-token: write # npm trusted publishing and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
+      - run: npm install -g npm@11.6.2
+      - name: Check the tag matches the version
+        run: test "v$(node -p "require('./package.json').version")" = "$TAG"
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+      - name: Skip if npm already has this version
+        id: npm
+        run: |
+          if npm view "@edgegap/mcp@${TAG#v}" version >/dev/null 2>&1; then echo "published=true" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.npm.outputs.published != 'true'
+        run: npm publish --provenance --access public
+      - name: Attach an SBOM to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm sbom --omit dev --sbom-format cyclonedx > edgegap-mcp.sbom.cdx.json
+          gh release upload "$TAG" edgegap-mcp.sbom.cdx.json --clobber || echo "No GitHub release for $TAG yet; SBOM not attached."

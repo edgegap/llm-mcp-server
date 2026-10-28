@@ -2,6 +2,47 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.14.0
+
+Gameye parity (gameye-mcp 0.4.0, 2026-10-25) for everything that needs no Edgegap platform change, and CPU and memory on versions. Every new endpoint and body field is in the public API spec ([edgegap/openapi-specification](https://github.com/edgegap/openapi-specification) 966ccc3, identical to `spec/`), checked by `test/spec.mjs`. New tools are tested against a mock API only.
+
+**Behaviour changes**
+
+- `edgegap_deploy` refuses a version whose `max_duration` is unlimited or above `EDGEGAP_MAX_DURATION_MINUTES` (default 60), unless the agent passes the new `allow_long_running: true`; the description tells it to ask the developer first. Versions made outside the agent default to 1440 minutes, so deploying them now needs that flag.
+- `edgegap_update_skills` with `apply: true` runs the skills CLI or `claude plugin update` only when the server was started with `EDGEGAP_ENABLE_SKILLS_UPDATE=1`; otherwise it lists the commands. Hand copies are still rewritten from the bundle.
+
+**Security**
+
+- The updaters `edgegap_update_skills` starts no longer inherit the server's whole environment, which included `EDGEGAP_API_TOKEN`. They get an allowlist (path, home, temp, locale, proxy, CA and npm settings), minus `EDGEGAP_*` and anything named like a token, secret, password, key or credential.
+- The skills CLI is pinned: `npx -y skills@1.7.4 update …` instead of whatever is newest on npm.
+
+**Limits**
+
+- `EDGEGAP_MAX_DEPLOYS_PER_RUN` (default 20, local server only): deploys one process may send, failed ones included.
+- `EDGEGAP_STOP_OWN_ONLY=1` (local, self-hosted and Worker): `edgegap_stop_deployment` refuses deployments without the `edgegap-mcp` tag.
+- When the API refuses a deploy but still creates a deployment (seen live: a 422 "Not enough space on locations" left an ERROR deployment, 2026-10-28), the error names it so the agent can stop it.
+- `edgegap_context` reports the new limits.
+
+**New on `edgegap_deploy`**: `webhook_on_ready`, `webhook_on_error`, `webhook_on_terminated` (https only, no credentials, refused if they hold the token), `require_cached_locations`, and `private_host_ids`, which sends the same body to `POST /v2/private-fleets/deployments`.
+
+**New tools** (10): `edgegap_tag_deployment` (the `edgegap-mcp` tag cannot be removed), `edgegap_report_deployment`, `edgegap_delete_app_version` and `edgegap_delete_app` (one exact name, refused while deployments run; an app with versions needs `max_versions`), `edgegap_list_fleet_hosts`, `edgegap_list_endpoint_storage`, `edgegap_create_endpoint_storage` (secret key masked in dry runs, never echoed), `edgegap_create_pull_profile`, `edgegap_link_pull_profile`. `edgegap_create_app_version` and `edgegap_update_app_version` take `endpoint_storage`. DESIGN.md's Scope and allowlist sections are updated.
+
+**Skills pack 0.21.0** (llm-agent-skills 02f2b96, PR #32): agents check the installed skills once per conversation with `edgegap_update_skills`, and get guidance for every tool above.
+
+**Repository**
+
+- CI: actions pinned by commit SHA, a Windows job (build and the stdio tests), and an `npm audit --omit=dev --audit-level=high` job. Dependabot proposes npm and Actions updates weekly (the MCP SDK is left out: `agents` pins it).
+- `npm run build` no longer calls `chmod` (`scripts/chmod-bin.mjs`), so it runs under cmd.exe.
+- `.github/workflows/publish-npm.yml`: npm trusted publishing with provenance and an SBOM, run by hand for a tag. Unused until npmjs.com lists it as a trusted publisher; releases still go through `release.sh`.
+- README: Windows notes, the new variables, tools and guardrails, Docker settings.
+
+**CPU and memory on versions**
+
+- `edgegap_update_app_version` takes `cpu_units` and `memory_mb` (sent as `req_cpu`/`req_memory`, which the public spec's `PATCH /v1/app/{app}/version/{version}` accepts). Both or neither, and memory at most twice the CPU units, as on `edgegap_deploy`; otherwise refused with nothing sent. The description no longer says resources cannot be changed on a version.
+- `edgegap_deploy`'s per-deployment override is unchanged: `resources: {cpu_units, memory_mib}` per `DeploymentV2.resources`. Checked live 2026-10-28: a 512/1024 override on a 256/512 version deployed READY, and a 1024-vCPU override got 422 "Not enough space on locations", so the API reads the field rather than ignoring it.
+- The 422 hint ("could not allocate a server") names the tool parameters `cpu_units`/`memory_mb` instead of the API's `req_cpu`/`req_memory`.
+- Tests: `test/newtools.mjs` (PATCH body, both-or-neither and ratio refusals, description), `test/spec.mjs` (the new body fields are in the public spec).
+
 ## 0.13.3
 
 - `edgegap_build_matchmaker_config`: an expansion that only repeats the initial `min_team_size` is left out, with a caution. Partial matches need no expansion: `min_team_size` below `max_team_size` allows them, and a short `ticket_expiration` (30s) keeps the wait short, while every expansion costs the matchmaker performance. The `expansions` parameter description says so. Covered in `test/unit.test.mjs`.

@@ -64,7 +64,7 @@ function findOperation(method, path) {
 // --------------------------------------------------------------- static ----
 console.log('\nclient endpoints are in the spec');
 const clientSrc = readFileSync('src/client.ts', 'utf8');
-const calls = [...clientSrc.matchAll(/this\.request<[\s\S]*?>\(\s*'(GET|POST|PATCH|DELETE)',\s*'(v1|v2)',\s*(`[^`]*`|'[^']*')/g)];
+const calls = [...clientSrc.matchAll(/this\.request<[\s\S]*?>\(\s*'(GET|POST|PUT|PATCH|DELETE)',\s*'(v1|v2)',\s*(`[^`]*`|'[^']*')/g)];
 check('found the client\'s requests', calls.length >= 20, `${calls.length}`);
 for (const [, method, version, raw] of calls) {
   const path = (version === 'v2' ? '/v2' : '') + raw.slice(1, -1).replace(/\$\{[^}]+\}/g, 'x');
@@ -92,15 +92,25 @@ const full = {
   edgegap_update_app: { application: 'my-game', is_active: false },
   edgegap_create_app_version: {
     application: 'my-game', name: 'v1', docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b1',
-    cpu_units: 512, memory_mb: 1024, ports, registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, verify_image: true, env,
+    cpu_units: 512, memory_mb: 1024, ports, registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, verify_image: true, env, endpoint_storage: 'logs',
   },
   edgegap_update_app_version: {
     application: 'my-game', version: 'v1', is_active: true, docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b2',
-    registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, force_cache: true, verify_image: true, termination_grace_period_seconds: 10,
-    ports, env,
+    cpu_units: 512, memory_mb: 1024, registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, force_cache: true, verify_image: true, termination_grace_period_seconds: 10,
+    ports, env, endpoint_storage: 'logs',
   },
-  edgegap_deploy: { application: 'my-game', version: 'v1', users: { ip_addresses: ['203.0.113.1'], geo_coordinates: [{ latitude: 45, longitude: -73 }] }, env, tags: ['ci'], cpu_units: 512, memory_mb: 1024 },
+  edgegap_deploy: { application: 'my-game', version: 'v1', users: { ip_addresses: ['203.0.113.1'], geo_coordinates: [{ latitude: 45, longitude: -73 }] }, env, tags: ['ci'], cpu_units: 512, memory_mb: 1024,
+    require_cached_locations: true, webhook_on_ready: 'https://hooks.example.com/r', webhook_on_error: 'https://hooks.example.com/e', webhook_on_terminated: 'https://hooks.example.com/t' },
+  // Same tool, private fleet route ("#" separates a second case for one tool).
+  'edgegap_deploy#fleet': { application: 'my-game', version: 'v1', users: { ip_addresses: ['203.0.113.1'] }, env, cpu_units: 512, memory_mb: 1024, require_cached_locations: true, private_host_ids: ['host-a'], webhook_on_ready: 'https://hooks.example.com/r' },
   edgegap_stop_deployment: { request_id: '7e709a0d8efd' },
+  edgegap_tag_deployment: { request_id: '7e709a0d8efd', add: ['playtest'], remove: ['old'] },
+  edgegap_report_deployment: { request_id: '7e709a0d8efd', reason: 'griefing', metadata: { match_id: 'm-42' } },
+  edgegap_delete_app_version: { application: 'my-game', version: 'v1' },
+  edgegap_delete_app: { application: 'my-game' },
+  edgegap_create_endpoint_storage: { name: 'logs', endpoint: 'https://s3.example.com', bucket: 'b', access_key_id: 'k', secret_access_key: 's', output_format: 'NDJSON', container_log_version: 'v2' },
+  edgegap_create_pull_profile: { endpoint_storage: 'logs', name: 'maps', source: 'maps/', source_type: 'Folder', destination: '/data/maps' },
+  edgegap_link_pull_profile: { endpoint_storage: 'logs', pull_profile: 'maps', application: 'my-game', version: 'v1' },
   edgegap_delete_registry_tag: { image_name: 'srv', tag: 'b1' },
   edgegap_create_relay_session: { user_ips: ['203.0.113.1'], webhook_url: 'https://hooks.example.com/relay' },
   edgegap_authorize_relay_user: { session_id: 'abc123-S', user_ip: '203.0.113.2' },
@@ -112,7 +122,8 @@ const { tools } = await c.listTools();
 const writeTools = tools.filter((t) => t.inputSchema?.properties?.dry_run).map((t) => t.name);
 check('every dry-run tool has a parity case', writeTools.every((n) => full[n]), writeTools.filter((n) => !full[n]).join(', '));
 
-for (const [name, args] of Object.entries(full)) {
+for (const [key, args] of Object.entries(full)) {
+  const name = key.split('#')[0];
   const r = await c.callTool({ name, arguments: { ...args, dry_run: true } });
   const payload = r.structuredContent ?? JSON.parse(r.content.at(-1).text);
   const reqs = payload.requests ?? [];

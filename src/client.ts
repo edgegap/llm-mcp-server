@@ -12,6 +12,36 @@ import { VERSION } from './version.js';
 import type { UpstreamResult } from './callreport.js';
 
 /** A request a dry run would have sent, with every secret masked. */
+export interface FleetHost {
+  host_id: string;
+  status?: string;
+  ip_address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  continent?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  [key: string]: unknown;
+}
+
+export interface EndpointStorage {
+  name: string;
+  endpoint?: string;
+  bucket?: string;
+  access_key_id?: string;
+  container_log_version?: string;
+  output_format?: string;
+  create_time?: string;
+  last_updated?: string;
+}
+
+export interface PullProfile {
+  name: string;
+  source?: string;
+  source_type?: string;
+  destination?: string;
+}
+
 export interface PlannedRequest {
   method: Method;
   host: string;
@@ -28,7 +58,7 @@ export interface ClientOptions {
   recorder?: (request: PlannedRequest) => void;
 }
 
-const SECRET_KEYS = /^(private_token|registry_token|token|password|secret|api_key)$/i;
+const SECRET_KEYS = /^(private_token|registry_token|token|password|secret|api_key|secret_access_key)$/i;
 
 /**
  * Deep copy of a request body with secrets masked: registry tokens and the
@@ -61,7 +91,7 @@ export class EdgegapApiError extends Error {
   }
 }
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export class EdgegapClient {
   /**
@@ -237,11 +267,106 @@ export class EdgegapClient {
     );
   }
 
+  /** Deletes one version. The API refuses nothing here, so callers check first. */
+  deleteAppVersion(appName: string, versionName: string) {
+    return this.request<{ success?: boolean; message?: string }>(
+      'DELETE',
+      'v1',
+      `/v1/app/${encodeURIComponent(appName)}/version/${encodeURIComponent(versionName)}`
+    );
+  }
+
+  /** Deletes an application and every version under it. */
+  deleteApp(appName: string) {
+    return this.request<Record<string, unknown>>('DELETE', 'v1', `/v1/app/${encodeURIComponent(appName)}`);
+  }
+
   // --- Deployments --------------------------------------------------------
 
   /** v2 deploy. Returns only a request_id; the deployment is still starting. */
   deploy(body: Record<string, unknown>) {
     return this.request<{ request_id: string }>('POST', 'v2', '/deployments', { body });
+  }
+
+  /** v2 deploy onto a private fleet: the same body plus private_host_ids. */
+  deployToFleet(body: Record<string, unknown>) {
+    return this.request<{ request_id: string }>('POST', 'v2', '/private-fleets/deployments', { body });
+  }
+
+  listFleetHosts(fleetName: string) {
+    return this.request<{ data?: FleetHost[] }>('GET', 'v2', `/private-fleets/${encodeURIComponent(fleetName)}/hosts`);
+  }
+
+  listDeploymentTags(requestId: string) {
+    return this.request<{ tags?: Array<{ name: string }>; total_count?: number }>(
+      'GET',
+      'v1',
+      `/v1/deployments/${encodeURIComponent(requestId)}/tags`,
+      { query: { limit: 100 } }
+    );
+  }
+
+  addDeploymentTag(requestId: string, name: string) {
+    return this.request<{ name: string }>('POST', 'v1', `/v1/deployments/${encodeURIComponent(requestId)}/tags`, {
+      body: { name },
+    });
+  }
+
+  removeDeploymentTag(requestId: string, name: string) {
+    return this.request<Record<string, unknown>>(
+      'DELETE',
+      'v1',
+      `/v1/deployments/${encodeURIComponent(requestId)}/tags/${encodeURIComponent(name)}`
+    );
+  }
+
+  reportDeployment(requestId: string, body: { reason: string; metadata?: Record<string, string> }) {
+    return this.request<Record<string, unknown>>(
+      'POST',
+      'v1',
+      `/v1/deployments/${encodeURIComponent(requestId)}:report`,
+      { body }
+    );
+  }
+
+  // --- Endpoint storage (S3 log export and pull profiles, v1) -------------
+
+  listEndpointStorage() {
+    return this.request<{ endpoints?: EndpointStorage[]; total_count?: number }>('GET', 'v1', '/v1/storage/endpoints', {
+      query: { limit: 100 },
+    });
+  }
+
+  createEndpointStorage(body: Record<string, unknown>) {
+    return this.request<EndpointStorage>('POST', 'v1', '/v1/storage/endpoint', { body });
+  }
+
+  listPullProfiles(endpointName: string) {
+    return this.request<{ pull_profiles?: PullProfile[]; total_count?: number }>(
+      'GET',
+      'v1',
+      `/v1/storage/endpoint/${encodeURIComponent(endpointName)}/pull-profiles`,
+      { query: { limit: 100 } }
+    );
+  }
+
+  createPullProfile(endpointName: string, body: Record<string, unknown>) {
+    return this.request<PullProfile>(
+      'POST',
+      'v1',
+      `/v1/storage/endpoint/${encodeURIComponent(endpointName)}/pull-profile`,
+      { body }
+    );
+  }
+
+  /** PUT links, DELETE unlinks; the path is the same. */
+  linkPullProfile(method: 'PUT' | 'DELETE', endpointName: string, profileName: string, appName: string, versionName: string) {
+    return this.request<Record<string, unknown>>(
+      method,
+      'v1',
+      `/v1/storage/endpoint/${encodeURIComponent(endpointName)}/pull-profile/${encodeURIComponent(profileName)}` +
+        `/app/${encodeURIComponent(appName)}/version/${encodeURIComponent(versionName)}`
+    );
   }
 
   getDeployment(requestId: string) {

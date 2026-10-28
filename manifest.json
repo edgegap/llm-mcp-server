@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "edgegap-mcp",
   "display_name": "Edgegap",
-  "version": "0.13.3",
+  "version": "0.14.0",
   "description": "Deploy and run multiplayer game servers on Edgegap from Claude: dedicated servers, matchmaking, relays and the Edgegap agent skills.",
   "long_description": "The Edgegap MCP server, running on your own computer. Check a server Dockerfile, push the image, create the app version, deploy dedicated game servers near your players, read their logs and metrics, build a matchmaker config, and load the Edgegap agent skills (Unity, NGO, FishNet, PurrNet, Photon Fusion, Unreal, Godot, Colyseus, Nakama, PlayFab, Three.js, Manus). Guardrails: dry_run on every write tool, a cap on agent deployments, a max_duration ceiling, refusal of \"latest\" image tags and of the API token in containers, and the token scrubbed from every result. Your token stays on this computer and is sent only to api.edgegap.com.",
   "author": {
@@ -108,8 +108,24 @@
       "description": "Create an application version"
     },
     {
+      "name": "edgegap_create_endpoint_storage",
+      "description": "Register an S3-compatible bucket for container log export"
+    },
+    {
+      "name": "edgegap_create_pull_profile",
+      "description": "Copy files from a bucket into containers at boot"
+    },
+    {
       "name": "edgegap_create_relay_session",
       "description": "Create a relay session (host-client games only)"
+    },
+    {
+      "name": "edgegap_delete_app",
+      "description": "Delete an application and its versions"
+    },
+    {
+      "name": "edgegap_delete_app_version",
+      "description": "Delete one application version"
     },
     {
       "name": "edgegap_delete_registry_tag",
@@ -156,6 +172,10 @@
       "description": "Load an Edgegap agent skill"
     },
     {
+      "name": "edgegap_link_pull_profile",
+      "description": "Link or unlink a pull profile and a version"
+    },
+    {
       "name": "edgegap_list_app_versions",
       "description": "List versions of an application"
     },
@@ -166,6 +186,14 @@
     {
       "name": "edgegap_list_deployments",
       "description": "List running deployments"
+    },
+    {
+      "name": "edgegap_list_endpoint_storage",
+      "description": "List Endpoint Storage buckets and pull profiles"
+    },
+    {
+      "name": "edgegap_list_fleet_hosts",
+      "description": "List the hosts of a private fleet"
     },
     {
       "name": "edgegap_list_locations",
@@ -188,12 +216,20 @@
       "description": "List the Edgegap agent skills"
     },
     {
+      "name": "edgegap_report_deployment",
+      "description": "Report a deployment to Edgegap"
+    },
+    {
       "name": "edgegap_revoke_relay_user",
       "description": "Remove a player from a relay session"
     },
     {
       "name": "edgegap_stop_deployment",
       "description": "Stop a deployment"
+    },
+    {
+      "name": "edgegap_tag_deployment",
+      "description": "Add or remove tags on a running deployment"
     },
     {
       "name": "edgegap_update_app",

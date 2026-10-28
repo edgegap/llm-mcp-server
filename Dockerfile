@@ -17,6 +17,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src ./src
+COPY scripts/chmod-bin.mjs ./scripts/chmod-bin.mjs
 RUN npm run build
 
 FROM --platform=$BUILDPLATFORM node:22-alpine AS deps

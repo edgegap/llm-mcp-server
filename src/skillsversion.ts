@@ -11,6 +11,9 @@
 
 import { SKILLS_PACK } from './skills.js';
 
+/** The skills CLI version the updater runs, not whatever is newest on npm. */
+export const SKILLS_CLI = 'skills@1.7.4';
+
 /** raw.githubusercontent.com root of the skills repo's main branch. */
 export const DEFAULT_SKILLS_RAW = 'https://raw.githubusercontent.com/edgegap/llm-agent-skills/main';
 

@@ -1,0 +1,18 @@
+# Weekly update PRs. Actions are pinned by commit SHA, and Dependabot keeps
+# both the SHA and its version comment current.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+    ignore:
+      # Every `agents` release pins this SDK exactly; bump it by hand with agents.
+      - dependency-name: '@modelcontextprotocol/sdk'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

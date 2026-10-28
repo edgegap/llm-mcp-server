@@ -26,6 +26,7 @@ import { OUTPUT } from './outputs.js';
 import { finishReport, codeForStatus, type CallMeta, type ErrorCode, type ToolCallReport } from './callreport.js';
 import { SKILLS_PACK, findSkill, findSkillFile, fileIndex, mimeType, skillUri } from './skills.js';
 import {
+  SKILLS_CLI,
   SKILL_NAME_RE,
   compareVersions,
   latestPack,
@@ -368,7 +369,7 @@ function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string):
     case 409:
       return 'a resource with that name already exists. Pick a different name or reuse the existing one.';
     case 422:
-      return 'Edgegap could not allocate a server for the requested location or resources. Try different user coordinates, or lower req_cpu/req_memory.';
+      return 'Edgegap could not allocate a server for the requested location or resources. Try different user coordinates, or lower cpu_units/memory_mb.';
     case 424:
       return 'Edgegap could not pull the container image. Check docker_repository, docker_image, docker_tag, and registry credentials.';
     default:
@@ -573,6 +574,12 @@ function checkRequestId(id: string): ToolResult | undefined {
   );
 }
 
+/** Refuses an empty, wildcard or list-like name where one exact name is required. */
+function exactName(name: string, what: string): ToolResult | undefined {
+  if (name.trim() === name && name.length > 0 && !/[*?,\s]/.test(name)) return undefined;
+  return fail(`"${name.slice(0, 80)}" is not one exact ${what} name. Pass a single name; wildcards and lists are refused.`);
+}
+
 /** The dry_run parameter every write tool takes. */
 const dryRunParam = z
   .boolean()
@@ -642,6 +649,21 @@ async function tokenLeak(
       'everything that can read those. If the game server needs to call Edgegap, give it a ' +
       'separate, purpose-made credential, and never this one.'
   );
+}
+
+const WEBHOOKS = ['webhook_on_ready', 'webhook_on_error', 'webhook_on_terminated'] as const;
+
+/** Why a deploy webhook URL is refused: Edgegap would POST deployment details to it. */
+export function webhookProblem(raw: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return `"${raw.slice(0, 80)}" is not a URL.`;
+  }
+  if (url.protocol !== 'https:') return 'must be an https URL: Edgegap sends deployment details (IP, ports) to it.';
+  if (url.username || url.password) return 'must not contain a username or password.';
+  return undefined;
 }
 
 /**
@@ -748,6 +770,8 @@ export function registerTools(
   options: RegisterOptions = {}
 ): void {
   const mutating = !config.readOnly;
+  // Deploys sent by this server instance; see EDGEGAP_MAX_DEPLOYS_PER_RUN.
+  let deploysSent = 0;
 
   // Every result names the API host it came from, first, so a session pointed
   // at a custom EDGEGAP_BASE_URL can never be mistaken for production.
@@ -877,11 +901,14 @@ export function registerTools(
         app_allowlist: config.appAllowlist.length ? config.appAllowlist : 'none (all applications)',
         max_duration_ceiling_minutes: config.maxDurationCeiling,
         max_agent_deployments: config.maxAgentDeployments > 0 ? config.maxAgentDeployments : 'no cap',
+        max_deploys_per_run: hosted ? 'n/a (hosted: no state between requests)' : (config.maxDeploysPerRun ?? 0) > 0 ? config.maxDeploysPerRun : 'no cap',
+        stop_own_only: config.stopOwnOnly === true,
+        ...(hosted ? {} : { skills_updaters_enabled: config.enableSkillsUpdate === true }),
         skills_pack: `${SKILLS_PACK.version} (${SKILLS_PACK.commit.slice(0, 7)}), ${SKILLS_PACK.skills.length} skills`,
         forced_deploy_tag: AGENT_TAG,
         guardrails: {
           dry_run: mutating
-            ? 'deploy, stop_deployment, create_app, update_app, create_app_version, update_app_version, delete_registry_tag, create/authorize/revoke/delete relay'
+            ? 'every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles, relays'
             : 'n/a: read-only, no write tools are registered',
           token_in_container: 'deploys and versions are refused if the API token appears in an env var, tag or webhook URL',
           image_tags: 'versions on "latest", an empty or malformed tag, or a docker_image holding a registry or tag are refused; so is deploying a version on "latest"',
@@ -889,8 +916,12 @@ export function registerTools(
             ? `deploy is refused while ${config.maxAgentDeployments} or more agent-tagged deployments are running`
             : 'off (EDGEGAP_MAX_AGENT_DEPLOYMENTS=0)',
           secret_env: 'env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY...) are sent hidden',
-          stop: 'one exact request_id per call; no bulk stop',
+          stop: config.stopOwnOnly
+            ? `one exact request_id per call; no bulk stop; only deployments tagged "${AGENT_TAG}" (EDGEGAP_STOP_OWN_ONLY)`
+            : 'one exact request_id per call; no bulk stop',
           auto_stop: 'each deploy reports its version\'s max_duration; Edgegap has no per-deployment time limit',
+          long_running: `deploying a version whose max_duration is unlimited or above ${config.maxDurationCeiling} minutes needs allow_long_running: true`,
+          deletes: 'one exact app or version per call; refused while its deployments run; an app with versions needs max_versions',
           results: `every result starts with [${label}]`,
         },
         user_agent: `edgegap-mcp/${VERSION} (<MCP client name>)`,
@@ -1179,6 +1210,11 @@ export function registerTools(
             .boolean()
             .optional()
             .describe('Verify Edgegap can pull the image before accepting the version.'),
+          endpoint_storage: z
+            .string()
+            .min(1)
+            .optional()
+            .describe('Endpoint Storage name (edgegap_list_endpoint_storage) to export container logs to when deployments end.'),
           env: z
             .array(z.object({ key: z.string(), value: z.string() }))
             .optional()
@@ -1248,6 +1284,7 @@ export function registerTools(
             private_username: args.registry_username,
             private_token: args.registry_token,
             verify_image: args.verify_image ?? false,
+            ...(args.endpoint_storage ? { endpoint_storage: args.endpoint_storage } : {}),
             max_duration: capped,
             ports: args.ports.map((p) => ({
               port: p.port,
@@ -1329,8 +1366,9 @@ export function registerTools(
           'version\'s whole list (per the API): read the current ones with edgegap_get_app_version ' +
           'and pass every port or variable to keep; secret env values are not readable, so get them ' +
           'from the developer. Refused, with nothing sent, for a registry login or env value equal to ' +
-          'the API\'s "' + ENCRYPTED_PLACEHOLDER + '" placeholder; leave the registry login out to keep it. CPU and memory cannot be changed here; create a ' +
-          'new version, or override them per deployment in edgegap_deploy.',
+          'the API\'s "' + ENCRYPTED_PLACEHOLDER + '" placeholder; leave the registry login out to keep it. cpu_units and memory_mb ' +
+          'change together (both or neither); to try other resources for one deployment only, override them in ' +
+          'edgegap_deploy instead.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().describe('Version name to change.'),
@@ -1345,8 +1383,25 @@ export function registerTools(
             .int()
             .optional()
             .describe('Auto-stop after this many minutes. Capped by EDGEGAP_MAX_DURATION_MINUTES.'),
+          cpu_units: z
+            .number()
+            .int()
+            .min(256)
+            .optional()
+            .describe('New vCPU units for later deployments, with memory_mb. 1024 = 1 vCPU.'),
+          memory_mb: z
+            .number()
+            .int()
+            .min(256)
+            .optional()
+            .describe('New memory in MB for later deployments, with cpu_units. At most 2x cpu_units.'),
           force_cache: z.boolean().optional().describe('Pre-load the image on Edgegap so deployments start faster.'),
           verify_image: z.boolean().optional().describe('Check Edgegap can pull the image when saving.'),
+          endpoint_storage: z
+            .string()
+            .min(1)
+            .optional()
+            .describe('Endpoint Storage name (edgegap_list_endpoint_storage) to export container logs to when deployments end.'),
           termination_grace_period_seconds: z
             .number()
             .int()
@@ -1416,6 +1471,17 @@ export function registerTools(
             const imageProblem = badImage(args.docker_repository ?? '', args.docker_image);
             if (imageProblem) return fail(`Refused: ${imageProblem}`);
           }
+          // The PATCH takes req_cpu and req_memory separately, but the 2x
+          // ratio spans both, so take them together like edgegap_deploy does.
+          if ((args.cpu_units === undefined) !== (args.memory_mb === undefined)) {
+            return fail('Pass both cpu_units and memory_mb to change the version\'s resources, or neither to keep them.');
+          }
+          if (args.cpu_units !== undefined && args.memory_mb !== undefined && args.memory_mb > args.cpu_units * 2) {
+            return fail(
+              `memory_mb (${args.memory_mb}) exceeds twice cpu_units (${args.cpu_units}). Edgegap rejects this. ` +
+                `Lower memory_mb to ${args.cpu_units * 2} or raise cpu_units.`
+            );
+          }
 
           const capped =
             args.max_duration_minutes === undefined
@@ -1428,9 +1494,12 @@ export function registerTools(
             docker_tag: args.docker_tag,
             private_username: args.registry_username,
             private_token: args.registry_token,
+            req_cpu: args.cpu_units,
+            req_memory: args.memory_mb,
             max_duration: capped,
             force_cache: args.force_cache,
             verify_image: args.verify_image,
+            endpoint_storage: args.endpoint_storage,
             termination_grace_period_seconds: args.termination_grace_period_seconds,
             ports: args.ports?.map((p) => ({
               port: p.port,
@@ -1558,7 +1627,11 @@ export function registerTools(
           'stopped or until the version\'s max_duration, which the result reports. Refused, with ' +
           'nothing sent, if the API token appears in an env var or tag, if the version uses the "latest" ' +
           'docker tag, or when too many agent deployments are already running (EDGEGAP_MAX_AGENT_DEPLOYMENTS, ' +
-          'default 5): stop finished ones first. Env vars named like secrets are hidden in the dashboard.',
+          'default 5): stop finished ones first. Also refused when the version\'s max_duration is unlimited or above ' +
+          'EDGEGAP_MAX_DURATION_MINUTES, unless allow_long_running is true (ask the developer first), and on the local ' +
+          'server after EDGEGAP_MAX_DEPLOYS_PER_RUN deploys (default 20). Env vars named like secrets are hidden in the ' +
+          'dashboard. Optional: webhooks Edgegap calls when the server is ready, errors or ends (instead of polling), ' +
+          'require_cached_locations for faster starts, and private_host_ids to place it on your private fleet first.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().describe('Version name within the application.'),
@@ -1583,6 +1656,28 @@ export function registerTools(
             .min(256)
             .optional()
             .describe('Override the version\'s memory for this deployment only, with cpu_units. At most 2x cpu_units.'),
+          require_cached_locations: z
+            .boolean()
+            .optional()
+            .describe('Only place it where the image is already cached: starts faster, fewer places to choose from.'),
+          webhook_on_ready: z.string().optional().describe('https URL Edgegap POSTs to when the server is ready.'),
+          webhook_on_error: z.string().optional().describe('https URL Edgegap POSTs to when the deployment fails.'),
+          webhook_on_terminated: z.string().optional().describe('https URL Edgegap POSTs to when the deployment ends.'),
+          private_host_ids: z
+            .array(z.string().min(1))
+            .min(1)
+            .optional()
+            .describe(
+              'Private fleet host IDs to try first, in order (from edgegap_list_fleet_hosts); Edgegap overflows to ' +
+                'its cloud when they are full. Omit for a normal cloud deployment.'
+            ),
+          allow_long_running: z
+            .boolean()
+            .optional()
+            .describe(
+              'Deploy even though the version\'s max_duration is unlimited or above EDGEGAP_MAX_DURATION_MINUTES. ' +
+                'Only after the developer agreed: the server bills until it is stopped or that limit.'
+            ),
           dry_run: dryRunParam,
         },
         outputSchema: OUTPUT.deploy,
@@ -1610,6 +1705,7 @@ export function registerTools(
               [`the value of env var "${e.key.slice(0, 40)}"`, e.value],
             ]),
             ...tags.map((t): [string, string] => [`tag "${t.slice(0, 8)}…"`, t]),
+            ...WEBHOOKS.map((w): [string, string | undefined] => [w, args[w]]),
           ]);
           if (leak) return leak;
 
@@ -1618,6 +1714,11 @@ export function registerTools(
             'Leave the variable out: the deployment already gets the version\'s own env vars.'
           );
           if (placeholder) return placeholder;
+
+          for (const w of WEBHOOKS) {
+            const problem = args[w] === undefined ? undefined : webhookProblem(args[w]);
+            if (problem) return fail(`${w}: ${problem}`);
+          }
 
           const body: Record<string, unknown> = {
             application: args.application,
@@ -1645,10 +1746,27 @@ export function registerTools(
             }
             body.resources = { cpu_units: args.cpu_units, memory_mib: args.memory_mb };
           }
+          if (args.require_cached_locations !== undefined) body.require_cached_locations = args.require_cached_locations;
+          for (const w of WEBHOOKS) if (args[w] !== undefined) body[w] = { url: args[w] };
+          const fleet = args.private_host_ids !== undefined;
+          if (fleet) body.private_host_ids = [...new Set(args.private_host_ids)];
+          const send = (c: EdgegapClient) => (fleet ? c.deployToFleet(body) : c.deploy(body));
+
+          // Counted per process, before the version is read, so a loop that
+          // keeps failing still runs out. The hosted server has no process to
+          // count in; its cap is EDGEGAP_MAX_AGENT_DEPLOYMENTS alone.
+          const perRun = config.transport === 'local' ? (config.maxDeploysPerRun ?? 0) : 0;
+          if (!args.dry_run && perRun > 0 && deploysSent >= perRun) {
+            return fail(
+              `Refused: this server already sent ${deploysSent} deploys, the limit for one run ` +
+                `(EDGEGAP_MAX_DEPLOYS_PER_RUN=${perRun}). Nothing was sent. Stop what is running and ask the developer; ` +
+                'restarting the MCP server resets the count.'
+            );
+          }
 
           if (args.dry_run) {
             const dry = client.dryRun();
-            await dry.client.deploy(body);
+            await send(dry.client);
             return dryRunResult(dry.requests, [
               `Tagged "${AGENT_TAG}" automatically.`,
               'Auto-stop comes from the version\'s max_duration; a real deploy reports it.',
@@ -1664,6 +1782,19 @@ export function registerTools(
             return fail(
               `Refused: version "${args.version}" uses docker_tag "${version.docker_tag}". ${TAG_FIX} ` +
                 'Then create a new version with edgegap_create_app_version and deploy that.'
+            );
+          }
+          const maxDuration = version.max_duration;
+          const longRunning =
+            typeof maxDuration === 'number' && (maxDuration <= 0 || maxDuration > config.maxDurationCeiling);
+          if (longRunning && !args.allow_long_running) {
+            return fail(
+              `Refused: version "${args.version}" lets a deployment run ` +
+                (maxDuration <= 0 ? 'with no time limit' : `for ${maxDuration} minutes`) +
+                `, above this server's EDGEGAP_MAX_DURATION_MINUTES (${config.maxDurationCeiling}). Nothing was sent. ` +
+                'Ask the developer; if they agree, deploy again with allow_long_running: true and stop it when done. ' +
+                'For tests, a version created with edgegap_create_app_version gets the capped max_duration. Do not ' +
+                'lower max_duration on a version live players use.'
             );
           }
 
@@ -1685,17 +1816,57 @@ export function registerTools(
             }
           }
 
-          const res = await client.deploy(body);
+          deploysSent++;
+          const sentAt = new Date(Date.now() - 60_000).toISOString();
+          let res: { request_id: string };
+          try {
+            res = await send(client);
+          } catch (err) {
+            // A refused deploy can still leave a deployment behind (a 422
+            // "not enough space" did, 2026-10-28) with no request_id in the
+            // error. Name it so the agent can stop it.
+            if (!(err instanceof EdgegapApiError)) throw err;
+            const left = await client
+              .listDeployments({
+                query: JSON.stringify({
+                  filters: [
+                    { field: 'application', operator: 'eq', value: args.application },
+                    { field: 'version', operator: 'eq', value: args.version },
+                    { field: 'tags', operator: 'in', value: [AGENT_TAG] },
+                    { field: 'created_at', operator: 'gte', value: sentAt },
+                  ],
+                }),
+                limit: 10,
+              })
+              .then((r) => (r.data ?? []).map((d) => d.request_id).filter(Boolean))
+              .catch(() => []);
+            if (left.length === 0) throw err;
+            throw new EdgegapApiError(
+              err.status,
+              `${err.apiMessage}\nThe API still created ${left.length === 1 ? 'a deployment' : 'deployments'} for this ` +
+                `request: ${left.join(', ')}. Stop ${left.length === 1 ? 'it' : 'each'} with edgegap_stop_deployment.`,
+              err.details
+            );
+          }
           return withMeta(
             ok({
               request_id: res.request_id,
               status: 'starting',
               tags,
+              ...(fleet ? { private_host_ids: body.private_host_ids } : {}),
+              ...(longRunning ? { long_running: 'allowed by allow_long_running' } : {}),
               ...autoStop(version.max_duration),
               resources: body.resources,
               next_step: `Call edgegap_wait_for_deployment with request_id ${res.request_id}.`,
             }),
-            { hash: { request_id: res.request_id }, props: { resources_override: body.resources !== undefined } }
+            {
+              hash: { request_id: res.request_id },
+              props: {
+                resources_override: body.resources !== undefined,
+                private_fleet: fleet,
+                webhooks: WEBHOOKS.filter((w) => args[w] !== undefined).length,
+              },
+            }
           );
         })
     );
@@ -1955,6 +2126,17 @@ export function registerTools(
         guarded(auth, NOT_FOUND.deployment, async () => {
           const bad = checkRequestId(request_id);
           if (bad) return bad;
+          if (config.stopOwnOnly && !dry_run) {
+            const own = await client
+              .listDeploymentTags(request_id)
+              .then((r) => (r.tags ?? []).some((t) => t.name === AGENT_TAG || t.name === 'mcp'));
+            if (!own) {
+              return fail(
+                `Refused: deployment ${request_id} has no "${AGENT_TAG}" tag, so this server did not start it, and ` +
+                  'EDGEGAP_STOP_OWN_ONLY is on. Nothing was sent. Ask the developer to stop it from the dashboard.'
+              );
+            }
+          }
           if (dry_run) {
             const dry = client.dryRun();
             await dry.client.stopDeployment(request_id);
@@ -2535,6 +2717,410 @@ export function registerTools(
     );
   }
 
+  // ============================================ deployment housekeeping ====
+
+  // --------------------------------------------------------------- 13c ----
+  if (mutating) {
+    tool(
+      'edgegap_tag_deployment',
+      {
+        title: 'Add or remove tags on a running deployment',
+        description:
+          'Add tags to, or remove tags from, one running deployment, e.g. to mark the match it serves or ' +
+          'that a test is done, so edgegap_list_deployments can filter on them. Tags are labels only: the ' +
+          'game server does not see the change. The "' + AGENT_TAG + '" tag cannot be removed, since it is ' +
+          'how agent deployments are found and cleaned up. Returns the tags now on the deployment.',
+        inputSchema: {
+          request_id: z.string().describe('The exact request_id of the deployment.'),
+          add: z.array(z.string().min(1).max(40)).optional().describe('Tags to add, at most 40 characters each.'),
+          remove: z.array(z.string().min(1).max(40)).optional().describe('Tags to remove.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      },
+      async ({ request_id, add, remove, dry_run }) =>
+        guarded(auth, NOT_FOUND.deployment, async () => {
+          const bad = checkRequestId(request_id);
+          if (bad) return bad;
+          const toAdd = [...new Set(add ?? [])];
+          const toRemove = [...new Set(remove ?? [])];
+          if (toAdd.length === 0 && toRemove.length === 0) return fail('Nothing to change: pass add, remove or both.');
+          if (toRemove.some((t) => t === AGENT_TAG || t === 'mcp')) {
+            return fail(`Refused: "${AGENT_TAG}" marks deployments an agent started and stays on. Nothing was sent.`);
+          }
+          const both = toAdd.filter((t) => toRemove.includes(t));
+          if (both.length) return fail(`${both.join(', ')}: in both add and remove. Pick one.`);
+          const leak = await tokenLeak(auth, dry_run, toAdd.map((t): [string, string] => [`tag "${t.slice(0, 8)}…"`, t]));
+          if (leak) return leak;
+          if (dry_run) {
+            const dry = client.dryRun();
+            for (const t of toAdd) await dry.client.addDeploymentTag(request_id, t);
+            for (const t of toRemove) await dry.client.removeDeploymentTag(request_id, t);
+            return dryRunResult(dry.requests);
+          }
+          const current = new Set(((await client.listDeploymentTags(request_id)).tags ?? []).map((t) => t.name));
+          const notes: string[] = [];
+          for (const t of toAdd) {
+            if (current.has(t)) notes.push(`"${t}" was already on it.`);
+            else await client.addDeploymentTag(request_id, t);
+          }
+          for (const t of toRemove) {
+            if (!current.has(t)) notes.push(`"${t}" was not on it.`);
+            else await client.removeDeploymentTag(request_id, t);
+          }
+          const after = ((await client.listDeploymentTags(request_id)).tags ?? []).map((t) => t.name);
+          return withMeta(ok({ request_id, tags: after, ...(notes.length ? { notes } : {}) }), { hash: { request_id } });
+        })
+    );
+
+    tool(
+      'edgegap_report_deployment',
+      {
+        title: 'Report a deployment to Edgegap',
+        description:
+          'Report a problem with one deployment to Edgegap (the API\'s "Report a Deployment", meant for a ' +
+          'studio\'s moderation backend), with a short reason and optional key/value details. It does not stop ' +
+          'the deployment. Use it only when the developer asks to report a deployment; for a crash, read ' +
+          'edgegap_get_deployment_logs first.',
+        inputSchema: {
+          request_id: z.string().describe('The exact request_id of the deployment.'),
+          reason: z.string().min(1).max(255).describe('Why it is reported, 1-255 characters.'),
+          metadata: z.record(z.string(), z.string()).optional().describe('Extra key/value details, e.g. {"match_id": "m-42"}.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      },
+      async ({ request_id, reason, metadata, dry_run }) =>
+        guarded(auth, NOT_FOUND.deployment, async () => {
+          const bad = checkRequestId(request_id);
+          if (bad) return bad;
+          const leak = await tokenLeak(auth, dry_run, [
+            ['reason', reason],
+            ...Object.entries(metadata ?? {}).flatMap(([k, v]): Array<[string, string]> => [[`metadata key "${k.slice(0, 40)}"`, k], [`metadata "${k.slice(0, 40)}"`, v]]),
+          ]);
+          if (leak) return leak;
+          const body = { reason, ...(metadata ? { metadata } : {}) };
+          if (dry_run) {
+            const dry = client.dryRun();
+            await dry.client.reportDeployment(request_id, body);
+            return dryRunResult(dry.requests);
+          }
+          await client.reportDeployment(request_id, body);
+          return withMeta(ok({ request_id, reported: true, note: 'The deployment keeps running; stop it separately if needed.' }), {
+            hash: { request_id },
+          });
+        })
+    );
+
+    tool(
+      'edgegap_delete_app_version',
+      {
+        title: 'Delete one application version',
+        description:
+          'Delete one version of an application, to clean up test versions. Exactly one exact version name; ' +
+          'refused while any deployment of that version is running. The container image stays in the registry ' +
+          '(edgegap_delete_registry_tag removes it). Cannot be undone, so confirm with the developer when the ' +
+          'version is not one this conversation created.',
+        inputSchema: {
+          application: z.string().describe('Application name.'),
+          version: z.string().min(1).describe('The exact version name to delete.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      },
+      async ({ application, version, dry_run }) =>
+        guarded(auth, NOT_FOUND.app, async () => {
+          assertAppAllowed(config, application);
+          const badName = exactName(version, 'version');
+          if (badName) return badName;
+          if (dry_run) {
+            const dry = client.dryRun();
+            await dry.client.deleteAppVersion(application, version);
+            return dryRunResult(dry.requests, ['A real call first checks that no deployment of this version is running.']);
+          }
+          const running = await runningOf(application, version);
+          if (running.length) return refusedRunning(`version "${version}"`, running);
+          await client.deleteAppVersion(application, version);
+          return ok({ application, deleted_version: version, image_kept: 'The registry image was not touched.' });
+        })
+    );
+
+    tool(
+      'edgegap_delete_app',
+      {
+        title: 'Delete an application and all its versions',
+        description:
+          'Delete one application and every version under it, to clean up a test application. Exactly one ' +
+          'exact name; refused while any of its deployments is running, and refused when it has more versions ' +
+          'than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise ' +
+          'max_versions after the developer agreed). Registry images are not touched. Cannot be undone.',
+        inputSchema: {
+          application: z.string().min(1).describe('The exact application name to delete.'),
+          max_versions: z
+            .number()
+            .int()
+            .min(0)
+            .optional()
+            .describe('Delete only if it has at most this many versions. Default 0.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      },
+      async ({ application, max_versions, dry_run }) =>
+        guarded(auth, NOT_FOUND.app, async () => {
+          assertAppAllowed(config, application);
+          const badName = exactName(application, 'application');
+          if (badName) return badName;
+          if (dry_run) {
+            const dry = client.dryRun();
+            await dry.client.deleteApp(application);
+            return dryRunResult(dry.requests, ['A real call first checks its versions and running deployments.']);
+          }
+          const versions = ((await client.listAppVersions(application)).versions ?? []).map((v) => v.name);
+          const limit = max_versions ?? 0;
+          if (versions.length > limit) {
+            return fail(
+              `Refused: "${application}" has ${versions.length} version${versions.length === 1 ? '' : 's'} ` +
+                `(${versions.slice(0, 10).join(', ')}${versions.length > 10 ? ', …' : ''}), more than max_versions ` +
+                `(${limit}). Nothing was deleted. Delete them with edgegap_delete_app_version, or pass max_versions ` +
+                `${versions.length} once the developer agreed to delete them all.`
+            );
+          }
+          const running = await runningOf(application);
+          if (running.length) return refusedRunning(`application "${application}"`, running);
+          await client.deleteApp(application);
+          return ok({ deleted_application: application, deleted_versions: versions });
+        })
+    );
+  }
+
+  /** Request IDs of running deployments of an application (and version). */
+  async function runningOf(application: string, version?: string): Promise<string[]> {
+    const filters: Array<Record<string, unknown>> = [{ field: 'application', operator: 'eq', value: application }];
+    if (version) filters.push({ field: 'version', operator: 'eq', value: version });
+    const res = await client.listDeployments({ query: JSON.stringify({ filters }), limit: 10 });
+    return (res.data ?? []).map((d) => d.request_id).filter(Boolean);
+  }
+
+  function refusedRunning(what: string, running: string[]): ToolResult {
+    return fail(
+      `Refused: ${what} still has running deployments (${running.join(', ')}${running.length === 10 ? ', …' : ''}). ` +
+        'Nothing was deleted. Stop them with edgegap_stop_deployment first, if the developer agrees.'
+    );
+  }
+
+  // ============================================ private fleets and storage ====
+
+  // --------------------------------------------------------------- 13d ----
+  tool(
+    'edgegap_list_fleet_hosts',
+    {
+      title: 'List the hosts of a private fleet',
+      description:
+        'List the hosts in one of the organization\'s private fleets (dedicated machines Edgegap manages for ' +
+        'you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to ' +
+        'edgegap_deploy as private_host_ids to place a server on them first. Organizations without private ' +
+        'fleets get an error from the API.',
+      inputSchema: {
+        fleet_name: z.string().min(1).describe('The private fleet name, as shown in the dashboard.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ fleet_name }) =>
+      guard(auth, async () => {
+        const hosts = ((await client.listFleetHosts(fleet_name)).data ?? []).map((h) => ({
+          host_id: h.host_id,
+          status: h.status,
+          ip_address: h.ip_address,
+          city: h.city,
+          country: h.country,
+          continent: h.continent,
+        }));
+        if (hosts.length === 0) {
+          return emptyState('empty', { fleet_name, hosts: [] }, 'This fleet has no hosts yet. Add hosts in the dashboard, or deploy to the cloud without private_host_ids.');
+        }
+        const active = hosts.filter((h) => h.status === 'ACTIVE').length;
+        return ok({ fleet_name, total: hosts.length, active, hosts, next_step: active ? 'Pass ACTIVE host_id values to edgegap_deploy as private_host_ids.' : 'No host is ACTIVE yet; deployments would overflow to the cloud.' });
+      }, `no private fleet named "${fleet_name}" in this organization. Check the name in the dashboard.`)
+  );
+
+  tool(
+    'edgegap_list_endpoint_storage',
+    {
+      title: 'List Endpoint Storage and pull profiles',
+      description:
+        'List the organization\'s Endpoint Storage: S3-compatible buckets Edgegap exports container logs to ' +
+        'when a deployment ends (so logs survive the deployment), and the pull profiles under each, which copy ' +
+        'files from the bucket into a container at boot. Secret keys are never returned. A version uses a storage ' +
+        'for logs through edgegap_create_app_version / edgegap_update_app_version endpoint_storage, and a pull ' +
+        'profile through edgegap_link_pull_profile.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () =>
+      guard(auth, async () => {
+        const endpoints = (await client.listEndpointStorage()).endpoints ?? [];
+        if (endpoints.length === 0) {
+          return emptyState(
+            'not_configured',
+            { endpoints: [] },
+            'No Endpoint Storage yet. To keep logs after deployments stop, create one with edgegap_create_endpoint_storage ' +
+              '(the developer supplies the bucket and its access keys), then set endpoint_storage on the version.'
+          );
+        }
+        const withProfiles = await Promise.all(
+          endpoints.map(async (e) => ({
+            name: e.name,
+            endpoint: e.endpoint,
+            bucket: e.bucket,
+            access_key_id: e.access_key_id,
+            container_log_version: e.container_log_version,
+            output_format: e.output_format,
+            pull_profiles: await client
+              .listPullProfiles(e.name)
+              .then((r) => (r.pull_profiles ?? []).map((pp) => ({ name: pp.name, source: pp.source, source_type: pp.source_type, destination: pp.destination })))
+              .catch(() => 'could not be listed'),
+          }))
+        );
+        return ok({ total: withProfiles.length, endpoints: withProfiles });
+      })
+  );
+
+  if (mutating) {
+    tool(
+      'edgegap_create_endpoint_storage',
+      {
+        title: 'Create an Endpoint Storage (S3 bucket for logs)',
+        description:
+          'Register an S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces, ...) as Endpoint Storage, ' +
+          'so container logs are exported there when deployments end. The developer supplies the bucket, endpoint ' +
+          'URL and an access key pair scoped to that bucket; never invent or reuse other credentials, and never pass ' +
+          'the Edgegap API token. The secret key is sent once and never echoed back. Then set endpoint_storage on the ' +
+          'version (edgegap_update_app_version) to turn log export on.',
+        inputSchema: {
+          name: z.string().min(1).describe('Name for this storage, e.g. "game-logs".'),
+          endpoint: z.string().describe('https URL of the S3 endpoint, without the bucket, e.g. "https://s3.us-east-1.amazonaws.com".'),
+          bucket: z.string().min(1).describe('Bucket name.'),
+          access_key_id: z.string().min(1).describe('Access key ID for the bucket.'),
+          secret_access_key: z.string().min(1).describe('Secret access key for the bucket. Never echoed back.'),
+          output_format: z.enum(['TEXT', 'NDJSON']).optional().describe('Log file format. Default TEXT.'),
+          container_log_version: z
+            .enum(['v1', 'v2'])
+            .optional()
+            .describe('v1 (default) writes one file per deployment; v2 streams chunks while it runs.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      },
+      async (args) =>
+        guard(auth, async () => {
+          const leak = await tokenLeak(auth, args.dry_run, [
+            ['access_key_id', args.access_key_id],
+            ['secret_access_key', args.secret_access_key],
+            ['endpoint', args.endpoint],
+          ]);
+          if (leak) return leak;
+          const problem = webhookProblem(args.endpoint);
+          if (problem) return fail(`endpoint ${problem.replace('Edgegap sends deployment details (IP, ports) to it', 'the bucket keys travel to it')}`);
+          const body: Record<string, unknown> = {
+            name: args.name,
+            endpoint: args.endpoint,
+            bucket: args.bucket,
+            access_key_id: args.access_key_id,
+            secret_access_key: args.secret_access_key,
+            ...(args.output_format ? { output_format: args.output_format } : {}),
+            ...(args.container_log_version ? { container_log_version: args.container_log_version } : {}),
+          };
+          if (args.dry_run) {
+            const dry = client.dryRun();
+            await dry.client.createEndpointStorage(body);
+            return dryRunResult(dry.requests);
+          }
+          const res = await client.createEndpointStorage(body);
+          return ok({
+            name: res.name ?? args.name,
+            bucket: res.bucket ?? args.bucket,
+            output_format: res.output_format,
+            container_log_version: res.container_log_version,
+            next_step: `Turn on log export with edgegap_update_app_version endpoint_storage: "${res.name ?? args.name}".`,
+          });
+        })
+    );
+
+    tool(
+      'edgegap_create_pull_profile',
+      {
+        title: 'Create a pull profile (copy bucket files into containers)',
+        description:
+          'Create a pull profile under an Endpoint Storage: at boot, Edgegap copies a file or folder from the ' +
+          'bucket into the container (maps, configs, large assets kept out of the image). It does nothing until ' +
+          'linked to a version with edgegap_link_pull_profile. Avoid destination paths the image already uses.',
+        inputSchema: {
+          endpoint_storage: z.string().min(1).describe('Endpoint Storage name, from edgegap_list_endpoint_storage.'),
+          name: z.string().min(1).describe('Name for the profile, e.g. "maps".'),
+          source: z.string().min(1).describe('Path in the bucket, e.g. "maps/" or "config/server.json".'),
+          source_type: z.enum(['File', 'Folder']).describe('Whether source is a file or a folder.'),
+          destination: z.string().min(1).describe('Absolute path in the container, e.g. "/data/maps".'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      },
+      async (args) =>
+        guard(auth, async () => {
+          if (!args.destination.startsWith('/')) return fail('destination must be an absolute container path, e.g. "/data/maps".');
+          const body = { name: args.name, source: args.source, source_type: args.source_type, destination: args.destination };
+          if (args.dry_run) {
+            const dry = client.dryRun();
+            await dry.client.createPullProfile(args.endpoint_storage, body);
+            return dryRunResult(dry.requests);
+          }
+          const res = await client.createPullProfile(args.endpoint_storage, body);
+          return ok({
+            endpoint_storage: args.endpoint_storage,
+            pull_profile: res.name ?? args.name,
+            next_step: 'Link it to a version with edgegap_link_pull_profile; new deployments of that version get the files.',
+          });
+        }, `no Endpoint Storage named "${args.endpoint_storage}". List them with edgegap_list_endpoint_storage.`)
+    );
+
+    tool(
+      'edgegap_link_pull_profile',
+      {
+        title: 'Link or unlink a pull profile and a version',
+        description:
+          'Link a pull profile to an application version, so its new deployments get the bucket files at boot, or ' +
+          'unlink it (unlink: true). Running deployments are not changed.',
+        inputSchema: {
+          endpoint_storage: z.string().min(1).describe('Endpoint Storage name.'),
+          pull_profile: z.string().min(1).describe('Pull profile name.'),
+          application: z.string().describe('Application name.'),
+          version: z.string().describe('Version name.'),
+          unlink: z.boolean().optional().describe('true removes the link instead.'),
+          dry_run: dryRunParam,
+        },
+        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      },
+      async (args) =>
+        guard(auth, async () => {
+          assertAppAllowed(config, args.application);
+          const method = args.unlink ? 'DELETE' : 'PUT';
+          if (args.dry_run) {
+            const dry = client.dryRun();
+            await dry.client.linkPullProfile(method, args.endpoint_storage, args.pull_profile, args.application, args.version);
+            return dryRunResult(dry.requests);
+          }
+          await client.linkPullProfile(method, args.endpoint_storage, args.pull_profile, args.application, args.version);
+          return ok({
+            endpoint_storage: args.endpoint_storage,
+            pull_profile: args.pull_profile,
+            application: args.application,
+            version: args.version,
+            linked: !args.unlink,
+          });
+        }, 'the Endpoint Storage, pull profile, application or version does not exist. Check them with edgegap_list_endpoint_storage and edgegap_list_app_versions.')
+    );
+  }
+
   // ================================================== peer-to-peer relays ====
 
   // --------------------------------------------------------------- 14 ----
@@ -3044,9 +3630,10 @@ function registerSkills(
             'metadata.version from its SKILL.md frontmatter) and it compares them with the latest on GitHub and says how to update. '
           : 'Finds installs made with the skills CLI (user-wide or this project), the Claude Code plugin edgegap@edgegap, and skills ' +
             'copied by hand into an agent\'s skills folder, and compares each skill with the latest on GitHub. Without apply it only ' +
-            'checks and changes nothing. With apply=true it runs each outdated install\'s own updater (npx skills update for the Edgegap ' +
-            'skills only, or claude plugin update) and rewrites hand-copied skills from the files bundled in this server; ask the ' +
-            'developer before applying. ') +
+            'checks and changes nothing. With apply=true it rewrites hand-copied skills from the files bundled in this server, and ' +
+            'runs each outdated install\'s own updater (npx ' + SKILLS_CLI + ' update for the Edgegap skills only, or claude plugin ' +
+            'update) only when the operator started the server with EDGEGAP_ENABLE_SKILLS_UPDATE=1; otherwise it lists those ' +
+            'commands for the developer to run. Ask the developer before applying. ') +
         'Skill text is never downloaded by this tool. The skills served by edgegap_get_skill need no update here.',
       inputSchema: {
         ...(local
@@ -3156,7 +3743,12 @@ function registerSkills(
       const applied: string[] = [];
       let failed = false;
       for (const p of plan) {
-        if (p.commands) {
+        if (p.commands && !config.enableSkillsUpdate) {
+          applied.push(
+            `not run (EDGEGAP_ENABLE_SKILLS_UPDATE is not set, so this server starts no updater): ${p.action}. ` +
+              'The developer can run it in a terminal.'
+          );
+        } else if (p.commands) {
           for (const cmd of p.commands) {
             try {
               const out = await local.env.run(cmd[0], cmd.slice(1), local.env.cwd);

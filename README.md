@@ -213,7 +213,7 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.13.3`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.14.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`:
 
@@ -222,10 +222,22 @@ The local server can also limit what an agent can do. These variables have no ef
 | `EDGEGAP_API_TOKEN` | *(prompted)* | API token. Optional: omit it and you're asked at first use. The `token ` prefix is added for you. Never pass it as a command-line argument. |
 | `EDGEGAP_READ_ONLY` | `0` | Set to `1` and the tools that change something (marked ● in [Tools](#-tools)) are never registered, so the agent cannot be talked into calling them. |
 | `EDGEGAP_APP_ALLOWLIST` | *(empty)* | Comma-separated application names. Limits what the agent can create and deploy into. Reading (listing apps and versions) is not limited, and neither is touching deployments once running. See [DESIGN.md](DESIGN.md#scope-of-the-allowlist). |
-| `EDGEGAP_MAX_DURATION_MINUTES` | `60` | Ceiling on `max_duration` the agent may set on a version. |
+| `EDGEGAP_MAX_DURATION_MINUTES` | `60` | Ceiling on `max_duration` the agent may set on a version. `edgegap_deploy` also refuses a version whose `max_duration` is above it, or unlimited, unless the agent passes `allow_long_running: true` after asking you. |
 | `EDGEGAP_MAX_AGENT_DEPLOYMENTS` | `5` | `edgegap_deploy` refuses while this many deployments tagged `edgegap-mcp` are running. `0` turns the cap off. |
+| `EDGEGAP_MAX_DEPLOYS_PER_RUN` | `20` | Deploys one server process may send, failed ones included. Restart the server to reset it. `0` turns it off. |
+| `EDGEGAP_STOP_OWN_ONLY` | `0` | Set to `1` and `edgegap_stop_deployment` only stops deployments tagged `edgegap-mcp`, so an agent cannot stop servers it did not start. |
+| `EDGEGAP_ENABLE_SKILLS_UPDATE` | `0` | Set to `1` to let `edgegap_update_skills` run `npx skills@1.7.4 update` or `claude plugin update` with `apply: true`. Without it, it lists those commands for you to run. Hand-copied skills are rewritten from the bundle either way. The updaters get only path, home, temp, locale, proxy and npm settings, never `EDGEGAP_*` variables or anything named like a token, secret, password or key. |
 | `EDGEGAP_TIMEOUT_MS` | `30000` | Per-request HTTP timeout. |
 | `EDGEGAP_SKILLS_CHECK` | `on` | Set to `off` and the skill tools never read the latest skills version from GitHub. |
+
+#### Windows
+
+The local server runs on Windows with Node.js 18 or newer, and CI runs the build and the stdio tests on Windows.
+
+- Many Windows MCP clients cannot start `npx` directly, because it is a `.cmd` script. Start it through `cmd /c`: `"command": "cmd", "args": ["/c", "npx", "-y", "@edgegap/mcp"]`. In Claude Code: `claude mcp add Edgegap --env EDGEGAP_API_TOKEN=<token> -- cmd /c npx -y @edgegap/mcp`.
+- In PowerShell, type `npx.cmd` instead of `npx` to run it by hand: a new Windows install blocks the `npx` PowerShell script ("running scripts is disabled on this system").
+- The first start downloads the package and can take a while; later starts are fast.
+- `edgegap_update_skills` finds skills installed in `%USERPROFILE%`, the same way as on macOS and Linux.
 
 ## 📚 Skills
 
@@ -294,16 +306,32 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_list_app_versions` | Lists versions with their image, resources, ports (with TLS Upgrade), and whether a registry login is set. |
 | `edgegap_get_app_version` | Reads one version in full: image, resources, ports, max duration, image caching, restart policy, and env var names (never values). |
 | `edgegap_create_app_version` ● | Registers a container image as a deployable version. Supports TLS Upgrade on WS and HTTP ports, which browser (WebGL) clients need for `wss://`. |
-| `edgegap_update_app_version` ● | Changes an existing version: a new image tag, on/off, max duration, registry login, image caching (`force_cache`), shutdown grace period, ports, env vars. Only the fields passed change, but `ports` and `env` replace the whole list. Running deployments keep the old settings. |
+| `edgegap_update_app_version` ● | Changes an existing version: a new image tag, on/off, CPU and memory (both together), max duration, registry login, image caching (`force_cache`), shutdown grace period, ports, env vars, and the Endpoint Storage its logs go to. Only the fields passed change, but `ports` and `env` replace the whole list. Running deployments keep the old settings. |
+| `edgegap_delete_app_version` ● | Deletes one version, to clean up test versions. Refused while a deployment of it runs. The registry image is kept. |
+| `edgegap_delete_app` ● | Deletes an application and its versions. Refused while any of its deployments runs, and while it has more versions than `max_versions` (default 0). |
 | `edgegap_list_locations` | Lists the cities Edgegap deploys to, or, for one version, only those with capacity right now. |
 | `edgegap_list_ping_beacons` | Lists the ping beacons game clients measure their latency to each region against. |
-| `edgegap_deploy` ● | Deploys an authoritative dedicated server close to your players. Always tagged `edgegap-mcp`, and reports when Edgegap will stop it. |
+| `edgegap_deploy` ● | Deploys an authoritative dedicated server close to your players. Always tagged `edgegap-mcp`, and reports when Edgegap will stop it. Optional: CPU and memory for this deployment only, webhooks Edgegap calls when the server is ready, fails or ends, `require_cached_locations` for faster starts, and `private_host_ids` to place it on your private fleet first. |
+| `edgegap_list_fleet_hosts` | Lists the hosts of one of your private fleets, with status and location, to deploy onto them. |
 | `edgegap_wait_for_deployment` | Waits until the server is ready and returns the connection address. |
 | `edgegap_get_deployment` | Reads a deployment's status. |
 | `edgegap_list_deployments` | Lists running deployments, filtered by application, version, status, tags and more, and sorted by age. Finds servers left running; `only_agent_deployments: true` lists every one an agent started. See [Filter Deployments](https://docs.edgegap.com/learn/orchestration/deployments#filter-deployments). |
 | `edgegap_get_deployment_logs` | Reads container logs and crash details while the deployment runs. After it stops, logs are only kept if Endpoint Storage was set up. |
 | `edgegap_get_deployment_metrics` | Summarises CPU, CPU throttling, memory and network use (latest, average, peak), to size a version or check a crash. |
 | `edgegap_stop_deployment` ● | Stops one deployment, by its exact request ID. No bulk stop. |
+| `edgegap_tag_deployment` ● | Adds or removes tags on a running deployment, e.g. to mark a match. The `edgegap-mcp` tag stays. |
+| `edgegap_report_deployment` ● | Reports a deployment to Edgegap with a reason, for a studio's moderation backend. It keeps running. |
+
+### Logs and Files (Endpoint Storage)
+
+Container logs disappear with the deployment unless they are exported to your own S3-compatible bucket.
+
+| Tool | What it does |
+| --- | --- |
+| `edgegap_list_endpoint_storage` | Lists your Endpoint Storage buckets and their pull profiles. Secret keys are never returned. |
+| `edgegap_create_endpoint_storage` ● | Registers a bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces…) for log export. Set `endpoint_storage` on a version to turn export on. The secret key is never echoed back. |
+| `edgegap_create_pull_profile` ● | Copies a file or folder from the bucket into the container at boot (maps, configs, large assets). |
+| `edgegap_link_pull_profile` ● | Links a pull profile to a version, or unlinks it. |
 
 ### Relays (Host-Client Games Only)
 
@@ -338,12 +366,15 @@ Your API token can do anything in your organization, so the server adds its own 
 | Dry run | Every tool that changes something takes `dry_run: true`: it returns the exact method, host, path and body, with the token, registry tokens and env values masked, and sends nothing. Local checks still run. |
 | No token in containers | A deploy or version is refused, with nothing sent, if your API token appears in an env var name or value, a tag, or a webhook URL. Env values are never echoed back. |
 | Agent tag | Every deployment gets the `edgegap-mcp` tag, even when the agent passes its own tags. `edgegap_list_deployments` with `only_agent_deployments: true` finds them all. |
-| Auto-stop | Every deploy reports when Edgegap will stop it: the version's `max_duration`, capped at `EDGEGAP_MAX_DURATION_MINUTES` (default 60) for versions the agent creates. Edgegap has no per-deployment time limit, so a version made elsewhere can run up to its own limit (1440 minutes by default); the result warns when it is over an hour or unlimited. |
+| Auto-stop | Every deploy reports when Edgegap will stop it: the version's `max_duration`, capped at `EDGEGAP_MAX_DURATION_MINUTES` (default 60) for versions the agent creates. Edgegap has no per-deployment time limit, so deploying a version whose `max_duration` is above that ceiling or unlimited (a version made elsewhere defaults to 1440 minutes) is refused unless the agent passes `allow_long_running: true`, which it is told to do only after asking you. |
+| Deploys per run | The local server sends at most `EDGEGAP_MAX_DEPLOYS_PER_RUN` (default 20) deploys per process, failed ones included, since a refused deploy can still create a deployment. When the API refuses a deploy but created one anyway, the error names it so the agent can stop it. |
 | No moving image tags | `edgegap_create_app_version` refuses `latest` (any case), an empty tag, or a tag Docker would reject, with nothing sent: Edgegap caches images by tag, so a re-pushed tag can deploy a stale build. Deploying an existing version on `latest` is refused too, and so is asking for registry push commands for `latest`. |
 | Image reference check | A `docker_image` that also holds a registry host, tag or digest (e.g. `registry.edgegap.com/proj/server:v2`) is refused, and the error gives the right `docker_repository` / `docker_image` / `docker_tag` split. `edgegap_validate_server_config` flags the same things. |
 | Deployment cap | `edgegap_deploy` is refused while `EDGEGAP_MAX_AGENT_DEPLOYMENTS` (default 5) deployments tagged `edgegap-mcp` are already running, so a looping agent cannot pile up billing servers. The refusal says how to list and stop them. |
 | Hidden secret env vars | Env vars whose names look like secrets (`TOKEN`, `SECRET`, `PASSWORD`, `API_KEY`, `CREDENTIAL`, `AUTH`…) are sent with `is_hidden`, so the dashboard does not show their values in plain text. |
-| Strict stop | `edgegap_stop_deployment` stops one deployment by its exact request ID. Empty IDs, wildcards and lists are refused. There is no bulk stop. |
+| Strict stop | `edgegap_stop_deployment` stops one deployment by its exact request ID. Empty IDs, wildcards and lists are refused. There is no bulk stop. With `EDGEGAP_STOP_OWN_ONLY=1`, it only stops deployments tagged `edgegap-mcp`. |
+| Careful deletes | `edgegap_delete_app_version` and `edgegap_delete_app` take one exact name, and are refused while a deployment of it is running. An application with versions is only deleted when `max_versions` covers them. |
+| Webhook and bucket URLs | Deploy webhooks and Endpoint Storage endpoints must be `https` URLs without credentials, and are refused if they contain your API token. |
 | Host on every result | Every result starts with the API host, e.g. `[api.edgegap.com]`, or `[custom · host]` when `EDGEGAP_BASE_URL` points elsewhere. A base URL naming `api.edgegap.com` must be exactly `https://api.edgegap.com`, or the server refuses to start. |
 | Redaction | The token is stripped from every error before it reaches the agent. |
 
@@ -406,7 +437,7 @@ docker build -t edgegap-mcp .
 docker run --rm -p 8080:8080 edgegap-mcp
 ```
 
-Clients connect to `http://<host>:8080/mcp` with their own `Authorization` header, the same way they connect to the hosted endpoint. The image holds no credential, and `/health` answers without one. `PORT`, `HOST`, `EDGEGAP_READ_ONLY`, `EDGEGAP_APP_ALLOWLIST`, `EDGEGAP_MAX_DURATION_MINUTES` and `EDGEGAP_MAX_AGENT_DEPLOYMENTS` apply. Read [worker/DECISION.md](worker/DECISION.md) before exposing it beyond a private network.
+Clients connect to `http://<host>:8080/mcp` with their own `Authorization` header, the same way they connect to the hosted endpoint. The image holds no credential, and `/health` answers without one. `PORT`, `HOST`, `EDGEGAP_READ_ONLY`, `EDGEGAP_APP_ALLOWLIST`, `EDGEGAP_MAX_DURATION_MINUTES`, `EDGEGAP_MAX_AGENT_DEPLOYMENTS` and `EDGEGAP_STOP_OWN_ONLY` apply; pass each with `-e NAME=value`. Never pass an API token to the container: each client sends its own on every request. Read [worker/DECISION.md](worker/DECISION.md) before exposing it beyond a private network.
 
 Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/edgegap/llm-mcp-server` (and, for existing setups, the old name `ghcr.io/edgegap/edgegap-mcp`), tagged `main` and `sha-<commit>` on every push to `main`, plus the version on `v*` tags:
 
