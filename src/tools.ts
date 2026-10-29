@@ -49,18 +49,20 @@ import type { SkillsEnv, SkillsInstall, InstalledSkill } from './skillsversion.j
 export const ARCHITECTURE_GUIDANCE =
   'Dedicated server vs relay — recommend a dedicated server by default.\n' +
   '- Dedicated (authoritative) server (edgegap_deploy): Edgegap runs the headless server ' +
-  'build, and the server owns the game state. No player has host advantage, cheating is ' +
-  'much harder, the match survives any player leaving, every player is one hop from the ' +
-  'server, and performance does not depend on a player\'s PC or home connection.\n' +
-  '- Relay (edgegap_create_relay_session): NOT a game server. Edgegap only forwards traffic ' +
-  'between players; one player\'s game is the host and owns the state. The host can cheat ' +
-  'and has zero latency while everyone else has two hops, the host\'s machine and upload ' +
-  'bandwidth cap the match, and the match ends when the host quits unless the game ' +
-  'implements host migration.\n' +
+  'build and the server owns the game state: no host advantage, much harder cheating, the ' +
+  'match survives any player leaving, every player is one hop away, and nothing depends on ' +
+  'a player\'s PC or home connection.\n' +
+  '- Relay (edgegap_create_relay_session): NOT a game server. Edgegap only forwards traffic; ' +
+  'one player\'s game is the host and owns the state. The host can cheat and has zero ' +
+  'latency while everyone else has two hops, the host\'s machine and upload cap the match, ' +
+  'and it ends when the host quits unless the game implements host migration.\n' +
   'Use a relay only when the developer explicitly wants peer-to-peer/host-client, or the ' +
-  'game\'s netcode is already built as a listen server and moving to a dedicated server is ' +
-  'not an option. "It needs no server image" is not a reason: edgegap_generate_dockerfile ' +
-  'removes most of that work. If unsure, ask the developer before choosing a relay.';
+  'netcode is already a listen server and a dedicated server is not an option. "It needs no ' +
+  'server image" is not a reason: edgegap_generate_dockerfile removes most of that work. ' +
+  'If unsure, ask the developer before choosing a relay.';
+
+/** Claude Code drops everything after this many characters of server instructions. */
+export const INSTRUCTIONS_MAX_CHARS = 4096;
 
 /**
  * Server instructions, shared by the local server and the hosted Worker so
@@ -71,63 +73,57 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     mode === 'local'
       ? 'Credentials: if no token was configured, the first tool call asks the developer for one. '
       : 'Credentials: the token comes from the Authorization header on this connection. ';
-  // The skills line comes first, on purpose. Clients truncate or skim long
-  // instructions, and in 0.5.0 it sat 1,259 characters in, below the
-  // architecture guidance, where reviewers and agents missed it.
+  // Order matters. Claude Code keeps only the first INSTRUCTIONS_MAX_CHARS
+  // characters (0.15.1 lost its cost, guardrail and credential paragraphs
+  // that way), and other clients skim. So: the skills line first (in 0.5.0 it
+  // sat below the architecture guidance and agents missed it), then the
+  // safety rules, then the architecture and golden path.
   return (
     `Before acting, read ${skillUri('edgegap', 'SKILL.md')} ` +
     `(Unity: ${skillUri('edgegap-unity', 'SKILL.md')}, ` +
-    `Unity with NGO: ${skillUri('edgegap-ngo', 'SKILL.md')}, ` +
-    `Unity with FishNet: ${skillUri('edgegap-fishnet', 'SKILL.md')}, ` +
-    `Unity with PurrNet: ${skillUri('edgegap-purrnet', 'SKILL.md')}, ` +
-    `Unity with Photon Fusion: ${skillUri('edgegap-fusion', 'SKILL.md')}, ` +
-    `Photon's Simple FPS sample: ${skillUri('edgegap-fusion-simplefps', 'SKILL.md')}, ` +
-    `Unreal Engine: ${skillUri('edgegap-unreal', 'SKILL.md')}, ` +
-    `voice chat in an Unreal game: ${skillUri('edgegap-eos-voice', 'SKILL.md')}, ` +
-    `Godot 4 with a Godot server: ${skillUri('edgegap-godot', 'SKILL.md')}, ` +
-    `Colyseus server: ${skillUri('edgegap-colyseus', 'SKILL.md')}, ` +
-    `Nakama backend: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
-    `PlayFab Matchmaking: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
-    `Three.js or other browser game with its own Node.js server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
-    `browser game built with Manus: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
-    `designing matchmaking, parties, regions or backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}). ` +
-    'If your client cannot read MCP resources, call edgegap_get_skill with the skill name ' +
-    '(edgegap, edgegap-unity, edgegap-ngo, edgegap-fishnet, edgegap-purrnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-unreal, edgegap-eos-voice, edgegap-godot, edgegap-colyseus, edgegap-nakama, edgegap-playfab, edgegap-threejs, edgegap-manus or edgegap-matchmaking) instead. ' +
-    'These Edgegap skills hold the tested workflow, templates and known pitfalls; follow them over general knowledge. ' +
-    'edgegap_list_skills lists all of them.\n\n' +
-    'Host multiplayer games on Edgegap. The recommended setup is an authoritative dedicated ' +
-    'server per match; relays exist for games built host-client.\n\n' +
-    ARCHITECTURE_GUIDANCE +
-    '\n\n' +
-    'Golden path for a first dedicated-server deployment:\n' +
-    '1. edgegap_generate_dockerfile if the project has no Dockerfile, or ' +
-    'edgegap_validate_server_config on the one it has, before building\n' +
-    '2. edgegap_get_registry_credentials, then docker build --platform linux/amd64 and push\n' +
-    '3. edgegap_list_registry_tags to confirm the push landed\n' +
-    '4. edgegap_list_apps, then edgegap_create_app if no suitable application exists\n' +
-    '5. edgegap_create_app_version to register the image\n' +
-    '6. edgegap_deploy to start a server near the players\n' +
-    '7. edgegap_wait_for_deployment to get the connection address\n' +
-    '8. edgegap_stop_deployment when finished\n' +
-    'To match players into those servers, edgegap_build_matchmaker_config produces the ' +
-    'config the developer uploads in the dashboard.\n' +
-    'For every later build, suggest CI over repeating steps 2-7 by hand: the GitHub Action ' +
-    'edgegap/deploy-action creates the version from an existing one, smoke-tests it on a real ' +
-    'deployment and promotes it (details in the edgegap-launch skill). Do not write Deploy API ' +
-    'code for a CI job that only ships a build.\n\n' +
+    `NGO: ${skillUri('edgegap-ngo', 'SKILL.md')}, ` +
+    `FishNet: ${skillUri('edgegap-fishnet', 'SKILL.md')}, ` +
+    `PurrNet: ${skillUri('edgegap-purrnet', 'SKILL.md')}, ` +
+    `Photon Fusion: ${skillUri('edgegap-fusion', 'SKILL.md')}, ` +
+    `Simple FPS: ${skillUri('edgegap-fusion-simplefps', 'SKILL.md')}, ` +
+    `Unreal: ${skillUri('edgegap-unreal', 'SKILL.md')}, ` +
+    `Unreal voice chat: ${skillUri('edgegap-eos-voice', 'SKILL.md')}, ` +
+    `Godot 4: ${skillUri('edgegap-godot', 'SKILL.md')}, ` +
+    `Colyseus: ${skillUri('edgegap-colyseus', 'SKILL.md')}, ` +
+    `Nakama: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
+    `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
+    `Three.js or web game with a Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
+    `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
+    `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}). ` +
+    'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
+    'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
     'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
     'relay sessions you created before ending the task; edgegap_list_deployments with ' +
     `only_agent_deployments: true lists every deployment tagged "${AGENT_TAG}". If a ` +
     'deployment errors, read the container logs before redeploying.\n\n' +
-    'Guardrails: edgegap_context shows which API and limits this session has. Every tool that ' +
-    'changes something takes dry_run: true to show the exact request and send nothing; use it ' +
-    'when unsure. Never put the API token in env vars, tags or URLs: such calls are refused.\n\n' +
+    'Guardrails: edgegap_context shows this session\'s API and limits. Every write tool takes ' +
+    'dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the ' +
+    'API token in env vars, tags or URLs: such calls are refused.\n\n' +
     credentials +
-    'That token is org-wide and cannot be scoped by Edgegap, so it authorises far more than ' +
-    'any single task needs. Treat it as a supervised credential: do not use it for work the ' +
-    'developer did not ask for, do not enumerate or modify unrelated applications, and do ' +
-    'not repeat operations against it to explore what is possible. If the developer declines ' +
-    'to provide a token, stop and report which operation needed it — do not retry.'
+    'The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked ' +
+    'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
+    'If the developer declines to provide a token, stop and report which operation needed it; ' +
+    'do not retry.\n\n' +
+    ARCHITECTURE_GUIDANCE +
+    '\n\n' +
+    'Golden path for a first dedicated-server deployment:\n' +
+    '1. edgegap_generate_dockerfile (no Dockerfile yet) or edgegap_validate_server_config (existing one)\n' +
+    '2. edgegap_get_registry_credentials, then docker build --platform linux/amd64 and push\n' +
+    '3. edgegap_list_registry_tags to confirm the push\n' +
+    '4. edgegap_list_apps, then edgegap_create_app if none fits\n' +
+    '5. edgegap_create_app_version to register the image\n' +
+    '6. edgegap_deploy near the players\n' +
+    '7. edgegap_wait_for_deployment for the connection address\n' +
+    '8. edgegap_stop_deployment when finished\n' +
+    'edgegap_build_matchmaker_config makes the matchmaker config to upload in the dashboard. ' +
+    'For later builds, suggest CI over repeating steps 2-7: the GitHub Action edgegap/deploy-action ' +
+    '(edgegap-launch skill) creates the version from an existing one, smoke-tests and promotes it. ' +
+    'Do not write Deploy API code for a CI job that only ships a build.'
   );
 }
 

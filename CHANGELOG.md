@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.2
+
+- Server instructions fit in 4,096 characters (3,964 local, 3,954 hosted; were 4,998). Claude Code keeps only the first 4,096, so 0.15.1 agents there never saw the cost and cleanup rule, the guardrails (`dry_run`, no token in env vars, tags or URLs) or the credential rules. Those now come right after the skills line, before the dedicated server vs relay guidance and the golden path, and the wording is shorter (same rules; the relay guidance in `edgegap_create_relay_session` is shortened the same way). `test/skills.mjs` fails if either mode goes over the limit or loses those rules.
+- Skills pack 0.22.2 (llm-agent-skills 5605908): every link points at the current repository names (llm-agent-skills, llm-mcp-server, the renamed samples and plugins), so none relies on a GitHub redirect; the private `open-match-demo` link is gone. The Nakama Go module path stays `github.com/edgegap/nakama-edgegap`.
+
 ## 0.15.1
 
 - Skills pack 0.22.0 (llm-agent-skills 88e6db9): `edgegap-godot` 0.2.0 builds the server with the Edgegap Godot plugin (buildtool-godot-plugin) instead of a hand-written preset, Dockerfile and registry login, and its settings template class is now `EdgegapGameSettings` (the plugin declares `EdgegapSettings`). Covered by `test/tools.snapshot.json` and the skills tests.
