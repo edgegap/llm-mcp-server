@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.4
+
+- Skills pack 0.24.0 (llm-agent-skills 0476c49): `edgegap-colyseus` 0.2.0 covers Cocos Creator clients (SDK bundle for a 0.17 server, matchmaker wiring, porting 0.14 state callbacks, array `onChange` passing `(index, value)`), verified on edgegap/backend-game-sample-cocos-colyseus-tictactoe; `edgegap` routes Cocos + Colyseus games to it (edgegap/llm-agent-skills#40).
+- Covered by the skills tests.
+
 ## 0.15.3
 
 - Skills pack 0.23.1 (llm-agent-skills c8ffc2f), which also brings 0.23.0:
