@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { SKILLS_PACK } from '../dist/skills.generated.js';
+import { serverInstructions, INSTRUCTIONS_MAX_CHARS } from '../dist/tools.js';
 
 let failures = 0;
 function check(label, cond, detail = '') {
@@ -132,6 +133,14 @@ check('instructions open with the skills line', instructions.startsWith('Before 
 const linked = [...new Set(instructions.match(/edgegap-skill:\/\/[^\s),]+/g) ?? [])];
 check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Three.js and Manus skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-threejs'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
 check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
+// Claude Code cuts instructions at INSTRUCTIONS_MAX_CHARS; 0.15.1 lost its
+// safety paragraphs that way. Shorten something before adding a skill line.
+for (const mode of ['local', 'hosted']) {
+  const text = serverInstructions(mode);
+  check(`${mode} instructions fit in ${INSTRUCTIONS_MAX_CHARS} characters`, text.length <= INSTRUCTIONS_MAX_CHARS, `${text.length} characters`);
+  const head = text.slice(0, INSTRUCTIONS_MAX_CHARS);
+  check(`${mode} instructions keep the cost, guardrail and credential rules`, ['cost money while running', 'dry_run: true', 'org-wide', 'do not retry'].every((s) => head.includes(s)));
+}
 for (const uri of linked) {
   const got = await c.readResource({ uri }).catch(() => undefined);
   check(`linked resource ${uri} resolves`, Boolean(got?.contents?.[0]?.text?.includes('name: ')));
