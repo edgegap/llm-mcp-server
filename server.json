@@ -3,7 +3,7 @@
   "name": "dev.edgegap/mcp",
   "title": "Edgegap",
   "description": "Deploy and operate multiplayer game servers on Edgegap's global edge network.",
-  "version": "0.15.2",
+  "version": "0.15.3",
   "repository": {
     "url": "https://github.com/edgegap/llm-mcp-server",
     "source": "github"
@@ -22,7 +22,7 @@
     {
       "registryType": "npm",
       "identifier": "@edgegap/mcp",
-      "version": "0.15.2",
+      "version": "0.15.3",
       "transport": {
         "type": "stdio"
       },

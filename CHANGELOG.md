@@ -2,6 +2,13 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.3
+
+- Skills pack 0.23.1 (llm-agent-skills c8ffc2f), which also brings 0.23.0:
+  - 0.23.0: the Unity skills build, push and deploy with the Edgegap Unity plugin (edgegap/llm-agent-skills#37).
+  - 0.23.1: `edgegap-godot` 0.2.1 requires Edgegap Godot plugin 1.0.10, whose Dockerfile no longer prints the environment (`ARBITRIUM_DELETE_TOKEN` was in deployment logs) and runs Godot under tini (edgegap/llm-agent-skills#38).
+- Covered by `test/tools.snapshot.json` and the skills tests.
+
 ## 0.15.2
 
 - Server instructions fit in 4,096 characters (3,964 local, 3,954 hosted; were 4,998). Claude Code keeps only the first 4,096, so 0.15.1 agents there never saw the cost and cleanup rule, the guardrails (`dry_run`, no token in env vars, tags or URLs) or the credential rules. Those now come right after the skills line, before the dedicated server vs relay guidance and the golden path, and the wording is shorter (same rules; the relay guidance in `edgegap_create_relay_session` is shortened the same way). `test/skills.mjs` fails if either mode goes over the limit or loses those rules.
