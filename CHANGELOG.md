@@ -2,6 +2,12 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.6
+
+- `edgegap_get_app_version` reported `hidden: false` for env vars the dashboard marks Secret: the API can return that flag as `is_secret` (the spec's own example) with `is_hidden` false. An env var now counts as hidden when `is_hidden` or `is_secret` is set, or its value is the encrypted placeholder. Covered in `test/newtools.mjs`.
+- Server instructions: the dedicated-vs-relay paragraph is shortened (relay results still carry the full trade-offs), bringing them from 3,964 to about 3,550 characters under the 4,096 limit, and they route host/client games to the new `edgegap-relays` skill.
+- Skills pack 0.28.0 (llm-agent-skills 6669915, edgegap/llm-agent-skills#43): Lyra (`edgegap-unreal` 0.3.0), new `edgegap-relays` 0.1.0 (not yet run on a live Edgegap relay; points to the verified LightNet relay deployment), MpsSamples in `edgegap-playfab`, Unity Matchmaker's `EdgegapAllocator` in `edgegap-unity`/`edgegap-ngo`, the BR200 kit repo in `edgegap-fusion`.
+
 ## 0.15.5
 
 - Skills pack 0.27.0 (llm-agent-skills 865ff95), which also brings 0.25.0 and 0.26.0:
