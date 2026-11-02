@@ -2,6 +2,15 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.5
+
+- Skills pack 0.27.0 (llm-agent-skills 865ff95), which also brings 0.25.0 and 0.26.0:
+  - `edgegap-colyseus` 0.3.0: Cocos Creator projects build, upload and test-deploy with the Edgegap Cocos extension 2.0 (edgegap/llm-agent-skills#41).
+  - `edgegap-playfab` 0.3.0: join tokens so only matched players can join, Windows test clients after a plugin server build (edgegap/llm-agent-skills#39).
+  - Unity plugin 3.2.2 no longer prints the environment (self-stop token) to deployment logs; `edgegap-nakama` 0.2.0 on Nakama 3.41.0; host/client Unity games pointed at the LightNet relay sample; `edgegap-unreal` 0.2.0 builds the server in Epic's container image without a source engine, with UE 5.8 and EOS-session pitfalls (edgegap/llm-agent-skills#42).
+- Dev dependencies and docker/setup-buildx-action bumped (#60, #61).
+- Covered by the skills tests.
+
 ## 0.15.4
 
 - Skills pack 0.24.0 (llm-agent-skills 0476c49): `edgegap-colyseus` 0.2.0 covers Cocos Creator clients (SDK bundle for a 0.17 server, matchmaker wiring, porting 0.14 state callbacks, array `onChange` passing `(index, value)`), verified on edgegap/backend-game-sample-cocos-colyseus-tictactoe; `edgegap` routes Cocos + Colyseus games to it (edgegap/llm-agent-skills#40).
