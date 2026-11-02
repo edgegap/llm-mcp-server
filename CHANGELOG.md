@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.7
+
+- Skills pack 0.29.0 (llm-agent-skills b16e040, edgegap/llm-agent-skills#44): the browser and Node.js templates use Edgegap's official JS SDK, `@edgegap/sdk` 1.1.0. `edgegap-threejs` 0.2.0 (Find Match through the SDK's `GroupAgent`, SDK loaded with an SRI hash, `ARBITRIUM_*`/`MM_*` parsing and self-stop through the SDK; verified on Edgegap 2026-11-02), `edgegap-colyseus` 0.4.0 (`Matchmaker.ts` wraps `GroupAgent`), `edgegap-matchmaking` 0.2.0 (names the Unity and JS SDKs, `ServerAgent` for Node backfill).
+
 ## 0.15.6
 
 - `edgegap_get_app_version` reported `hidden: false` for env vars the dashboard marks Secret: the API can return that flag as `is_secret` (the spec's own example) with `is_hidden` false. An env var now counts as hidden when `is_hidden` or `is_secret` is set, or its value is the encrypted placeholder. Covered in `test/newtools.mjs`.
