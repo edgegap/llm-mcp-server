@@ -61,6 +61,17 @@ export const ARCHITECTURE_GUIDANCE =
   'server image" is not a reason: edgegap_generate_dockerfile removes most of that work. ' +
   'If unsure, ask the developer before choosing a relay.';
 
+/** The instructions' short form of ARCHITECTURE_GUIDANCE (which relay results still carry in
+ *  full): the edgegap and edgegap-relays skills hold the trade-offs, and the instructions must
+ *  stay under INSTRUCTIONS_MAX_CHARS. */
+export const ARCHITECTURE_SUMMARY =
+  'Dedicated server vs relay — recommend a dedicated server by default (edgegap_deploy): the ' +
+  'server owns the game state, so no host advantage, much harder cheating, and the match ' +
+  'survives any player leaving. Relay (edgegap_create_relay_session): NOT a game server; one ' +
+  'player\'s game hosts and owns the state, everyone else gets two hops, and the match ends ' +
+  'when the host quits. Use one only when the developer explicitly wants host/client; "it ' +
+  'needs no server image" is not a reason. If unsure, ask before choosing a relay.';
+
 /** Claude Code drops everything after this many characters of server instructions. */
 export const INSTRUCTIONS_MAX_CHARS = 4096;
 
@@ -94,7 +105,8 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Three.js or web game with a Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
     `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
-    `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}). ` +
+    `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
+    `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
     'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
@@ -109,7 +121,7 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
     'If the developer declines to provide a token, stop and report which operation needed it; ' +
     'do not retry.\n\n' +
-    ARCHITECTURE_GUIDANCE +
+    ARCHITECTURE_SUMMARY +
     '\n\n' +
     'Golden path for a first dedicated-server deployment:\n' +
     '1. edgegap_generate_dockerfile (no Dockerfile yet) or edgegap_validate_server_config (existing one)\n' +
@@ -1137,7 +1149,12 @@ export function registerTools(
           termination_grace_period_seconds: v.termination_grace_period_seconds,
           endpoint_storage: v.endpoint_storage || undefined,
           time_to_deploy_seconds: v.time_to_deploy,
-          env: v.envs?.map((e) => ({ key: e.key, hidden: e.is_hidden ?? false })),
+          // The dashboard's Secret flag can come back as is_secret (the spec's own example) with is_hidden false,
+          // and a secret value is replaced by the encrypted placeholder: any of the three means hidden.
+          env: v.envs?.map((e) => ({
+            key: e.key,
+            hidden: Boolean(e.is_hidden || e.is_secret || isEncryptedPlaceholder(e.value)),
+          })),
           ...autoStop(v.max_duration),
         });
       })

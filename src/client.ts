@@ -548,7 +548,7 @@ export interface AppVersionRecord {
   termination_grace_period_seconds?: number;
   endpoint_storage?: string | null;
   /** Values are not surfaced; names only. */
-  envs?: Array<{ key: string; value?: string; is_hidden?: boolean }>;
+  envs?: Array<{ key: string; value?: string; is_hidden?: boolean; is_secret?: boolean }>;
   ports?: Array<{ port: number; protocol: string; name?: string; tls_upgrade?: boolean }>;
   /** Registry login for pulling the image. The API returns the token in
    *  plain text here: read it for presence only, never pass it on. */

@@ -225,7 +225,7 @@ const mock = http.createServer((req, res) => {
           verify_image: false, restart_policy: 'Never', termination_grace_period_seconds: 5, time_to_deploy: 15, endpoint_storage: 'game-logs',
           private_username: 'robot$pull', private_token: 'registry-secret-do-not-leak',
           ports: [{ port: 7777, protocol: 'UDP', name: 'gameport', tls_upgrade: false }],
-          envs: [{ key: 'GAME_MODE', value: 'env-value-do-not-leak', is_hidden: false }, { key: 'API_KEY', value: 'x', is_hidden: true }],
+          envs: [{ key: 'GAME_MODE', value: 'env-value-do-not-leak', is_hidden: false }, { key: 'API_KEY', value: 'x', is_hidden: true }, { key: 'EOS_SERVER_CLIENT_SECRET', value: 'y', is_hidden: false, is_secret: true }, { key: 'SERVER_PASS', value: 'This value is set and encrypted', is_hidden: false }],
         });
       case 'GET /v1/locations': {
         const q = new URL(req.url, 'http://x').searchParams;
@@ -863,7 +863,7 @@ const acall = async (name, args) => ac.callTool({ name, arguments: args });
 res = await acall('edgegap_get_app_version', { application: 'my-game', version: 'full-1' });
 r = json(res);
 check('get_app_version: settings shown', r.force_cache === true && r.restart_policy === 'Never' && r.registry_credentials_set === true && r.image === 'registry.edgegap.com/my-org-abc123/my-game-server:build-42' && r.endpoint_storage === 'game-logs', JSON.stringify(r).slice(0, 200));
-check('get_app_version: env names and hidden flag, no values', JSON.stringify(r.env) === JSON.stringify([{ key: 'GAME_MODE', hidden: false }, { key: 'API_KEY', hidden: true }]));
+check('get_app_version: env names and hidden flag, no values', JSON.stringify(r.env) === JSON.stringify([{ key: 'GAME_MODE', hidden: false }, { key: 'API_KEY', hidden: true }, { key: 'EOS_SERVER_CLIENT_SECRET', hidden: true }, { key: 'SERVER_PASS', hidden: true }]));
 check('get_app_version: registry token and env values never shown', !text(res).includes('registry-secret-do-not-leak') && !text(res).includes('env-value-do-not-leak'));
 
 // update_app_version: only passed fields, capped, same refusals as create
