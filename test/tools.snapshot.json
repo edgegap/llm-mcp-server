@@ -324,6 +324,15 @@
               "minimum": -9007199254740991,
               "maximum": 9007199254740991
             },
+            "restart_policy": {
+              "description": "What Edgegap does when the server process exits. \"never\" for match servers that stop themselves (an exit or crash ends the deployment instead of restarting a half-played match); \"on_failure\" restarts only after a crash (persistent servers); \"always\" (the API default) restarts after any exit.",
+              "type": "string",
+              "enum": [
+                "never",
+                "on_failure",
+                "always"
+              ]
+            },
             "verify_image": {
               "description": "Verify Edgegap can pull the image before accepting the version.",
               "type": "boolean"
@@ -2424,7 +2433,7 @@
       {
         "name": "edgegap_update_app_version",
         "title": "Update an application version",
-        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep; secret env values are not readable, so get them from the developer. Refused, with nothing sent, for a registry login or env value equal to the API's \"This value is set and encrypted\" placeholder; leave the registry login out to keep it. cpu_units and memory_mb change together (both or neither); to try other resources for one deployment only, override them in edgegap_deploy instead.",
+        "description": "Change settings on an existing version instead of creating a new one: point it at a new image tag, turn it on or off, change max_duration, set the registry login, turn on image caching (force_cache: Edgegap pre-loads the image so deployments start faster), set the restart policy, or set the shutdown grace period. Only the fields you pass change. Deployments already running keep their old settings; new deployments get the new ones. Same refusals as edgegap_create_app_version: \"latest\" or empty tags, a docker_image holding a host or tag, and the API token in the registry login or env vars. ports and env REPLACE the version's whole list (per the API): read the current ones with edgegap_get_app_version and pass every port or variable to keep; secret env values are not readable, so get them from the developer. Refused, with nothing sent, for a registry login or env value equal to the API's \"This value is set and encrypted\" placeholder; leave the registry login out to keep it. cpu_units and memory_mb change together (both or neither); to try other resources for one deployment only, override them in edgegap_deploy instead.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2489,6 +2498,15 @@
               "description": "Endpoint Storage name (edgegap_list_endpoint_storage) to export container logs to when deployments end.",
               "type": "string",
               "minLength": 1
+            },
+            "restart_policy": {
+              "description": "What Edgegap does when the server process exits. \"never\" for match servers that stop themselves (an exit or crash ends the deployment instead of restarting a half-played match); \"on_failure\" restarts only after a crash (persistent servers); \"always\" (the API default) restarts after any exit.",
+              "type": "string",
+              "enum": [
+                "never",
+                "on_failure",
+                "always"
+              ]
             },
             "termination_grace_period_seconds": {
               "description": "Seconds between SIGTERM and SIGKILL when a deployment stops.",
