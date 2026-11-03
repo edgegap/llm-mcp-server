@@ -32,7 +32,13 @@ const UNPUBLISHED = new Set([
 
 // Body fields sent although the spec does not list them, each with the reason.
 // Empty since spec 2026.08.05 documented DeploymentV2.resources.
-const UNPUBLISHED_FIELDS = {};
+// Fields the live API uses that the published spec doesn't list, keyed "METHOD /template".
+const UNPUBLISHED_FIELDS = {
+  // is_secret is what the dashboard's Secret toggle writes and what encrypts the value; the
+  // spec's is_hidden is accepted but not stored (live API, 2026-11-03).
+  'POST /v1/app/{app_name}/version': ['envs[].is_secret'],
+  'PATCH /v1/app/{app_name}/version/{version_name}': ['envs[].is_secret'],
+};
 
 function resolve(spec, schema, depth = 0) {
   if (!schema || depth > 8) return schema ?? {};
@@ -152,7 +158,7 @@ for (const [key, args] of Object.entries(full)) {
       if (!Array.isArray(v) || typeof v[0] !== 'object' || v[0] === null) continue;
       const item = resolve(found.spec, resolve(found.spec, schema.properties?.[k]).items);
       if (!item.properties) continue;
-      for (const row of v) for (const ik of Object.keys(row)) if (!(ik in item.properties)) unknown.push(`${k}[].${ik}`);
+      for (const row of v) for (const ik of Object.keys(row)) if (!(ik in item.properties) && !allowed.includes(`${k}[].${ik}`)) unknown.push(`${k}[].${ik}`);
     }
     check(`${name}: ${req.method} ${found.template} body fields are in the spec`, unknown.length === 0, [...new Set(unknown)].join(', '));
   }

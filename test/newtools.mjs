@@ -848,6 +848,8 @@ calls.length = 0;
 await icall('edgegap_create_app_version', { ...verUdp, env: [{ key: 'GAME_MODE', value: 'ffa' }, { key: 'STEAM_API_KEY', value: 'k' }, { key: 'db_password', value: 'p' }] });
 const envs = calls.find((x) => x.method === 'POST')?.body?.envs ?? [];
 check('create_app_version: GAME_MODE visible, STEAM_API_KEY and db_password hidden', envs.map((e) => e.is_hidden).join() === 'false,true,true', JSON.stringify(envs.map((e) => [e.key, e.is_hidden])));
+// The API stores is_secret (the dashboard's Secret toggle) and drops is_hidden (live API, 2026-11-03).
+check('create_app_version: secret-named env vars also sent with is_secret', envs.map((e) => e.is_secret).join() === 'false,true,true', JSON.stringify(envs.map((e) => [e.key, e.is_secret])));
 calls.length = 0;
 await icall('edgegap_deploy', { ...dep, env: [{ key: 'MATCH_ID', value: 'm' }, { key: 'JWT_SECRET', value: 's' }] });
 const depEnvs = calls.find((x) => x.method === 'POST')?.body?.environment_variables ?? [];
@@ -878,6 +880,7 @@ r = json(await acall('edgegap_update_app_version', { application: 'my-game', ver
 patch = calls.find((x) => x.method === 'PATCH');
 check('update_app_version: ports sent in full, with defaults', JSON.stringify(patch?.body?.ports) === JSON.stringify([{ port: 7777, protocol: 'UDP', name: 'gameport', to_check: true, tls_upgrade: false }, { port: 7778, protocol: 'WS', name: 'gameport', to_check: true, tls_upgrade: true }]), JSON.stringify(patch?.body?.ports));
 check('update_app_version: env sent as envs, secret-named ones hidden', JSON.stringify(patch?.body?.envs?.map((e) => [e.key, e.is_hidden])) === JSON.stringify([['GAME_MODE', false], ['STEAM_API_KEY', true]]));
+check('update_app_version: secret-named env vars also sent with is_secret', JSON.stringify(patch?.body?.envs?.map((e) => [e.key, e.is_secret])) === JSON.stringify([['GAME_MODE', false], ['STEAM_API_KEY', true]]));
 check('update_app_version: the result says the lists were replaced', r.notes?.some((n) => /ports replaced/.test(n)) && r.notes?.some((n) => /env replaced/.test(n)));
 check('update_app_version: the description warns ports/env replace the list', /REPLACE/.test((await ac.listTools()).tools.find((t) => t.name === 'edgegap_update_app_version')?.description ?? ''));
 for (const [label, extra] of [['tls_upgrade on UDP', { ports: [{ port: 7777, protocol: 'UDP', tls_upgrade: true }] }], ['token in an env value', { env: [{ key: 'X', value: REAL }] }]]) {

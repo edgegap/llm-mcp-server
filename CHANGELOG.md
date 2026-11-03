@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.9
+
+- `edgegap_create_app_version` and `edgegap_update_app_version` now really hide secret-looking env vars (names with SECRET, TOKEN, PASSWORD, API_KEY...). They sent only `is_hidden`, which the API accepts but does not store, so the values stayed readable in the dashboard and the API. They now also send `is_secret`, the field the dashboard's Secret toggle writes, which encrypts the value. Checked against the live API on 2026-11-03. Covered in `test/newtools.mjs`. Versions created earlier keep their visible values: mark them Secret in the dashboard, or update the version's env through the MCP.
+
 ## 0.15.8
 
 - Skills pack 0.30.0 (llm-agent-skills 7f8064c, edgegap/llm-agent-skills#46): new `edgegap-supabase` 0.1.0, Supabase as the game backend (anonymous sign-in, profiles behind RLS, a matchmaking Edge Function that holds the matchmaker token, game servers that verify Supabase access tokens with JWKS, results recorded through an Edge Function, Realtime leaderboard, cancel on page exit), verified on Edgegap 2026-11-03 with edgegap/netcode-sample-threejs-supabase. `edgegap-threejs` 0.2.1 points sign-in cases at it.
