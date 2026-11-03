@@ -2,6 +2,13 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.15.8
+
+- Skills pack 0.30.0 (llm-agent-skills 7f8064c, edgegap/llm-agent-skills#46): new `edgegap-supabase` 0.1.0, Supabase as the game backend (anonymous sign-in, profiles behind RLS, a matchmaking Edge Function that holds the matchmaker token, game servers that verify Supabase access tokens with JWKS, results recorded through an Edge Function, Realtime leaderboard, cancel on page exit), verified on Edgegap 2026-11-03 with edgegap/netcode-sample-threejs-supabase. `edgegap-threejs` 0.2.1 points sign-in cases at it.
+- Server instructions route Supabase backends to `edgegap-supabase`.
+- Skill bundles may hold `.sql`, `.patch` and `.snippet` text files (`application/sql`, `text/x-diff`).
+- Covered by the skills tests.
+
 ## 0.15.7
 
 - Skills pack 0.29.0 (llm-agent-skills b16e040, edgegap/llm-agent-skills#44): the browser and Node.js templates use Edgegap's official JS SDK, `@edgegap/sdk` 1.1.0. `edgegap-threejs` 0.2.0 (Find Match through the SDK's `GroupAgent`, SDK loaded with an SRI hash, `ARBITRIUM_*`/`MM_*` parsing and self-stop through the SDK; verified on Edgegap 2026-11-02), `edgegap-colyseus` 0.4.0 (`Matchmaker.ts` wraps `GroupAgent`), `edgegap-matchmaking` 0.2.0 (names the Unity and JS SDKs, `ServerAgent` for Node backfill).

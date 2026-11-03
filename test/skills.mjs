@@ -24,7 +24,7 @@ const totalFiles = SKILLS_PACK.skills.reduce((n, s) => n + s.files.length, 0);
 console.log('\nbundle');
 const pin = readFileSync('scripts/skills-pin.txt', 'utf8').trim();
 check('bundle is the pinned commit', SKILLS_PACK.commit === pin, `${SKILLS_PACK.commit} vs ${pin}`);
-check('bundle has the core skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-threejs', 'edgegap-relays'].every((n) => SKILLS_PACK.skills.some((s) => s.name === n)));
+check('bundle has the core skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs', 'edgegap-relays'].every((n) => SKILLS_PACK.skills.some((s) => s.name === n)));
 check('every skill starts with its SKILL.md', SKILLS_PACK.skills.every((s) => s.files[0].path === 'SKILL.md' && s.files[0].content.includes(`name: ${s.name}`)));
 check('no evals, scripts or fixtures bundled', SKILLS_PACK.skills.every((s) => s.files.every((f) => !/^(evals|scripts|fixtures)\//.test(f.path))));
 check('no Windows line endings', SKILLS_PACK.skills.every((s) => s.files.every((f) => !f.content.includes('\r\n'))));
@@ -72,6 +72,8 @@ r = await c.callTool({ name: 'edgegap_get_skill', arguments: { skill: 'edgegap-n
 check('edgegap-nakama serves its Go module', !r.isError && body(r).includes('nakama-edgegap'));
 r = await c.callTool({ name: 'edgegap_get_skill', arguments: { skill: 'edgegap-playfab', file: 'assets/azure-functions/src/functions/StartEdgegapDeployment.js' } });
 check('edgegap-playfab serves its Azure Function', !r.isError && body(r).includes('playfab.matchmaking.match_found'));
+r = await c.callTool({ name: 'edgegap_get_skill', arguments: { skill: 'edgegap-supabase', file: 'assets/supabase/migrations/20261103000000_game_backend.sql' } });
+check('edgegap-supabase serves its SQL migration', !r.isError && body(r).includes('create function public.record_match'));
 r = await c.callTool({ name: 'edgegap_get_skill', arguments: { skill: 'edgegap-unity', file: 'assets/matchmaker/casual.json' } });
 check('matchmaker templates name app versions with a UTC timestamp', !r.isError && body(r).includes('"version": "20261022-1430"') && !body(r).includes('"version": "v1"'));
 r = await c.callTool({ name: 'edgegap_get_skill', arguments: { skill: 'edgegap-threejs', file: 'assets/client/index.html' } });
@@ -131,7 +133,7 @@ check('server instructions point at the skills', /edgegap_get_skill/.test(c.getI
 const instructions = c.getInstructions() ?? '';
 check('instructions open with the skills line', instructions.startsWith('Before acting, read edgegap-skill://edgegap/SKILL.md'), instructions.slice(0, 80));
 const linked = [...new Set(instructions.match(/edgegap-skill:\/\/[^\s),]+/g) ?? [])];
-check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Three.js, Manus and relays skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-threejs'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
+check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Supabase, Three.js, Manus and relays skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
 check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
 // Claude Code cuts instructions at INSTRUCTIONS_MAX_CHARS; 0.15.1 lost its
 // safety paragraphs that way. Shorten something before adding a skill line.

@@ -103,6 +103,7 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Colyseus: ${skillUri('edgegap-colyseus', 'SKILL.md')}, ` +
     `Nakama: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
     `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
+    `Supabase backend: ${skillUri('edgegap-supabase', 'SKILL.md')}, ` +
     `Three.js or web game with a Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
     `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
