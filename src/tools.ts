@@ -515,6 +515,7 @@ function compactVersion(v: AppVersionRecord) {
     cpu_units: v.req_cpu,
     memory_mb: v.req_memory,
     max_duration_minutes: v.max_duration,
+    restart_policy: v.restart_policy,
     ports: v.ports?.map((p) => ({
       name: p.name,
       port: p.port,
@@ -1242,6 +1243,15 @@ export function registerTools(
             .int()
             .optional()
             .describe('Auto-stop after this many minutes. Keeps test deployments from running up cost.'),
+          restart_policy: z
+            .enum(['never', 'on_failure', 'always'])
+            .optional()
+            .describe(
+              'What Edgegap does when the server process exits. "never" for match servers that stop ' +
+                'themselves (an exit or crash ends the deployment instead of restarting a half-played ' +
+                'match); "on_failure" restarts only after a crash (persistent servers); "always" (the API default) ' +
+                'restarts after any exit.'
+            ),
           verify_image: z
             .boolean()
             .optional()
@@ -1320,6 +1330,7 @@ export function registerTools(
             private_username: args.registry_username,
             private_token: args.registry_token,
             verify_image: args.verify_image ?? false,
+            ...(args.restart_policy ? { restart_policy: args.restart_policy } : {}),
             ...(args.endpoint_storage ? { endpoint_storage: args.endpoint_storage } : {}),
             max_duration: capped,
             ports: args.ports.map((p) => ({
@@ -1360,6 +1371,12 @@ export function registerTools(
                 'and token to this version in the dashboard.'
             );
           }
+          if (!args.restart_policy) {
+            notes.push(
+              'restart_policy was not set, so Edgegap restarts the server whenever its process exits ("always"). ' +
+                'For a match server that stops itself, set restart_policy "never" with edgegap_update_app_version.'
+            );
+          }
           for (const p of args.ports) {
             if (WS_PROTOCOLS.has(p.protocol.toUpperCase()) && !p.tls_upgrade) {
               notes.push(
@@ -1394,8 +1411,8 @@ export function registerTools(
         description:
           'Change settings on an existing version instead of creating a new one: point it at a new ' +
           'image tag, turn it on or off, change max_duration, set the registry login, turn on image ' +
-          'caching (force_cache: Edgegap pre-loads the image so deployments start faster), or set ' +
-          'the shutdown grace period. Only the fields you pass change. Deployments already running ' +
+          'caching (force_cache: Edgegap pre-loads the image so deployments start faster), set ' +
+          'the restart policy, or set the shutdown grace period. Only the fields you pass change. Deployments already running ' +
           'keep their old settings; new deployments get the new ones. Same refusals as ' +
           'edgegap_create_app_version: "latest" or empty tags, a docker_image holding a host or ' +
           'tag, and the API token in the registry login or env vars. ports and env REPLACE the ' +
@@ -1438,6 +1455,15 @@ export function registerTools(
             .min(1)
             .optional()
             .describe('Endpoint Storage name (edgegap_list_endpoint_storage) to export container logs to when deployments end.'),
+          restart_policy: z
+            .enum(['never', 'on_failure', 'always'])
+            .optional()
+            .describe(
+              'What Edgegap does when the server process exits. "never" for match servers that stop ' +
+                'themselves (an exit or crash ends the deployment instead of restarting a half-played ' +
+                'match); "on_failure" restarts only after a crash (persistent servers); "always" (the API default) ' +
+                'restarts after any exit.'
+            ),
           termination_grace_period_seconds: z
             .number()
             .int()
@@ -1537,6 +1563,7 @@ export function registerTools(
             verify_image: args.verify_image,
             endpoint_storage: args.endpoint_storage,
             termination_grace_period_seconds: args.termination_grace_period_seconds,
+            restart_policy: args.restart_policy,
             ports: args.ports?.map((p) => ({
               port: p.port,
               protocol: p.protocol,
@@ -3648,6 +3675,7 @@ export function registerTools(
               'DELETE {api_url}/tickets/{id} cancels a search.',
             'Parties that must land in the same match use the group API instead (POST {api_url}/groups, then memberships for the other players; see the matchmaker API docs on the dashboard). ' +
               '/memberships endpoints belong to groups only: a plain ticket is polled at /tickets/{id}.',
+            'Browser and Node.js clients can use the Edgegap JS SDK (npm @edgegap/sdk, GroupAgent: a group of one per player) instead of these calls: it polls, retries 429/5xx and cancels, and getConnectionUrl() gives the wss:// URL. The engine skills (edgegap-threejs, edgegap-colyseus, edgegap-unity...) have ready Find Match clients and a headless e2e test.',
             'That auth token is safe to ship in game clients: it grants no access to the Edgegap API.',
             args.allowed_cors_origins?.length
               ? `Browser clients are allowed from: ${args.allowed_cors_origins.join(', ')}. Add any other origin the game is served from (each staging or production URL) before uploading.`

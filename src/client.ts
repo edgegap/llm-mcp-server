@@ -89,6 +89,35 @@ export class EdgegapApiError extends Error {
     super(`Edgegap API ${status}: ${apiMessage}`);
     this.name = 'EdgegapApiError';
   }
+
+  /** From the response's Retry-After header, when it had one. */
+  retryAfterMs?: number;
+}
+
+const RETRY_STATUSES = new Set([429, 502, 503, 504]);
+const RETRY_DELAY_MS = 1000;
+const MAX_RETRY_DELAY_MS = 5000;
+
+function transient(err: Error): Error {
+  return Object.assign(err, { transient: true });
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+}
+
+/** How long to wait before retrying a failed read, or undefined when it should not be retried. */
+export function retryDelayMs(err: unknown): number | undefined {
+  if (err instanceof EdgegapApiError) {
+    if (!RETRY_STATUSES.has(err.status)) return undefined;
+    return Math.min(err.retryAfterMs ?? RETRY_DELAY_MS, MAX_RETRY_DELAY_MS);
+  }
+  if (err instanceof Error && (err as { transient?: boolean }).transient) return RETRY_DELAY_MS;
+  return undefined;
 }
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -127,7 +156,31 @@ export class EdgegapClient {
     return `edgegap-mcp/${VERSION}${client ? ` (${client.replace(/[^\w .\-/]/g, '')})` : ''}`;
   }
 
+  /**
+   * Reads (GET) are retried once after a timeout, a network error, 429 or a
+   * 502/503/504: the hosted relay saw single GETs time out or get rate
+   * limited mid-session, and failing the tool call there sends agents into
+   * their own retry loops. Writes are never retried: a POST that timed out
+   * may have created the deployment or version anyway.
+   */
   private async request<T>(
+    method: Method,
+    version: 'v1' | 'v2',
+    path: string,
+    options: { body?: unknown; query?: Record<string, string | number | undefined> } = {}
+  ): Promise<T> {
+    if (method !== 'GET' || this.options.recorder) return this.send<T>(method, version, path, options);
+    try {
+      return await this.send<T>(method, version, path, options);
+    } catch (err) {
+      const delay = retryDelayMs(err);
+      if (delay === undefined) throw err;
+      await new Promise((r) => setTimeout(r, delay));
+      return this.send<T>(method, version, path, options);
+    }
+  }
+
+  private async send<T>(
     method: Method,
     version: 'v1' | 'v2',
     path: string,
@@ -179,13 +232,13 @@ export class EdgegapClient {
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         this.upstream.push('timeout');
-        throw new Error(
-          `Request to ${method} ${path} timed out after ${this.config.requestTimeoutMs}ms.`
+        throw transient(
+          new Error(`Request to ${method} ${path} timed out after ${this.config.requestTimeoutMs}ms.`)
         );
       }
       this.upstream.push('network');
-      throw new Error(
-        redact(`Network error calling ${method} ${path}: ${(err as Error).message}`, token)
+      throw transient(
+        new Error(redact(`Network error calling ${method} ${path}: ${(err as Error).message}`, token))
       );
     } finally {
       clearTimeout(timer);
@@ -208,11 +261,13 @@ export class EdgegapClient {
       if (response.status === 401) this.auth.invalidate();
 
       const body = (parsed ?? {}) as { message?: string; details?: unknown };
-      throw new EdgegapApiError(
+      const apiError = new EdgegapApiError(
         response.status,
         redact(body.message ?? response.statusText, token),
         body.details
       );
+      apiError.retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+      throw apiError;
     }
 
     return (parsed ?? {}) as T;
@@ -381,12 +436,18 @@ export class EdgegapClient {
     );
   }
 
-  getDeployment(requestId: string) {
-    return this.request<DeploymentStatus>(
+  async getDeployment(requestId: string) {
+    const status = await this.request<DeploymentStatus>(
       'GET',
       'v1',
       `/v1/status/${encodeURIComponent(requestId)}`
     );
+    // The API answers "Status.READY", "Status.TERMINATED"... (a Python enum's
+    // repr). Agents and people read "READY".
+    if (typeof status.current_status === 'string') {
+      status.current_status = status.current_status.replace(/^Status\./, '');
+    }
+    return status;
   }
 
   listDeployments(query: { query?: string; page?: number; limit?: number } = {}) {

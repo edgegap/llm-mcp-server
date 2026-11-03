@@ -560,7 +560,7 @@ check('logs of a deployment Edgegap does not know: an error naming the request_i
 check('logs 404: does not point at applications', !/edgegap_list_apps/.test(t));
 res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'stoppeddep01' } });
 r = json(res);
-check('logs of a stopped deployment: an "expired" state that explains Endpoint Storage', !res.isError && r.status === 'expired' && /Endpoint/.test(r.next_step) && r.deployment_status === 'Status.TERMINATED', text(res).slice(0, 200));
+check('logs of a stopped deployment: an "expired" state that explains Endpoint Storage', !res.isError && r.status === 'expired' && /Endpoint/.test(r.next_step) && r.deployment_status === 'TERMINATED', text(res).slice(0, 200));
 res = await c.callTool({ name: 'edgegap_get_deployment_logs', arguments: { request_id: 'slowdep00001' } });
 r = json(res);
 check('logs of a starting deployment: a "not_ready" state pointing at wait_for_deployment', !res.isError && r.status === 'not_ready' && /edgegap_wait_for_deployment/.test(r.next_step), text(res).slice(0, 200));

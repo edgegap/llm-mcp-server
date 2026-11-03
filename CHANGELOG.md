@@ -2,6 +2,17 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.16.0
+
+Lessons from turning a vibe-coded single-player Three.js game into online multiplayer through the MCP (edgegap/netcode-sample-threejs-vibe-coded, 2026-11-03).
+
+- `edgegap_create_app_version` and `edgegap_update_app_version` take `restart_policy` (`never`, `on_failure`, `always`). The skills tell agents to set `never` on match servers, and no tool could. Creating a version without it now says so in `notes`. `edgegap_list_app_versions` and `edgegap_get_app_version` show the version's policy.
+- Reads (GET) are retried once after a timeout, a network error, 429 or 502/503/504, waiting for `Retry-After` (at most 5 s, else 1 s). The hosted relay saw single `edgegap_list_app_versions` and `edgegap_get_deployment_logs` calls fail that way mid-session. Writes are never retried.
+- Deployment statuses read `READY`, `TERMINATED`... instead of the API's `Status.READY`. The telemetry property `final_status` of `edgegap_wait_for_deployment` loses the prefix too.
+- `edgegap_build_matchmaker_config` points browser and Node.js clients at the Edgegap JS SDK's `GroupAgent` and the engine skills' ready clients.
+- Skills pack 0.31.0 (llm-agent-skills eaffdbf, edgegap/llm-agent-skills#47): `edgegap-threejs` 0.3.0 (keep a single-player game's solo mode by sharing one rules file with the server; e2e direct mode; CI image build and GitHub Pages templates; restart policy never; troubleshooting for idle test clients, hidden automated tabs, Pages on private repos), `edgegap-local-testing` 0.3.0 (`assets/parity.sh`, the whole local battery in one command), `edgegap-server-design` 0.2.1 and `edgegap-containerize` 0.2.3 (`restart_policy` through the MCP).
+- Covered in `test/retries.mjs` (mock API).
+
 ## 0.15.9
 
 - `edgegap_create_app_version` and `edgegap_update_app_version` now really hide secret-looking env vars (names with SECRET, TOKEN, PASSWORD, API_KEY...). They sent only `is_hidden`, which the API accepts but does not store, so the values stayed readable in the dashboard and the API. They now also send `is_secret`, the field the dashboard's Secret toggle writes, which encrypts the value. Checked against the live API on 2026-11-03. Covered in `test/newtools.mjs`. Versions created earlier keep their visible values: mark them Secret in the dashboard, or update the version's env through the MCP.

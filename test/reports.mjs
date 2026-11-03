@@ -88,7 +88,7 @@ check('validate_server_config: validation_result and issue_count, no API call', 
 x = await t.call('edgegap_get_skill', { skill: 'edgegap-unity' });
 check('get_skill: skill_name and resource_uri', x.report.props.skill_name === 'edgegap-unity' && x.report.props.resource_uri === 'edgegap-skill://edgegap-unity/SKILL.md');
 x = await t.call('edgegap_wait_for_deployment', { request_id: 'abcdef123456', timeout_seconds: 30 });
-check('wait ready: outcome, final_status, poll_count, timeout_ms_configured', x.report.props.outcome === 'ready' && x.report.props.final_status === 'Status.READY' && x.report.props.poll_count === 2 && x.report.props.timeout_ms_configured === 30000, JSON.stringify(x.report.props));
+check('wait ready: outcome, final_status, poll_count, timeout_ms_configured', x.report.props.outcome === 'ready' && x.report.props.final_status === 'READY' && x.report.props.poll_count === 2 && x.report.props.timeout_ms_configured === 30000, JSON.stringify(x.report.props));
 check('wait ready: deployment_ready milestone, request_id handed over for hashing', x.report.milestones.includes('deployment_ready') && x.report.hash.request_id === 'abcdef123456');
 x = await t.call('edgegap_stop_deployment', { request_id: 'abcdef123456', dry_run: true });
 check('a dry run is marked dry_run', x.report.dry_run === true && x.report.success === true);
