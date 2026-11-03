@@ -38,6 +38,18 @@ import {
 import type { SkillsEnv, SkillsInstall, InstalledSkill } from './skillsversion.js';
 
 /**
+ * An app version env var as the API stores it. The dashboard's Secret toggle writes is_secret, which
+ * encrypts the value; the API accepts the spec's is_hidden but does not store it (live API,
+ * 2026-11-03: a version created and patched with is_hidden: true read back is_secret: false with
+ * the value in clear, and the same variable toggled Secret read back is_secret: true, encrypted).
+ * Both are sent for secret-looking names.
+ */
+function versionEnv(e: { key: string; value: string }) {
+  const secret = looksSecret(e.key);
+  return { key: e.key, value: e.value, is_hidden: secret, is_secret: secret };
+}
+
+/**
  * The one definition of "dedicated server vs relay" this server gives agents.
  * Used in the server instructions, the relay tool description, and every relay
  * result, so the recommendation cannot drift between them.
@@ -1317,7 +1329,7 @@ export function registerTools(
               to_check: p.to_check ?? true,
               tls_upgrade: p.tls_upgrade ?? false,
             })),
-            envs: args.env?.map((e) => ({ key: e.key, value: e.value, is_hidden: looksSecret(e.key) })),
+            envs: args.env?.map(versionEnv),
           };
 
           if (args.dry_run) {
@@ -1532,7 +1544,7 @@ export function registerTools(
               to_check: p.to_check ?? true,
               tls_upgrade: p.tls_upgrade ?? false,
             })),
-            envs: args.env?.map((e) => ({ key: e.key, value: e.value, is_hidden: looksSecret(e.key) })),
+            envs: args.env?.map(versionEnv),
           };
           for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
           if (Object.keys(body).length === 0) {
