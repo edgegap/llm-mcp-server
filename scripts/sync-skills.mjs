@@ -18,7 +18,7 @@ import { join, relative, sep } from 'node:path';
 const REPO = 'https://github.com/edgegap/llm-agent-skills';
 const PIN = 'scripts/skills-pin.txt';
 const OUT = 'src/skills.generated.ts';
-const TEXT_EXT = /\.(md|cs|h|cpp|json|ini|xml|txt|yml|yaml|meta|asset|ts|js|mjs|sh|gd|cfg|go|html|css)$|(^|\/)(Dockerfile|\.dockerignore|\.funcignore|\.gitattributes|\.gitignore|\.env\.example|go\.mod|go\.sum)$/;
+const TEXT_EXT = /\.(md|cs|h|cpp|json|ini|xml|txt|yml|yaml|meta|asset|ts|js|mjs|sh|gd|cfg|go|html|css|sql|patch|snippet)$|(^|\/)(Dockerfile|\.dockerignore|\.funcignore|\.gitattributes|\.gitignore|\.env\.example|go\.mod|go\.sum)$/;
 
 const args = process.argv.slice(2);
 const flag = (name) => {

@@ -66,6 +66,8 @@ export function mimeType(path: string): string {
   if (/\.(ts|mjs)$/.test(path)) return 'text/javascript';
   if (path.endsWith('.html')) return 'text/html';
   if (path.endsWith('.css')) return 'text/css';
+  if (path.endsWith('.sql')) return 'application/sql';
+  if (path.endsWith('.patch')) return 'text/x-diff';
   return 'text/plain';
 }
 
