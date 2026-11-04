@@ -2,6 +2,12 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.16.2
+
+- Skills pack 0.33.0 (edgegap/llm-agent-skills#50, 9da8ecb): new `edgegap-vibe-coded` skill for single-player browser games made with an AI tool that should get online matches while solo play keeps working (game fit for network delay, getting the code out of Lovable, Bolt or v0, one shared rules file, a public demo with an always-on matchmaker). Worked example: Thin Ice Tussle, verified on Edgegap 2026-11-04. `edgegap-threejs` 0.3.2 and `edgegap-samples` 0.1.2 point to it.
+- Server instructions route vibe-coded games to the new skill.
+- Covered by the skills tests (the instructions link and resolve `edgegap-vibe-coded`) and the instructions-length test.
+
 ## 0.16.1
 
 - Skills pack 0.32.1 (llm-agent-skills a56ace2):
