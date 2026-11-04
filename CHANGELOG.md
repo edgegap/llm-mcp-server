@@ -2,6 +2,13 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.17.0
+
+- `edgegap_create_app_version` sends `registry_profile: "Edgegap"` when the image is on `registry.edgegap.com` (or a staging `*-registry.edgegap.dev`) and no `registry_username`/`registry_token` is given. Edgegap then attaches the organization's own registry login, so versions no longer need the developer to paste the Container Registry login, and `verify_image: true` works without one. A login you pass still wins; other registries are unchanged. The result says which login the version got (`registry_login`), and the old "no registry login, pulls will fail (424)" note is gone. Verified on Edgegap 2026-11-04: without the field `verify_image` fails with `Unable to login with the given credentials`; with it the version verifies, deploys and serves traffic. The API takes the field on create only, so `edgegap_update_app_version` says to create a new version instead.
+- `edgegap_get_registry_credentials` no longer puts the registry login in `for_create_app_version`, and its manual steps say to leave it out of `edgegap_create_app_version`.
+- Skills pack 0.34.0 (edgegap/llm-agent-skills#52, b153756): 21 skills stop asking the developer to add the registry login to each version; `edgegap-deployments-api` documents the field and its errors.
+- Covered by `test/newtools.mjs` (profile sent / not sent per registry and login, `verify_image`, credentials result) and `test/spec.mjs` (allowlisted until the field is in the published spec).
+
 ## 0.16.3
 
 - Skills pack 0.33.1 (llm-agent-skills 37e976c, edgegap/llm-agent-skills#51): `edgegap-threejs` 0.3.3 fixes the idle timeout from 0.32.1, which dropped players who had only switched tabs (a hidden tab sends no input). If the other player then left, the whole server stopped. `net.js` sends a heartbeat every 5 s from a timer, `room.js` pings sockets and drops dead ones, and the recommended `IDLE_TIMEOUT_S` is 75 s. `edgegap-vibe-coded` 0.1.1 has the same recommendation. Verified on Edgegap 2026-11-04.

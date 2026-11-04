@@ -81,9 +81,11 @@ const mock = http.createServer((req, res) => {
         ], total_count: 3 });
       case 'POST /v1/app/my-game/version': {
         const b = JSON.parse(body);
-        // verify_image pulls with the version's registry login; without one,
-        // Edgegap answers this bare 400, even for registry.edgegap.com.
-        if (b.verify_image && !b.private_username) return send(400, { message: 'Unable to login with the given credentials' });
+        // verify_image pulls with the version's registry login; without one or
+        // registry_profile "Edgegap", Edgegap answers this bare 400 (live, 2026-11-04).
+        if (b.registry_profile !== undefined && b.registry_profile !== 'Edgegap') return send(404, { message: `Registry profile ${b.registry_profile} not found.` });
+        if (b.registry_profile && !/registry\.edgegap\.(com|dev)$/.test(b.docker_repository)) return send(400, { message: 'docker_repository must point to the registry of registry profile Edgegap (registry.edgegap.com).' });
+        if (b.verify_image && !b.private_username && !b.registry_profile) return send(400, { message: 'Unable to login with the given credentials' });
         return send(200, { success: true, version: { name: b.name } });
       }
       // A request_id Edgegap does not know is a 400, not a 404 (live, 2026-10-08).
@@ -407,6 +409,7 @@ r = json(res);
 check('quick-start token: provisions via init-quick-start when credentials 404', calls.some((x) => x.url === '/v1/wizard/init-quick-start' && x.body?.source === 'mcp'));
 check('returns project/username/token', r.project === 'my-org-abc123' && r.username === 'robot$my-org' && r.token === 'reg-token-xyz');
 check('image ref includes project and tag', r.image_ref === 'registry.edgegap.com/my-org-abc123/my-game-server:build-42');
+check('for_create_app_version carries no pull login (registry_profile covers it)', r.for_create_app_version && !('registry_username' in r.for_create_app_version) && !('registry_token' in r.for_create_app_version));
 check('login uses --password-stdin, token not on the command line', /--password-stdin/.test(r.commands.login) && !r.commands.login.includes('reg-token-xyz'));
 check('build targets linux/amd64', /--platform linux\/amd64/.test(r.commands.build));
 check('API token sent as "token <value>"', calls.every((x) => x.auth === 'token fake-api-token'));
@@ -532,7 +535,27 @@ calls.length = 0;
 r = json(await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, ports: [{ port: 7778, protocol: 'WS', tls_upgrade: true }] } }));
 let sent = calls.find((x) => x.method === 'POST')?.body;
 check('tls_upgrade is sent on the port', sent?.ports?.[0]?.tls_upgrade === true, JSON.stringify(sent?.ports));
-check('no registry login on registry.edgegap.com: warned the pull will fail', r.notes?.some((n) => /registry login/.test(n) && /424/.test(n)));
+check('registry.edgegap.com without a login: sends registry_profile "Edgegap"', sent?.registry_profile === 'Edgegap' && !sent?.private_username && !sent?.private_token, JSON.stringify(sent).slice(0, 300));
+check('registry.edgegap.com without a login: says which login the version got, no 424 warning', /registry_profile "Edgegap"/.test(r.registry_login ?? '') && !r.notes?.some((n) => /424/.test(n)), JSON.stringify(r).slice(0, 300));
+calls.length = 0;
+r = json(await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, registry_username: 'robot$pull', registry_token: 'reg-tok', ports: [{ port: 7777, protocol: 'UDP' }] } }));
+sent = calls.find((x) => x.method === 'POST')?.body;
+check('a login given wins: no registry_profile sent', sent?.private_username === 'robot$pull' && !('registry_profile' in (sent ?? {})), JSON.stringify(sent).slice(0, 200));
+calls.length = 0;
+r = json(await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, registry_username: 'robot$pull', ports: [{ port: 7777, protocol: 'UDP' }] } }));
+sent = calls.find((x) => x.method === 'POST')?.body;
+check('half a login: no registry_profile, warned', !('registry_profile' in (sent ?? {})) && r.notes?.some((n) => /Only one of registry_username/.test(n)));
+for (const repo of ['docker.io', 'ghcr.io', 'registry.edgegap.com.evil.example', 'myregistry.edgegap.com.example']) {
+  calls.length = 0;
+  r = json(await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, docker_repository: repo, ports: [{ port: 7777, protocol: 'UDP' }] } }));
+  sent = calls.find((x) => x.method === 'POST')?.body;
+  check(`${repo}: no registry_profile (Edgegap registry only)`, sent && !('registry_profile' in sent) && /public/.test(r.registry_login ?? ''), JSON.stringify(r).slice(0, 200));
+}
+for (const repo of ['https://registry.edgegap.com', 'staging-registry.edgegap.dev']) {
+  calls.length = 0;
+  await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, docker_repository: repo, ports: [{ port: 7777, protocol: 'UDP' }] } });
+  check(`${repo}: registry_profile sent`, calls.find((x) => x.method === 'POST')?.body?.registry_profile === 'Edgegap');
+}
 calls.length = 0;
 r = json(await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, ports: [{ port: 7777, protocol: 'UDP' }] } }));
 check('tls_upgrade defaults to false', calls.find((x) => x.method === 'POST')?.body?.ports?.[0]?.tls_upgrade === false);
@@ -542,8 +565,10 @@ res = await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver
 check('tls_upgrade on a UDP port is refused locally', res.isError && /only works on WS and HTTP/.test(text(res)));
 
 res = await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, verify_image: true, ports: [{ port: 7777, protocol: 'UDP' }] } });
+check('verify_image on registry.edgegap.com without a login: passes with registry_profile', !res.isError, text(res).slice(0, 200));
+res = await c.callTool({ name: 'edgegap_create_app_version', arguments: { ...ver, docker_repository: 'ghcr.io', docker_image: 'me/srv', verify_image: true, ports: [{ port: 7777, protocol: 'UDP' }] } });
 t = text(res);
-check('verify_image without a login: explained, not the raw 400', res.isError && /not your API token/.test(t) && /registry\.edgegap\.com project too/.test(t));
+check('verify_image on another registry without a login: explained, not the raw 400', res.isError && /not your API token/.test(t) && /registry\.edgegap\.com need neither/.test(t), t.slice(0, 300));
 check('verify_image without a login: offers the dashboard route first', /1\. Create the version again with verify_image false/.test(t) && /dashboard/.test(t));
 
 r = json(await c.callTool({ name: 'edgegap_list_app_versions', arguments: { application: 'my-game' } }));
