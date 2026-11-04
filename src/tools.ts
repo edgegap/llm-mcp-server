@@ -1193,6 +1193,9 @@ export function registerTools(
           'deploy time. Refused, with nothing sent, for the "latest" or an empty docker tag (use a build ID so ' +
           'deployments are reproducible) and for a docker_image that also holds a registry host or tag. ' +
           'Env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY…) are hidden in the dashboard. ' +
+          'Images on registry.edgegap.com need no registry login: leave registry_username and ' +
+          'registry_token out and the version gets the organization\'s own registry login ' +
+          '(registry_profile "Edgegap"). ' +
           'When copying an existing version, copy only non-secret settings: the API returns "' +
           ENCRYPTED_PLACEHOLDER + '" for its registry login and secret env values, and that ' +
           'placeholder is refused here.',
@@ -1238,8 +1241,9 @@ export function registerTools(
             .string()
             .optional()
             .describe(
-              'Registry username. Needed for private images, including images in your own ' +
-                'registry.edgegap.com project: Edgegap pulls with this login, not your API token.'
+              'Registry username, for private images on other registries (Docker Hub, GHCR, ECR...). ' +
+                'Leave it out for registry.edgegap.com: Edgegap then pulls with the organization\'s own ' +
+                'registry login (registry_profile "Edgegap").'
             ),
           registry_token: z.string().optional().describe('Registry password or token.'),
           max_duration_minutes: z
@@ -1321,7 +1325,10 @@ export function registerTools(
           const requested = args.max_duration_minutes ?? config.maxDurationCeiling;
           const capped = Math.min(requested, config.maxDurationCeiling);
           const hasRegistryLogin = Boolean(args.registry_username && args.registry_token);
-          const edgegapRegistry = /(^|\/\/)registry\.edgegap\.com\/?$/.test(args.docker_repository.trim());
+          // Edgegap attaches the org's own pull login when asked to (live API,
+          // 2026-11-04). Only without a login of the caller's: the profile is
+          // refused for other registries, and a login given wins.
+          const useProfile = isEdgegapRegistry(args.docker_repository) && !args.registry_username && !args.registry_token;
 
           const body = {
             name: args.name,
@@ -1333,6 +1340,7 @@ export function registerTools(
             docker_tag: args.docker_tag,
             private_username: args.registry_username,
             private_token: args.registry_token,
+            ...(useProfile ? { registry_profile: EDGEGAP_REGISTRY_PROFILE } : {}),
             verify_image: args.verify_image ?? false,
             ...(args.restart_policy ? { restart_policy: args.restart_policy } : {}),
             ...(args.endpoint_storage ? { endpoint_storage: args.endpoint_storage } : {}),
@@ -1367,12 +1375,10 @@ export function registerTools(
           }
 
           const notes: string[] = [];
-          if (edgegapRegistry && !hasRegistryLogin) {
+          if (!useProfile && !hasRegistryLogin && (args.registry_username || args.registry_token)) {
             notes.push(
-              'No registry login was set. Edgegap pulls images from registry.edgegap.com with the ' +
-                'version\'s registry login, not your API token, so deployments of this version will ' +
-                'likely fail to pull (424) until the developer adds the Container Registry username ' +
-                'and token to this version in the dashboard.'
+              'Only one of registry_username and registry_token was given, so the version has no complete ' +
+                'registry login and deployments will likely fail to pull (424). Pass both.'
             );
           }
           if (!args.restart_policy) {
@@ -1394,13 +1400,18 @@ export function registerTools(
             ok({
               created: `${args.application}/${res.version?.name ?? args.name}`,
               max_duration_minutes: capped,
+              registry_login: useProfile
+                ? 'Edgegap registry login (registry_profile "Edgegap")'
+                : hasRegistryLogin
+                  ? 'the registry_username/registry_token given'
+                  : 'none: the image must be public',
               capped_by_server: capped < requested ? config.maxDurationCeiling : undefined,
               notes: notes.length ? notes : undefined,
               next_step:
                 `Call edgegap_deploy with application "${args.application}" and version ` +
                 `"${res.version?.name ?? args.name}" to start a server, then edgegap_wait_for_deployment.`,
             }),
-            { milestones: ['app_version_created'], props: { registry_login_set: hasRegistryLogin } }
+            { milestones: ['app_version_created'], props: { registry_login_set: hasRegistryLogin, registry_profile: useProfile } }
           );
         })
     );
@@ -1414,7 +1425,8 @@ export function registerTools(
         title: 'Update an application version',
         description:
           'Change settings on an existing version instead of creating a new one: point it at a new ' +
-          'image tag, turn it on or off, change max_duration, set the registry login, turn on image ' +
+          'image tag, turn it on or off, change max_duration, set the registry login (the API cannot add ' +
+          'registry_profile "Edgegap" to an existing version: create a new version for that), turn on image ' +
           'caching (force_cache: Edgegap pre-loads the image so deployments start faster), set ' +
           'the restart policy, or set the shutdown grace period. Only the fields you pass change. Deployments already running ' +
           'keep their old settings; new deployments get the new ones. Same refusals as ' +
@@ -2633,8 +2645,6 @@ export function registerTools(
               docker_repository: host,
               docker_image: `${creds.project}/${image}`,
               docker_tag: buildTag,
-              registry_username: creds.username,
-              registry_token: '<the token above>',
             },
             next_step:
               'Export the token as EDGEGAP_REGISTRY_TOKEN in the shell that runs docker login ' +
@@ -4253,6 +4263,14 @@ function closestSkill(input: string, names: string[]): string | undefined {
   );
 }
 
+/** What POST /v1/app/{app}/version takes to pull with the org's own registry login. Case-sensitive. */
+const EDGEGAP_REGISTRY_PROFILE = 'Edgegap';
+
+/** registry.edgegap.com, or a staging registry such as staging-registry.edgegap.dev. */
+function isEdgegapRegistry(repository: string): boolean {
+  return /^(https?:\/\/)?([a-z0-9-]+-)?registry\.edgegap\.(com|dev)\/?$/i.test(repository.trim());
+}
+
 function registryCredentialsUnavailable(imageName?: string, tag?: string): string {
   const image = imageName ?? '<image-name>';
   const buildTag = tag ?? '<unique-build-tag>';
@@ -4270,8 +4288,8 @@ function registryCredentialsUnavailable(imageName?: string, tag?: string): strin
     `4. docker push ${ref}\n` +
     `5. Confirm with edgegap_list_registry_tags (image_name "${image}", without the project).\n` +
     '6. Call edgegap_create_app_version with docker_repository "registry.edgegap.com", ' +
-    `docker_image "<project>/${image}", docker_tag "${buildTag}", and the same username and ` +
-    'token as registry_username/registry_token.\n\n' +
+    `docker_image "<project>/${image}", docker_tag "${buildTag}". Leave registry_username and ` +
+    'registry_token out: the version gets the organization\'s own registry login.\n\n' +
     'Or push to any other registry Edgegap can pull from (Docker Hub, GHCR, ECR, GCR, GitLab) ' +
     'and pass its registry_username/registry_token to edgegap_create_app_version.'
   );
@@ -4288,13 +4306,11 @@ function registryLoginNeeded(repository: string, hadLogin: boolean): string {
     'created. ' +
     (hadLogin
       ? 'The registry_username/registry_token given were rejected: check them.'
-      : 'Edgegap pulls images with a registry login set on the version, not your API token — ' +
-        'this applies to your own registry.edgegap.com project too.') +
+      : 'Edgegap pulls images from this registry with a login set on the version, not your API token.') +
     '\n\nOptions:\n' +
     '1. Create the version again with verify_image false, then have the developer open it in ' +
-    `the dashboard (${DASHBOARD_URL}) and add the registry username and token (for ` +
-    'registry.edgegap.com, the ones on the Container Registry page). Deployments fail to pull ' +
-    'until they do.\n' +
+    `the dashboard (${DASHBOARD_URL}) and add the registry username and token. Deployments fail ` +
+    'to pull until they do. (Images on registry.edgegap.com need neither: push there instead.)\n' +
     '2. If the developer chooses to give them to you, pass registry_username and registry_token. ' +
     'They are registry-scoped, not the org API token. Do not write them into files.'
   );

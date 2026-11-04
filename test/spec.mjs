@@ -36,7 +36,9 @@ const UNPUBLISHED = new Set([
 const UNPUBLISHED_FIELDS = {
   // is_secret is what the dashboard's Secret toggle writes and what encrypts the value; the
   // spec's is_hidden is accepted but not stored (live API, 2026-11-03).
-  'POST /v1/app/{app_name}/version': ['envs[].is_secret'],
+  // registry_profile "Edgegap": the org's own registry login for registry.edgegap.com
+  // images, create only (live API, 2026-11-04; not in the published spec yet).
+  'POST /v1/app/{app_name}/version': ['envs[].is_secret', 'registry_profile'],
   'PATCH /v1/app/{app_name}/version/{version_name}': ['envs[].is_secret'],
 };
 
@@ -99,6 +101,11 @@ const full = {
   edgegap_create_app_version: {
     application: 'my-game', name: 'v1', docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b1',
     cpu_units: 512, memory_mb: 1024, ports, registry_username: 'robot', registry_token: 'x', max_duration_minutes: 30, verify_image: true, env, endpoint_storage: 'logs',
+  },
+  // registry.edgegap.com without a login: the tool adds registry_profile.
+  'edgegap_create_app_version#registry_profile': {
+    application: 'my-game', name: 'v2', docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b2',
+    cpu_units: 512, memory_mb: 1024, ports, verify_image: true,
   },
   edgegap_update_app_version: {
     application: 'my-game', version: 'v1', is_active: true, docker_repository: 'registry.edgegap.com', docker_image: 'proj/srv', docker_tag: 'b2',
