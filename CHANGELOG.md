@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.16.3
+
+- Skills pack 0.33.1 (llm-agent-skills 37e976c, edgegap/llm-agent-skills#51): `edgegap-threejs` 0.3.3 fixes the idle timeout from 0.32.1, which dropped players who had only switched tabs (a hidden tab sends no input). If the other player then left, the whole server stopped. `net.js` sends a heartbeat every 5 s from a timer, `room.js` pings sockets and drops dead ones, and the recommended `IDLE_TIMEOUT_S` is 75 s. `edgegap-vibe-coded` 0.1.1 has the same recommendation. Verified on Edgegap 2026-11-04.
+- Covered by the skills tests.
+
 ## 0.16.2
 
 - Skills pack 0.33.0 (edgegap/llm-agent-skills#50, 9da8ecb): new `edgegap-vibe-coded` skill for single-player browser games made with an AI tool that should get online matches while solo play keeps working (game fit for network delay, getting the code out of Lovable, Bolt or v0, one shared rules file, a public demo with an always-on matchmaker). Worked example: Thin Ice Tussle, verified on Edgegap 2026-11-04. `edgegap-threejs` 0.3.2 and `edgegap-samples` 0.1.2 point to it.
