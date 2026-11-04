@@ -2,6 +2,14 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.16.1
+
+- Skills pack 0.32.1 (llm-agent-skills a56ace2):
+  - 0.32.0 (edgegap/llm-agent-skills#48): `edgegap-unreal` on Edgegap's Unreal SDK, and new `edgegap-ugs-matchmaker`, `edgegap-cocos` and `edgegap-samples` skills.
+  - 0.32.1 (edgegap/llm-agent-skills#49): `edgegap-threejs` 0.3.1. `IDLE_TIMEOUT_S` drops players who send nothing, so matches left open in closed or backgrounded tabs still stop. There's a quick-stop env set for matchmakers that stay up, and `tools/e2e.mjs` only counts a deployment as stopped after three failed requests in a row. Verified on Edgegap 2026-11-04 with Thin Ice Tussle.
+- Server instructions route Cocos Creator, Unity Matchmaker (UGS) and sample-project questions to the new skills.
+- Covered by the skills tests and the instructions-length test.
+
 ## 0.16.0
 
 Lessons from turning a vibe-coded single-player Three.js game into online multiplayer through the MCP (edgegap/netcode-sample-threejs-vibe-coded, 2026-11-03).

@@ -113,13 +113,16 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Unreal voice chat: ${skillUri('edgegap-eos-voice', 'SKILL.md')}, ` +
     `Godot 4: ${skillUri('edgegap-godot', 'SKILL.md')}, ` +
     `Colyseus: ${skillUri('edgegap-colyseus', 'SKILL.md')}, ` +
+    `Cocos Creator: ${skillUri('edgegap-cocos', 'SKILL.md')}, ` +
+    `Unity Matchmaker (UGS): ${skillUri('edgegap-ugs-matchmaker', 'SKILL.md')}, ` +
     `Nakama: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
     `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Supabase backend: ${skillUri('edgegap-supabase', 'SKILL.md')}, ` +
     `Three.js or web game with a Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
     `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
-    `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}). ` +
+    `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
+    `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
     'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
