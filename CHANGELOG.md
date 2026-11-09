@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.17.1
+
+- Skills pack 0.34.1 (edgegap/llm-agent-skills#54, 05a0a74): fixes lines 0.34.0 missed that still had the developer add the registry login to a version for `registry.edgegap.com`. `edgegap-ngo` no longer says `edgegap_create_app_version` needs the registry username and token; `edgegap-playfab` and `edgegap-manus` no longer have the developer paste the login onto the version; `edgegap-unity` no longer claims the tool warns in `notes` about a missing login; seven hand-off lists drop "registry credentials on the app version"; the Unity plugin form step and the "Unable to pull image" troubleshooting rows (fishnet, godot, ngo, purrnet) point at a new version created without a login. 13 skills get a patch bump.
+- Covered by the skills tests and the tool snapshot.
+
 ## 0.17.0
 
 - `edgegap_create_app_version` sends `registry_profile: "Edgegap"` when the image is on `registry.edgegap.com` (or a staging `*-registry.edgegap.dev`) and no `registry_username`/`registry_token` is given. Edgegap then attaches the organization's own registry login, so versions no longer need the developer to paste the Container Registry login, and `verify_image: true` works without one. A login you pass still wins; other registries are unchanged. The result says which login the version got (`registry_login`), and the old "no registry login, pulls will fail (424)" note is gone. Verified on Edgegap 2026-11-04: without the field `verify_image` fails with `Unable to login with the given credentials`; with it the version verifies, deploys and serves traffic. The API takes the field on create only, so `edgegap_update_app_version` says to create a new version instead.
