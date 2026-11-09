@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.17.2
+
+- Skills pack 0.34.2 (edgegap/llm-agent-skills#55, fd510ba): the LightNet relay sample (edgegap/server-sample-lightnet-relay) now runs in Unity WebGL builds over `wss://` (relay `relay-ws` port 7778, TLS Upgrade), verified on Edgegap 2026-11-09 for Mirror, FishNet, PurrNet and NGO. `edgegap-relays` 0.1.1 documents the WebGL build and its limits and scopes "WebGL can't open UDP sockets" to the managed relays; `edgegap-unity`, `edgegap-fishnet`, `edgegap-purrnet`, `edgegap-ngo` and the `edgegap-samples` catalog say the sample covers WebGL.
+- Covered by the skills tests and the tool snapshot.
+
 ## 0.17.1
 
 - Skills pack 0.34.1 (edgegap/llm-agent-skills#54, 05a0a74): fixes lines 0.34.0 missed that still had the developer add the registry login to a version for `registry.edgegap.com`. `edgegap-ngo` no longer says `edgegap_create_app_version` needs the registry username and token; `edgegap-playfab` and `edgegap-manus` no longer have the developer paste the login onto the version; `edgegap-unity` no longer claims the tool warns in `notes` about a missing login; seven hand-off lists drop "registry credentials on the app version"; the Unity plugin form step and the "Unable to pull image" troubleshooting rows (fishnet, godot, ngo, purrnet) point at a new version created without a login. 13 skills get a patch bump.
