@@ -52,5 +52,51 @@
     "POSTHOG_HOST": "https://us.i.posthog.com",
     // Mathieu's token (ends …35ac), added 2026-10-26.
     "TELEMETRY_INTERNAL_IDS": "org_14ded028b92a2f9b25d662d8813b46b5"
+  },
+
+  // OAuth environments (OAUTH_MODE "1"): developers sign in with Edgegap and
+  // the Worker accepts only Edgegap access tokens (src/oauth.ts). The top-level
+  // Worker above, mcp.edgegap.dev, stays in token mode until the launch.
+  //
+  // Deploy with `npx wrangler deploy --config worker/wrangler.jsonc --env <name>`
+  // (runbook: README, "Hosted Worker: OAuth environments"). Each environment is
+  // its own Worker (edgegap-mcp-<name>) with its own secrets, and wrangler does
+  // not inherit vars or routes, so every var is repeated here. The custom
+  // domain is created with its DNS record on the first deploy.
+  //
+  // MCP_RESOURCE_URL is the URL developers add to their MCP client, exactly:
+  // the authorization server puts it in each token's aud (it must be in that
+  // environment's OAUTH/ALLOWED_RESOURCES), and the Worker accepts a token only
+  // when its aud contains it. TELEMETRY_INTERNAL_IDS lists org_ hashes of
+  // organization ids here (`npm run telemetry:id` with the id).
+  "env": {
+    "staging": {
+      "routes": [{ "pattern": "mcp-staging.edgegap.dev", "custom_domain": true }],
+      "vars": {
+        "OAUTH_MODE": "1",
+        "OAUTH_ISSUER": "https://auth.staging.edgegap.dev",
+        "OAUTH_JWKS_URL": "https://auth.staging.edgegap.dev/oauth2/.well-known/jwks.json",
+        "MCP_RESOURCE_URL": "https://mcp-staging.edgegap.dev/mcp",
+        "EDGEGAP_API_URL": "https://staging-api.edgegap.dev",
+        "ALLOWED_ORIGINS": "",
+        "EDGEGAP_MAX_DURATION_MINUTES": "60",
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        "TELEMETRY_INTERNAL_IDS": ""
+      }
+    },
+    "beta": {
+      "routes": [{ "pattern": "mcp-beta.edgegap.dev", "custom_domain": true }],
+      "vars": {
+        "OAUTH_MODE": "1",
+        "OAUTH_ISSUER": "https://auth.edgegap.com",
+        "OAUTH_JWKS_URL": "https://auth.edgegap.com/oauth2/.well-known/jwks.json",
+        "MCP_RESOURCE_URL": "https://mcp-beta.edgegap.dev/mcp",
+        "EDGEGAP_API_URL": "https://api.edgegap.com",
+        "ALLOWED_ORIGINS": "",
+        "EDGEGAP_MAX_DURATION_MINUTES": "60",
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        "TELEMETRY_INTERNAL_IDS": ""
+      }
+    }
   }
 }

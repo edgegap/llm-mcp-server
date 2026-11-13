@@ -16,7 +16,7 @@ npm run scan
 What each command does:
 - `npm run build`: the tests run `dist/`, so build before testing.
 - `npm test`: unit tests, then the MCP tests against a local mock API. Nothing reaches Edgegap.
-- `npm run test:worker`: the hosted Worker, including telemetry.
+- `npm run test:worker`: the hosted Worker under `wrangler dev`, including telemetry and OAuth mode.
 - `npm run scan`: checks tracked files for secrets and local paths.
 
 ## What the checks expect

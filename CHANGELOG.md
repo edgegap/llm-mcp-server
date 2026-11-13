@@ -2,6 +2,14 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.18.0
+
+- Hosted Worker: OAuth mode, for Edgegap's OAuth sign-in (ARBI-12109). With `OAUTH_MODE` `"1"` the Worker is an OAuth resource server: it serves RFC 9728 metadata (`/.well-known/oauth-protected-resource/mcp`, scopes `apps:read deployments:read registry:read relays:read`), verifies access tokens against the issuer's JWKS (RS256 and `typ: at+jwt` only, a `kid` from the JWKS, `iss`, `aud` containing its own MCP URL, `exp`; the JWKS is cached 10 minutes and refetched on an unknown `kid` at most once a minute), and forwards the token unchanged to the API as `Authorization: Bearer`. Discovery and the no-account tools work signed out; an account tool signed out gets 401 with `resource_metadata` and the scopes to ask for, a token without the tool's scopes gets 403 `insufficient_scope` with the scopes held plus the ones needed, and an invalid token (including a pasted API token) gets 401 `invalid_token`. Tools whose API routes don't accept OAuth tokens yet are not listed in this mode, and `edgegap_deploy` with `private_host_ids` answers a tool error. Browser requests must come from an origin in `ALLOWED_ORIGINS`.
+- New wrangler environments `staging` (`mcp-staging.edgegap.dev`) and `beta` (`mcp-beta.edgegap.dev`), both in OAuth mode. `mcp.edgegap.dev` stays in token mode. The Edgegap API base URL is now a var, `EDGEGAP_API_URL`, defaulting to `https://api.edgegap.com`. Deploy runbook in the README.
+- Analytics in OAuth mode: the distinct_id is the salted hash of the organization id from the token, and a `user_id` property holds the salted hash of its user, so users can be counted per organization. The raw ids are never sent.
+- `npm run test:worker` now runs in CI.
+- Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`).
+
 ## 0.17.2
 
 - Skills pack 0.34.2 (edgegap/llm-agent-skills#55, fd510ba): the LightNet relay sample (edgegap/server-sample-lightnet-relay) now runs in Unity WebGL builds over `wss://` (relay `relay-ws` port 7778, TLS Upgrade), verified on Edgegap 2026-11-09 for Mirror, FishNet, PurrNet and NGO. `edgegap-relays` 0.1.1 documents the WebGL build and its limits and scopes "WebGL can't open UDP sockets" to the managed relays; `edgegap-unity`, `edgegap-fishnet`, `edgegap-purrnet`, `edgegap-ngo` and the `edgegap-samples` catalog say the sample covers WebGL.

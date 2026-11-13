@@ -91,11 +91,21 @@ export const INSTRUCTIONS_MAX_CHARS = 4096;
  * Server instructions, shared by the local server and the hosted Worker so
  * both give agents the same golden path. Only the credential paragraph differs.
  */
-export function serverInstructions(mode: 'local' | 'hosted'): string {
+export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
+  const tokenRules =
+    'The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked ' +
+    'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
+    'If the developer declines to provide a token, stop and report which operation needed it; ' +
+    'do not retry.\n\n';
   const credentials =
     mode === 'local'
-      ? 'Credentials: if no token was configured, the first tool call asks the developer for one. '
-      : 'Credentials: the token comes from the Authorization header on this connection. ';
+      ? 'Credentials: if no token was configured, the first tool call asks the developer for one. ' + tokenRules
+      : mode === 'hosted'
+        ? 'Credentials: the token comes from the Authorization header on this connection. ' + tokenRules
+        : 'Credentials: the developer signs in with Edgegap when a tool first needs the account, and ' +
+          'approves what this connection may do. A tool that needs more asks the developer to approve it; ' +
+          'if they decline, stop and report which operation needed it, and do not retry. Use the access ' +
+          'only for work the developer asked for.\n\n';
   // Order matters. Claude Code keeps only the first INSTRUCTIONS_MAX_CHARS
   // characters (0.15.1 lost its cost, guardrail and credential paragraphs
   // that way), and other clients skim. So: the skills line first (in 0.5.0 it
@@ -134,10 +144,6 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     'dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the ' +
     'API token in env vars, tags or URLs: such calls are refused.\n\n' +
     credentials +
-    'The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked ' +
-    'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
-    'If the developer declines to provide a token, stop and report which operation needed it; ' +
-    'do not retry.\n\n' +
     ARCHITECTURE_SUMMARY +
     '\n\n' +
     'Golden path for a first dedicated-server deployment:\n' +
@@ -795,6 +801,10 @@ export interface RegisterOptions {
    * hosted Worker passes it, for analytics; nothing else is told.
    */
   onToolCall?: (report: ToolCallReport) => void | Promise<void>;
+  /** Tools not to register. The hosted Worker's OAuth mode hides tools its tokens can't call. */
+  hidden?: (tool: string) => boolean;
+  /** A refusal for a call this credential can't make, returned as the tool's error before it runs. */
+  refuse?: (tool: string, args: Record<string, unknown>) => string | undefined;
 }
 
 export function registerTools(
@@ -820,6 +830,7 @@ export function registerTools(
   const onToolCall = options.onToolCall;
   let inFlight = 0;
   const tool = ((name: string, def: unknown, cb: (...a: unknown[]) => Promise<ToolResult>) => {
+    if (options.hidden?.(name)) return undefined;
     inputs.set(name, ((def as { inputSchema?: Record<string, z.ZodType> }).inputSchema) ?? {});
     return server.registerTool(name, def as never, (async (...a: unknown[]) => {
       const startedAt = Date.now();
@@ -827,7 +838,8 @@ export function registerTools(
       inFlight++;
       let result: ToolResult;
       try {
-        result = withHost(scrubToken(await cb(...a), auth.current), label);
+        const refusal = options.refuse?.(name, a[0] && typeof a[0] === 'object' ? (a[0] as Record<string, unknown>) : {});
+        result = withHost(scrubToken(refusal ? fail(refusal) : await cb(...a), auth.current), label);
       } finally {
         inFlight--;
       }
@@ -915,13 +927,20 @@ export function registerTools(
     },
     async ({ check_token }) => {
       const hosted = config.transport === 'hosted';
-      const tokenStatus = await describeToken(client, auth, hosted, check_token === true);
+      const oauth = config.credential === 'oauth';
+      const tokenStatus = oauth
+        ? await describeOAuth(client, auth, check_token === true)
+        : await describeToken(client, auth, hosted, check_token === true);
       return withMeta(ok({
         server: `@edgegap/mcp ${VERSION}`,
         transport: hosted ? 'hosted (Streamable HTTP)' : 'local (stdio)',
         api_host: label,
         api_base_url: config.baseUrlV1,
-        token: hosted
+        token: oauth
+          ? auth.current
+            ? 'signed in with Edgegap: an OAuth access token on this request'
+            : 'not signed in: the first tool that needs the account starts the Edgegap sign-in'
+          : hosted
           ? auth.current
             ? 'received on this request\'s Authorization header'
             : 'none on this request: send it as an Authorization header'
@@ -930,7 +949,9 @@ export function registerTools(
             : auth.current
               ? 'provided by the developer this session (memory only)'
               : 'not yet provided: the developer is asked on first use',
-        token_scope: 'organization-wide (Edgegap cannot scope tokens)',
+        token_scope: oauth
+          ? 'one organization, limited to the access the developer approved for this connection'
+          : 'organization-wide (Edgegap cannot scope tokens)',
         token_status: tokenStatus,
         read_only: config.readOnly,
         app_allowlist: config.appAllowlist.length ? config.appAllowlist : 'none (all applications)',
@@ -4177,6 +4198,31 @@ async function describeToken(
       return { state: 'rejected', ...base, note: 'Edgegap rejected this token: it was revoked, expired or mistyped.', fix };
     }
     return { state: 'unknown', ...base, note: `The check call failed: ${(err as Error).message.slice(0, 200)}` };
+  }
+}
+
+/** describeToken for the hosted Worker's OAuth mode: signed in or not, never the token. */
+async function describeOAuth(
+  client: EdgegapClient,
+  auth: TokenSource,
+  check: boolean
+): Promise<Record<string, unknown> & { state: string }> {
+  if (!auth.current) {
+    return {
+      state: 'signed_out',
+      note: 'Not signed in. The first tool that needs the Edgegap account makes the MCP client start the sign-in.',
+      works_without_token: TOKENLESS_TOOLS,
+    };
+  }
+  if (!check) return { state: 'signed in (not checked)', note: 'Pass check_token: true to confirm Edgegap accepts it.' };
+  try {
+    await client.listApps({ limit: 1 });
+    return { state: 'accepted' };
+  } catch (err) {
+    if (err instanceof EdgegapApiError && err.status === 401) {
+      return { state: 'rejected', note: 'Edgegap no longer accepts this sign-in: it was revoked or expired. Reconnect the server in the MCP client.' };
+    }
+    return { state: 'unknown', note: `The check call failed: ${(err as Error).message.slice(0, 200)}` };
   }
 }
 

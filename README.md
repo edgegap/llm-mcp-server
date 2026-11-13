@@ -213,7 +213,7 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.17.2`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.18.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`:
 
@@ -447,6 +447,40 @@ Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/ed
 docker run --rm -p 8080:8080 ghcr.io/edgegap/llm-mcp-server:main
 ```
 
+### Hosted Worker: OAuth environments
+
+Two more Workers run the same code in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one. They are the `staging` and `beta` environments in [worker/wrangler.jsonc](worker/wrangler.jsonc); `mcp.edgegap.dev` stays in token mode.
+
+| Environment | MCP URL | Authorization server | Edgegap API |
+| --- | --- | --- | --- |
+| `staging` | `https://mcp-staging.edgegap.dev/mcp` | `https://auth.staging.edgegap.dev` | `https://staging-api.edgegap.dev` |
+| `beta` | `https://mcp-beta.edgegap.dev/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
+
+In OAuth mode the Worker:
+
+- answers `initialize`, `tools/list` and the tools that need no account without a sign-in, and a call to an account tool with 401 and `WWW-Authenticate: Bearer scope="...", resource_metadata="..."`, which makes the client start the sign-in;
+- serves its RFC 9728 metadata at `/.well-known/oauth-protected-resource/mcp` (and without the path);
+- verifies each access token against the issuer's JWKS (RS256, `typ: at+jwt`, a published `kid`, `iss`, `aud` containing its own `MCP_RESOURCE_URL`, `exp`) and forwards it unchanged to the API as `Authorization: Bearer`;
+- answers a tool the token's scopes don't cover with 403 `insufficient_scope` and the scopes to ask for (step-up), and lists only the tools whose API routes accept OAuth tokens.
+
+Deploys are manual: nothing deploys a Worker from CI. From a checkout of the commit to release, logged in with `npx wrangler login`:
+
+1. Check the bundle: `npx wrangler deploy --config worker/wrangler.jsonc --env staging --dry-run --outdir=.wrangler/dryrun`.
+2. First deploy of an environment only: set its secrets, `npx wrangler secret put POSTHOG_API_KEY --config worker/wrangler.jsonc --env staging`, then `TELEMETRY_SALT` the same way. Without them it sends no analytics.
+3. Deploy: `npx wrangler deploy --config worker/wrangler.jsonc --env staging`. The first deploy creates the custom domain and its DNS record.
+4. Check: `curl https://mcp-staging.edgegap.dev/.well-known/oauth-protected-resource/mcp` names the right `resource` and issuer, and an MCP client adding the URL is sent to the Edgegap sign-in.
+5. Roll back if needed: `npx wrangler rollback --config worker/wrangler.jsonc --env staging`.
+
+Use `--env beta` for beta. The authorization server must list the environment's MCP URL in `OAUTH/ALLOWED_RESOURCES`, or it refuses to issue tokens for it.
+
+To run OAuth mode locally against a development authorization server and API, pass the vars to `wrangler dev`:
+
+```bash
+npm run worker:dev -- --var OAUTH_MODE:1 --var OAUTH_ISSUER:<issuer> \
+  --var OAUTH_JWKS_URL:<issuer>/oauth2/.well-known/jwks.json \
+  --var MCP_RESOURCE_URL:http://localhost:8787/mcp --var EDGEGAP_API_URL:<api base URL>
+```
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the checks a change has to pass, [CHANGELOG.md](CHANGELOG.md) for what each version changed, and [SECURITY.md](SECURITY.md) to report a vulnerability.
@@ -477,6 +511,8 @@ npm run check-skills      # exit 1 if src/skills.generated.ts differs from the p
 | `test/http.mjs` | Self-hosted HTTP server: discovery without a token, per-request tokens, foreign credentials |
 | `test/spec.mjs` | Every endpoint and request-body field the server sends is in `spec/` (write tools checked by dry run) |
 | `test/snapshot.mjs` | Tool names, descriptions, schemas and the instructions match `test/tools.snapshot.json`; `npm run snapshot:update` after a deliberate change |
+| `test/oauth.test.mjs` | OAuth mode: token verification, the JWKS cache, the 401/403 gate, the tool-to-scope table, hidden tools |
+| `test/worker-telemetry.mjs`, `test/worker-oauth.mjs` | `npm run test:worker`: the Worker under `wrangler dev`, its analytics and OAuth mode over HTTP, including concurrent requests from two organizations |
 | `test/live-check.mjs` | Not in `npm test`. Runs against the real API with a token from a non-production organization |
 
 Design decisions, the security model, and what's deliberately out of scope are in [DESIGN.md](DESIGN.md).

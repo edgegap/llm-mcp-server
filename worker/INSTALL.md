@@ -232,14 +232,17 @@ These are load-bearing, not stylistic:
   subpaths; `pathname === '/mcp'` breaks connections in a way that is painful
   to debug.
 
-## 12. Known gap
+## 12. Known gap, and OAuth mode
 
 The interactive token prompt from the local server does not exist here. On the
 2026-07-28 protocol revision the server-to-client request channel was removed,
 so `elicitInput` throws on the stateless handler. Hosted users paste a token
 into their client config instead.
 
-Closing that gap properly means OAuth
-(`@cloudflare/workers-oauth-provider` wired to `createMcpHandler` via
-`apiRoute` / `apiHandler`), at which point the token stops transiting this
-Worker at all and the header path can be retired.
+OAuth mode closes that gap: with `OAUTH_MODE` `"1"` the developer signs in with
+Edgegap from the MCP client, and the Worker accepts only the scoped,
+short-lived access tokens Edgegap's authorization server issues, verified
+against its JWKS and forwarded to the API unchanged. It runs in the `staging`
+and `beta` environments of `wrangler.jsonc`; the deploy runbook is in the
+README ("Hosted Worker: OAuth environments"). This Worker, `mcp.edgegap.dev`,
+stays in token mode until the switch to OAuth-only.
