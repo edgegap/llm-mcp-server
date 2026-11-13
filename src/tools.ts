@@ -23,6 +23,7 @@ import { generateDockerfile, DockerfileInputError } from './dockerfile.js';
 import { buildMatchmakerConfig, DASHBOARD_URL } from './matchmaker.js';
 import { badImage, badTag, ENCRYPTED_PLACEHOLDER, isEncryptedPlaceholder, looksSecret, TAG_FIX } from './image.js';
 import { OUTPUT } from './outputs.js';
+import { analyzeSeries, finiteValues, percentile, mapLimit, groupLogMatches, lineMatcher, ERROR_PATTERN } from './ops.js';
 import { finishReport, codeForStatus, type CallMeta, type ErrorCode, type ToolCallReport } from './callreport.js';
 import { SKILLS_PACK, findSkill, findSkillFile, fileIndex, mimeType, skillUri } from './skills.js';
 import {
@@ -640,6 +641,35 @@ const dryRunParam = z
       'Local checks still run. Use it to confirm a billable or destructive call before making it.'
   );
 
+/**
+ * The confirm parameter of the destructive tools. Without it they send nothing
+ * and return a preview, so an agent has to show the developer what it is about
+ * to stop or delete before doing it. Stopping a deployment this server started
+ * (tagged edgegap-mcp) needs no confirm: that is the cleanup every task ends with.
+ */
+const confirmParam = z
+  .boolean()
+  .optional()
+  .describe(
+    'Set true only after the developer approved this exact call. Without it nothing is sent: the result ' +
+      'previews what would be stopped or deleted (status "confirmation_required").'
+  );
+
+function confirmationRequired(action: string, preview: Record<string, unknown>): ToolResult {
+  return withMeta(
+    ok({
+      status: 'confirmation_required',
+      sent: false,
+      action,
+      ...preview,
+      next_step:
+        'Nothing was changed. Show this to the developer and ask; if they approve, call again with the same ' +
+        'arguments plus confirm: true.',
+    }),
+    { props: { result_state: 'confirmation_required' } }
+  );
+}
+
 function dryRunResult(requests: PlannedRequest[], notes: string[] = []): ToolResult {
   return ok({
     dry_run: true,
@@ -970,7 +1000,11 @@ export function registerTools(
           secret_env: 'env vars named like secrets (TOKEN, SECRET, PASSWORD, API_KEY...) are sent hidden',
           stop: config.stopOwnOnly
             ? `one exact request_id per call; no bulk stop; only deployments tagged "${AGENT_TAG}" (EDGEGAP_STOP_OWN_ONLY)`
-            : 'one exact request_id per call; no bulk stop',
+            : `one exact request_id per call; no bulk stop; a running deployment without the "${AGENT_TAG}" tag needs confirm: true`,
+          confirm: 'stop (of a deployment this server did not start), delete_app, delete_app_version and delete_registry_tag send nothing without confirm: true and return a preview instead',
+          ...(config.appAllowlist.length
+            ? { allowlist: 'create, change, delete and deploy in listed applications only; stop, tag and report only deployments of listed applications; reads are not limited' }
+            : {}),
           auto_stop: 'each deploy reports its version\'s max_duration; Edgegap has no per-deployment time limit',
           long_running: `deploying a version whose max_duration is unlimited or above ${config.maxDurationCeiling} minutes needs allow_long_running: true`,
           deletes: 'one exact app or version per call; refused while its deployments run; an app with versions needs max_versions',
@@ -2242,26 +2276,54 @@ export function registerTools(
           'Gracefully stop one deployment by request_id, sending SIGTERM to the container. ' +
           'Stop every deployment you started for testing before ending your task. This tool ' +
           'stops exactly one deployment, named by its exact request_id: empty IDs, wildcards ' +
-          'and lists are refused, and bulk stop is deliberately not exposed.',
+          'and lists are refused, and bulk stop is deliberately not exposed. A deployment this server ' +
+          `started (tagged "${AGENT_TAG}") stops right away; any other running deployment may be serving ` +
+          'players, so without confirm: true the result only previews it and nothing is sent.',
         inputSchema: {
           request_id: z.string().describe('The exact request_id of the one deployment to stop, e.g. "61b1be8f54d9".'),
+          confirm: confirmParam,
           dry_run: dryRunParam,
         },
         annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
-      async ({ request_id, dry_run }) =>
+      async ({ request_id, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
           const bad = checkRequestId(request_id);
           if (bad) return bad;
-          if (config.stopOwnOnly && !dry_run) {
-            const own = await client
+          if (!dry_run) {
+            const blocked = await deploymentOutsideAllowlist(request_id);
+            if (blocked) return blocked;
+          }
+          const isOwn = () =>
+            client
               .listDeploymentTags(request_id)
               .then((r) => (r.tags ?? []).some((t) => t.name === AGENT_TAG || t.name === 'mcp'));
-            if (!own) {
+          if (config.stopOwnOnly && !dry_run) {
+            if (!(await isOwn())) {
               return fail(
                 `Refused: deployment ${request_id} has no "${AGENT_TAG}" tag, so this server did not start it, and ` +
                   'EDGEGAP_STOP_OWN_ONLY is on. Nothing was sent. Ask the developer to stop it from the dashboard.'
               );
+            }
+          } else if (!dry_run && confirm !== true && !(await isOwn().catch(() => false))) {
+            // Not started by an agent: preview it if it is still running. One
+            // that is gone or already stopping goes on to the idempotent path.
+            const s = await client.getDeployment(request_id).catch(() => undefined);
+            if (s && s.running && !(s.current_status ?? '').toUpperCase().includes('TERMINAT')) {
+              const c = compactDeployment(s);
+              return confirmationRequired('stop deployment', {
+                deployment: {
+                  request_id,
+                  status: c.status,
+                  application: c.application,
+                  version: c.version,
+                  location: c.location,
+                  fqdn: c.fqdn,
+                  running_for_seconds: c.elapsed_seconds,
+                  tags: s.tags,
+                },
+                warning: `Not started through this server (no "${AGENT_TAG}" tag): it may be serving players, and stopping it ends their match.`,
+              });
             }
           }
           if (dry_run) {
@@ -2345,9 +2407,11 @@ export function registerTools(
       title: 'Get CPU, memory and network use of a deployment',
       description:
         'Summarise a deployment\'s resource use over time: CPU, CPU throttling, memory and network, ' +
-        'each as latest, average and peak, with the API\'s own labels. Use it to size a version ' +
-        '(cpu_units, memory_mb) from a real match, or to check whether a crash was memory or CPU ' +
-        'starvation before redeploying. Defaults to the whole life of the deployment.',
+        'each as latest, average, p95 and peak, with the API\'s own labels, plus anomaly flags ' +
+        '(spikes above mean + 3 sd, a rising trend such as a memory leak, any CPU throttling) collected ' +
+        'in `anomalies`. Use it to size a version (cpu_units, memory_mb) from a real match, or to check ' +
+        'whether a crash was memory or CPU starvation before redeploying. Defaults to the whole life of ' +
+        'the deployment. To compare two versions, use edgegap_compare_versions.',
       inputSchema: {
         request_id: z.string().describe('The request_id of the deployment.'),
         start_time: z.string().optional().describe('ISO 8601. Default: when the deployment started.'),
@@ -2362,13 +2426,20 @@ export function registerTools(
         const bad = checkRequestId(request_id);
         if (bad) return bad;
         const m = await client.getDeploymentMetrics(request_id, { start_time, end_time, steps: step });
-        return ok({
+        const series = {
+          cpu: analyzeSeries(m.cpu),
+          cpu_throttle_rate: analyzeSeries(m.cpu_throttle_rate, { nonzero: true }),
+          memory: analyzeSeries(m.mem),
+          network_receive: analyzeSeries(m.network?.receive),
+          network_transmit: analyzeSeries(m.network?.transmit),
+        };
+        const anomalies = Object.entries(series).flatMap(([name, s]) =>
+          (s?.anomalies ?? []).map((a) => `${name}: ${a}`)
+        );
+        return withMeta(ok({
           request_id,
-          cpu: summarizeSeries(m.cpu),
-          cpu_throttle_rate: summarizeSeries(m.cpu_throttle_rate),
-          memory: summarizeSeries(m.mem),
-          network_receive: summarizeSeries(m.network?.receive),
-          network_transmit: summarizeSeries(m.network?.transmit),
+          ...series,
+          anomalies: anomalies.length ? anomalies : 'none found',
           totals: m.total
             ? {
                 received: summarizeSeries(m.total.receive_total)?.latest,
@@ -2377,8 +2448,330 @@ export function registerTools(
                 disk_written: summarizeSeries(m.total.disk_write_total)?.latest,
               }
             : undefined,
-          note: 'Units are as the API labels them; values are averaged per step.',
+          note: 'Units are as the API labels them; values are averaged per step. p95 is over the steps.',
+        }), { props: { anomaly_count: anomalies.length } });
+      })
+  );
+
+  // ================================================== operating live games ====
+  // Read-only views across many deployments. The hosted Worker makes one API
+  // call per deployment read, inside a per-request subrequest budget, so it
+  // inspects fewer deployments per call than the local server.
+  const hosted = config.transport === 'hosted';
+  const OPS_CAP = hosted ? 20 : 100;
+  const COMPARE_CAP = hosted ? 6 : 20;
+
+  /** Running deployments of an application (and version), newest first, at most `limit`. */
+  async function runningDeployments(application: string | undefined, version: string | undefined, limit: number, startedAfter?: string) {
+    const filters: Array<Record<string, unknown>> = [];
+    if (application) filters.push({ field: 'application', operator: 'eq', value: application });
+    if (version) filters.push({ field: 'version', operator: 'eq', value: version });
+    if (startedAfter) filters.push({ field: 'created_at', operator: 'gte', value: startedAfter });
+    const query = JSON.stringify({ filters, order_by: [{ field: 'created_at', order: 'desc' }] });
+    const res = await client.listDeployments({ query, limit });
+    const rows = (res.data ?? []).filter((d) => d.request_id);
+    return { rows, total: res.total_count ?? rows.length };
+  }
+
+  /** Crash facts of one deployment from its logs endpoint; never throws. */
+  async function crashFacts(requestId: string) {
+    try {
+      const l = await client.getDeploymentLogs(requestId);
+      return {
+        restarts: l.crash_data?.restart_count ?? 0,
+        exit_code: l.crash_data?.exit_code,
+        crash_message: l.crash_data?.message || undefined,
+        logs: [l.logs, l.crash_logs].filter(Boolean).join('\n'),
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  type Health = 'ready' | 'error' | 'pending' | 'terminating' | 'unknown';
+  function healthOf(s: DeploymentStatus | undefined): Health {
+    if (!s) return 'unknown';
+    const st = (s.current_status ?? '').toUpperCase();
+    if (s.error || st.includes('ERROR')) return 'error';
+    if (st.includes('TERMINAT')) return 'terminating';
+    if (st.includes('READY')) return 'ready';
+    return 'pending';
+  }
+  const where = (s: DeploymentStatus | undefined) =>
+    s?.location ? [s.location.city, s.location.country].filter(Boolean).join(', ') || 'unknown' : 'unknown';
+  const scopeOf = (application?: string, version?: string) =>
+    application ? `${application}${version ? ` / ${version}` : ''}` : 'all applications';
+
+  tool(
+    'edgegap_fleet_health',
+    {
+      title: 'Summarise the health of running deployments',
+      description:
+        'One call for "is anything wrong right now?" across running deployments, instead of checking them one ' +
+        'by one: counts by status, the deployments in error with their error detail, ones stuck starting for ' +
+        'over 10 minutes, and totals per location and per version with unhealthy ones flagged. ' +
+        'check_crashes: true also reads each deployment\'s crash data (restarts, exit codes). Covers what ' +
+        'Edgegap still lists: stopped deployments are gone, so this is current state, not history. ' +
+        `Inspects up to ${OPS_CAP} deployments per call, newest first. Read-only. Next: ` +
+        'edgegap_search_deployment_logs for what the errors say, edgegap_compare_versions for a rollback decision.',
+      inputSchema: {
+        application: z.string().optional().describe('Only this application. Default: all.'),
+        version: z.string().optional().describe('Only this version (needs application).'),
+        max_deployments: z.number().int().optional().describe(`How many to inspect, 1-${OPS_CAP}. Default ${Math.min(50, OPS_CAP)}.`),
+        check_crashes: z.boolean().optional().describe('Also read crash data (restart count, exit code) per deployment. Default false.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ application, version, max_deployments, check_crashes }) =>
+      guarded(auth, NOT_FOUND.app, async () => {
+        if (version && !application) return fail('version needs application too.');
+        const cap = clamp(max_deployments, 1, OPS_CAP, Math.min(50, OPS_CAP));
+        const { rows, total } = await runningDeployments(application, version, cap);
+        if (rows.length === 0) {
+          return emptyState('empty', { scope: scopeOf(application, version), total: 0 },
+            'No deployments are running here, so there is nothing to be unhealthy. Start one with edgegap_deploy.');
+        }
+        const inspected = await mapLimit(rows, 8, async (r) => {
+          const status = await client.getDeployment(r.request_id).catch(() => undefined);
+          const crash = check_crashes ? await crashFacts(r.request_id) : undefined;
+          return { id: r.request_id, status, crash, health: healthOf(status) };
         });
+
+        const byStatus: Record<string, number> = {};
+        const errors: Array<Record<string, unknown>> = [];
+        const stuck: Array<Record<string, unknown>> = [];
+        const crashes: Array<Record<string, unknown>> = [];
+        type Bucket = { total: number; ready: number; error: number; pending: number; restarts: number };
+        const locs = new Map<string, Bucket>();
+        const vers = new Map<string, Bucket>();
+        const bump = (m: Map<string, Bucket>, k: string) => {
+          const b = m.get(k) ?? { total: 0, ready: 0, error: 0, pending: 0, restarts: 0 };
+          m.set(k, b);
+          return b;
+        };
+        for (const d of inspected) {
+          byStatus[d.health] = (byStatus[d.health] ?? 0) + 1;
+          const s = d.status;
+          const ver = s ? `${s.app_name} / ${s.app_version}` : 'unknown';
+          for (const b of [bump(locs, where(s)), bump(vers, ver)]) {
+            b.total++;
+            if (d.health === 'ready') b.ready++;
+            if (d.health === 'error') b.error++;
+            if (d.health === 'pending') b.pending++;
+            b.restarts += d.crash?.restarts ?? 0;
+          }
+          if (d.health === 'error') {
+            errors.push({ request_id: d.id, version: ver, location: where(s), detail: s?.error_detail || s?.current_status });
+          }
+          if (d.health === 'pending' && (s?.elapsed_time ?? 0) > 600) {
+            stuck.push({ request_id: d.id, version: ver, location: where(s), status: s?.current_status, elapsed_seconds: s?.elapsed_time });
+          }
+          if (d.crash && (d.crash.restarts > 0 || d.crash.exit_code !== undefined)) {
+            crashes.push({ request_id: d.id, version: ver, restarts: d.crash.restarts, exit_code: d.crash.exit_code, message: d.crash.crash_message });
+          }
+        }
+        const table = (m: Map<string, Bucket>, key: string) =>
+          [...m.entries()]
+            .map(([k, b]) => ({
+              [key]: k,
+              ...b,
+              error_rate: Math.round((b.error / b.total) * 100) / 100,
+              ...(b.error > 0 || b.restarts > 0 ? { unhealthy: true } : {}),
+            }))
+            .sort((a, b) => b.error - a.error || b.restarts - a.restarts || b.total - a.total);
+        const byLocation = table(locs, 'location');
+        const byVersion = table(vers, 'version');
+        const unhealthyLocations = byLocation.filter((l) => l.unhealthy).map((l) => (l as Record<string, unknown>).location as string);
+        const problems = errors.length + stuck.length + crashes.length;
+        return withMeta(
+          ok({
+            scope: scopeOf(application, version),
+            verdict: problems === 0
+              ? `healthy: ${inspected.length} deployment${inspected.length === 1 ? '' : 's'} inspected, none in error${check_crashes ? ' or restarting' : ''}`
+              : `${errors.length} in error, ${stuck.length} stuck starting${check_crashes ? `, ${crashes.length} restarted or crashed` : ''}, out of ${inspected.length} inspected`,
+            running: total,
+            inspected: inspected.length,
+            ...(total > inspected.length ? { not_inspected: total - inspected.length, note: `Only the ${inspected.length} newest were inspected. Narrow by application or version, or raise max_deployments (max ${OPS_CAP}).` } : {}),
+            by_status: byStatus,
+            errors: errors.length ? errors : undefined,
+            stuck_starting: stuck.length ? stuck : undefined,
+            crashes: check_crashes ? (crashes.length ? crashes : 'none') : undefined,
+            unhealthy_locations: unhealthyLocations.length ? unhealthyLocations : undefined,
+            by_location: byLocation,
+            by_version: byVersion,
+            next_step: problems
+              ? 'Read what failed with edgegap_search_deployment_logs (same application/version) or edgegap_get_deployment_logs for one request_id.'
+              : check_crashes ? undefined : 'Pass check_crashes: true to also catch servers that restarted after a crash.',
+          }),
+          { props: { item_count: inspected.length, error_count: errors.length, check_crashes: check_crashes === true } }
+        );
+      })
+  );
+
+  tool(
+    'edgegap_search_deployment_logs',
+    {
+      title: 'Search the logs of many deployments at once',
+      description:
+        'Search the container and crash logs of running deployments of an application (and version) for a ' +
+        'pattern, and group the matching lines by error, with counts and which deployments printed them: ' +
+        '"every crash in version 1.4.2 since yesterday, grouped by error". Without a pattern it looks for ' +
+        'errors, exceptions, fatal signals and out-of-memory kills. Also counts crash exit codes. Logs only ' +
+        'exist while a deployment runs (or in Endpoint Storage), so stopped deployments are not searched. ' +
+        `Searches up to ${OPS_CAP} deployments per call, newest first. Read-only.`,
+      inputSchema: {
+        application: z.string().optional().describe('Only this application. Default: all.'),
+        version: z.string().optional().describe('Only this version (needs application).'),
+        pattern: z.string().optional().describe('Text to find, case-insensitive. Default: common error and crash words.'),
+        regex: z.boolean().optional().describe('Treat pattern as a regular expression. Default false.'),
+        started_after: z.string().optional().describe('Only deployments started after this ISO 8601 time, e.g. "2026-11-12T00:00:00Z" for the last day.'),
+        max_deployments: z.number().int().optional().describe(`How many to search, 1-${OPS_CAP}. Default ${Math.min(30, OPS_CAP)}.`),
+        max_groups: z.number().int().optional().describe('Most error groups to return, 1-50. Default 15.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ application, version, pattern, regex, started_after, max_deployments, max_groups }) =>
+      guarded(auth, NOT_FOUND.app, async () => {
+        if (version && !application) return fail('version needs application too.');
+        if (started_after && Number.isNaN(Date.parse(started_after))) {
+          return fail(`started_after "${started_after.slice(0, 40)}" is not an ISO 8601 time, e.g. "2026-11-12T00:00:00Z".`);
+        }
+        const matcher = pattern ? lineMatcher(pattern, regex === true) : lineMatcher(ERROR_PATTERN, true);
+        if ('error' in matcher) return fail(matcher.error);
+        const cap = clamp(max_deployments, 1, OPS_CAP, Math.min(30, OPS_CAP));
+        const { rows, total } = await runningDeployments(application, version, cap, started_after);
+        if (rows.length === 0) {
+          return emptyState('empty', { scope: scopeOf(application, version), searched: 0 },
+            'No running deployment matches, so there are no logs to search. Logs of stopped deployments only exist in Endpoint Storage, if it was set on the version.');
+        }
+        const read = await mapLimit(rows, 8, async (r) => ({ id: r.request_id, crash: await crashFacts(r.request_id) }));
+        const matches: Array<{ request_id: string; line: string }> = [];
+        const exitCodes: Record<string, number> = {};
+        const noLogs: string[] = [];
+        let matchedDeployments = 0;
+        for (const d of read) {
+          if (!d.crash) {
+            noLogs.push(d.id);
+            continue;
+          }
+          if (d.crash.exit_code !== undefined) exitCodes[String(d.crash.exit_code)] = (exitCodes[String(d.crash.exit_code)] ?? 0) + 1;
+          // The tail is enough: a crash is at the end, and a 1 MB log must not
+          // stall the request.
+          const lines = d.crash.logs.slice(-200_000).split('\n');
+          let hit = false;
+          for (const line of lines) {
+            if (line.trim() && matcher.test(line)) {
+              matches.push({ request_id: d.id, line: line.trim() });
+              hit = true;
+            }
+          }
+          if (hit) matchedDeployments++;
+        }
+        const groups = groupLogMatches(matches, clamp(max_groups, 1, 50, 15));
+        return withMeta(
+          ok({
+            scope: scopeOf(application, version),
+            pattern: pattern ?? 'default: errors, exceptions, fatal signals, out of memory',
+            running: total,
+            searched: read.length - noLogs.length,
+            ...(total > rows.length ? { not_searched: total - rows.length, note: `Only the ${rows.length} newest were searched. Narrow with version or started_after, or raise max_deployments (max ${OPS_CAP}).` } : {}),
+            deployments_with_matches: matchedDeployments,
+            matching_lines: matches.length,
+            groups: groups.length ? groups : undefined,
+            exit_codes: Object.keys(exitCodes).length ? exitCodes : undefined,
+            no_logs: noLogs.length ? noLogs : undefined,
+            next_step: groups.length
+              ? 'Read the full log of one deployment in the top group with edgegap_get_deployment_logs before changing code.'
+              : 'Nothing matched. Try another pattern, or check edgegap_fleet_health for deployments in error.',
+          }),
+          { props: { item_count: read.length, group_count: groups.length, regex: regex === true } }
+        );
+      })
+  );
+
+  tool(
+    'edgegap_compare_versions',
+    {
+      title: 'Compare two versions of an application',
+      description:
+        'Compare two versions of one application from their running deployments, to back a rollback or ' +
+        'promote decision: deployments in error, crash restarts and exit codes, and CPU and memory (average, ' +
+        'p95, peak) against each version\'s requested cpu_units and memory_mb, with the differences spelled ' +
+        `out. Reads up to ${COMPARE_CAP} running deployments per version, newest first, so both versions need ` +
+        'deployments running now (stopped ones keep no logs or status). Read-only.',
+      inputSchema: {
+        application: z.string().describe('Application name.'),
+        version_a: z.string().describe('The baseline version, e.g. the one in production.'),
+        version_b: z.string().describe('The version to compare against it, e.g. the new build.'),
+        max_deployments_per_version: z.number().int().optional().describe(`1-${COMPARE_CAP}. Default ${Math.min(5, COMPARE_CAP)}.`),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ application, version_a, version_b, max_deployments_per_version }) =>
+      guarded(auth, NOT_FOUND.app, async () => {
+        if (version_a === version_b) return fail('version_a and version_b are the same. Pass two different versions.');
+        const cap = clamp(max_deployments_per_version, 1, COMPARE_CAP, Math.min(5, COMPARE_CAP));
+        const one = async (version: string) => {
+          const settings = await client.getAppVersion(application, version);
+          const { rows, total } = await runningDeployments(application, version, cap);
+          const deps = await mapLimit(rows, 6, async (r) => {
+            const [status, crash, metrics] = await Promise.all([
+              client.getDeployment(r.request_id).catch(() => undefined),
+              crashFacts(r.request_id),
+              client.getDeploymentMetrics(r.request_id).catch(() => undefined),
+            ]);
+            return { status, crash, metrics };
+          });
+          const pool = (pick: (m: NonNullable<(typeof deps)[number]['metrics']>) => MetricSeries | undefined) => {
+            const all = deps.flatMap((d) => (d.metrics ? finiteValues(pick(d.metrics)) : []));
+            if (!all.length) return undefined;
+            const r2 = (x: number) => Math.round(x * 100) / 100;
+            return { average: r2(all.reduce((a, b) => a + b, 0) / all.length), p95: r2(percentile(all, 95)!), peak: r2(Math.max(...all)), samples: all.length };
+          };
+          const errors = deps.filter((d) => healthOf(d.status) === 'error').length;
+          const exitCodes = [...new Set(deps.map((d) => d.crash?.exit_code).filter((x) => x !== undefined))];
+          return {
+            version,
+            requested: { cpu_units: settings.req_cpu, memory_mb: settings.req_memory },
+            running: total,
+            inspected: deps.length,
+            in_error: errors,
+            error_rate: deps.length ? Math.round((errors / deps.length) * 100) / 100 : undefined,
+            restarts: deps.reduce((a, d) => a + (d.crash?.restarts ?? 0), 0),
+            deployments_restarted: deps.filter((d) => (d.crash?.restarts ?? 0) > 0).length,
+            exit_codes: exitCodes.length ? exitCodes : undefined,
+            cpu: pool((m) => m.cpu),
+            cpu_throttle_rate: pool((m) => m.cpu_throttle_rate),
+            memory: pool((m) => m.mem),
+            labels: deps.find((d) => d.metrics?.mem?.labels?.length)?.metrics?.mem?.labels?.slice(0, 3),
+          };
+        };
+        const [a, b] = await Promise.all([one(version_a), one(version_b)]);
+        const diff: string[] = [];
+        const pct = (x: number, y: number) => (y === 0 ? undefined : Math.round(((x - y) / y) * 100));
+        for (const k of ['cpu', 'memory'] as const) {
+          const pa = a[k]?.p95, pb = b[k]?.p95;
+          if (pa !== undefined && pb !== undefined) {
+            const d = pct(pb, pa);
+            if (d !== undefined && Math.abs(d) >= 10) diff.push(`${k} p95 is ${Math.abs(d)} % ${d > 0 ? 'higher' : 'lower'} in ${version_b} (${pb} vs ${pa})`);
+          }
+        }
+        if ((a.error_rate ?? 0) !== (b.error_rate ?? 0)) diff.push(`error rate ${b.error_rate ?? 0} in ${version_b} vs ${a.error_rate ?? 0} in ${version_a}`);
+        if (a.restarts !== b.restarts) diff.push(`${b.restarts} crash restarts in ${version_b} vs ${a.restarts} in ${version_a}`);
+        if ((b.cpu_throttle_rate?.peak ?? 0) > 0 && (a.cpu_throttle_rate?.peak ?? 0) === 0) diff.push(`${version_b} is CPU-throttled, ${version_a} is not`);
+        const missing = [a, b].filter((v) => v.inspected === 0).map((v) => v.version);
+        return withMeta(
+          ok({
+            application,
+            a,
+            b,
+            differences: diff.length ? diff : missing.length ? undefined : ['no difference of 10 % or more, and the same error and restart counts'],
+            ...(missing.length
+              ? { note: `No running deployment of ${missing.join(' and ')}: nothing to compare for ${missing.length === 2 ? 'either' : 'it'}. Deploy one (edgegap_deploy) and let it serve a match first.` }
+              : { caveat: `Based on ${a.inspected} and ${b.inspected} running deployments; a handful of servers under different load is a signal, not proof.` }),
+          }),
+          { props: { item_count: a.inspected + b.inspected } }
+        );
       })
   );
 
@@ -2791,15 +3184,16 @@ export function registerTools(
           'registry, to clean up old builds. Takes exactly one image name and one exact tag; ' +
           'wildcards, lists and "latest" are refused, and there is no bulk delete. A version that ' +
           'still uses the tag can no longer start deployments, so check edgegap_list_app_versions ' +
-          'first. Cannot be undone.',
+          'first. Cannot be undone, so without confirm: true the result only previews it and nothing is sent.',
         inputSchema: {
           image_name: z.string().min(1).describe('The image name only, e.g. "my-game-server", as for edgegap_list_registry_tags.'),
           tag: z.string().describe('The exact tag to delete, e.g. "build-41".'),
+          confirm: confirmParam,
           dry_run: dryRunParam,
         },
         annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
-      async ({ image_name, tag, dry_run }) =>
+      async ({ image_name, tag, confirm, dry_run }) =>
         guard(auth, async () => {
           let name = imageNameOnly(image_name);
           if (!/^[a-z0-9][a-z0-9._\/-]{0,254}$/.test(name)) {
@@ -2812,6 +3206,15 @@ export function registerTools(
             const dry = client.dryRun();
             await dry.client.deleteRegistryTag(name, tag);
             return dryRunResult(dry.requests, name !== image_name ? [`Looked up "${name}".`] : []);
+          }
+          if (confirm !== true) {
+            return confirmationRequired('delete registry tag', {
+              image_name: name,
+              tag,
+              warning:
+                'Deletes the tag and, if no other tag points to it, the image. Any version still using this tag ' +
+                'can no longer start deployments (check edgegap_list_app_versions). Cannot be undone.',
+            });
           }
           const notFound = (err: unknown) => err instanceof EdgegapApiError && err.status === 404;
           try {
@@ -2877,6 +3280,10 @@ export function registerTools(
           if (both.length) return fail(`${both.join(', ')}: in both add and remove. Pick one.`);
           const leak = await tokenLeak(auth, dry_run, toAdd.map((t): [string, string] => [`tag "${t.slice(0, 8)}…"`, t]));
           if (leak) return leak;
+          if (!dry_run) {
+            const blocked = await deploymentOutsideAllowlist(request_id);
+            if (blocked) return blocked;
+          }
           if (dry_run) {
             const dry = client.dryRun();
             for (const t of toAdd) await dry.client.addDeploymentTag(request_id, t);
@@ -2924,6 +3331,10 @@ export function registerTools(
             ...Object.entries(metadata ?? {}).flatMap(([k, v]): Array<[string, string]> => [[`metadata key "${k.slice(0, 40)}"`, k], [`metadata "${k.slice(0, 40)}"`, v]]),
           ]);
           if (leak) return leak;
+          if (!dry_run) {
+            const blocked = await deploymentOutsideAllowlist(request_id);
+            if (blocked) return blocked;
+          }
           const body = { reason, ...(metadata ? { metadata } : {}) };
           if (dry_run) {
             const dry = client.dryRun();
@@ -2944,16 +3355,17 @@ export function registerTools(
         description:
           'Delete one version of an application, to clean up test versions. Exactly one exact version name; ' +
           'refused while any deployment of that version is running. The container image stays in the registry ' +
-          '(edgegap_delete_registry_tag removes it). Cannot be undone, so confirm with the developer when the ' +
-          'version is not one this conversation created.',
+          '(edgegap_delete_registry_tag removes it). Cannot be undone, so without confirm: true the result only ' +
+          'previews it and nothing is sent.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().min(1).describe('The exact version name to delete.'),
+          confirm: confirmParam,
           dry_run: dryRunParam,
         },
         annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
-      async ({ application, version, dry_run }) =>
+      async ({ application, version, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
           assertAppAllowed(config, application);
           const badName = exactName(version, 'version');
@@ -2965,6 +3377,14 @@ export function registerTools(
           }
           const running = await runningOf(application, version);
           if (running.length) return refusedRunning(`version "${version}"`, running);
+          if (confirm !== true) {
+            const v = await client.getAppVersion(application, version);
+            return confirmationRequired('delete application version', {
+              application,
+              version: compactVersion(v),
+              warning: 'Matchmakers or scripts that deploy this version will fail afterwards. The registry image is kept. Cannot be undone.',
+            });
+          }
           await client.deleteAppVersion(application, version);
           return ok({ application, deleted_version: version, image_kept: 'The registry image was not touched.' });
         })
@@ -2978,9 +3398,11 @@ export function registerTools(
           'Delete one application and every version under it, to clean up a test application. Exactly one ' +
           'exact name; refused while any of its deployments is running, and refused when it has more versions ' +
           'than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise ' +
-          'max_versions after the developer agreed). Registry images are not touched. Cannot be undone.',
+          'max_versions after the developer agreed). Registry images are not touched. Cannot be undone, so ' +
+          'without confirm: true the result only previews it and nothing is sent.',
         inputSchema: {
           application: z.string().min(1).describe('The exact application name to delete.'),
+          confirm: confirmParam,
           max_versions: z
             .number()
             .int()
@@ -2991,7 +3413,7 @@ export function registerTools(
         },
         annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
-      async ({ application, max_versions, dry_run }) =>
+      async ({ application, max_versions, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
           assertAppAllowed(config, application);
           const badName = exactName(application, 'application');
@@ -3013,10 +3435,33 @@ export function registerTools(
           }
           const running = await runningOf(application);
           if (running.length) return refusedRunning(`application "${application}"`, running);
+          if (confirm !== true) {
+            return confirmationRequired('delete application', {
+              application,
+              versions_deleted_with_it: versions,
+              warning: 'Deletes the application and every version listed. Registry images are kept. Cannot be undone.',
+            });
+          }
           await client.deleteApp(application);
           return ok({ deleted_application: application, deleted_versions: versions });
         })
     );
+  }
+
+  /**
+   * With EDGEGAP_APP_ALLOWLIST set, the write tools keyed on request_id (stop,
+   * tag, report) refuse a deployment of an application outside the list. Reads
+   * stay open, as for applications. No allowlist: no extra API call.
+   */
+  async function deploymentOutsideAllowlist(requestId: string): Promise<ToolResult | undefined> {
+    if (config.appAllowlist.length === 0) return undefined;
+    const s = await client.getDeployment(requestId);
+    try {
+      assertAppAllowed(config, s.app_name);
+      return undefined;
+    } catch (err) {
+      return fail(`Refused: deployment ${requestId} belongs to "${s.app_name}". ${(err as Error).message} Nothing was sent.`);
+    }
   }
 
   /** Request IDs of running deployments of an application (and version). */

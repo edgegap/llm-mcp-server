@@ -41,7 +41,7 @@ import { StaticTokenProvider } from '../src/auth.js';
 import { registerTools, serverInstructions } from '../src/tools.js';
 import { skillsCheckFromEnv } from '../src/skillsversion.js';
 import type { Config } from '../src/config.js';
-import { extractToken, unavailableMessage } from '../src/hosted.js';
+import { extractToken, narrowConfig, unavailableMessage } from '../src/hosted.js';
 import { VERSION } from '../src/version.js';
 import { createAnalytics, type TelemetryEnv } from './telemetry.js';
 
@@ -94,7 +94,8 @@ export default {
     }
 
     const { token, problem } = extractToken(request.headers.get('Authorization'));
-    const config = configForRequest(env);
+    // Per-connection limits from X-Edgegap-Read-Only / X-Edgegap-App-Allowlist (narrow only).
+    const config = narrowConfig(configForRequest(env), (name) => request.headers.get(name));
 
     // PostHog MCP Analytics (@posthog/mcp), off unless POSTHOG_API_KEY is set.
     // See telemetry.ts for exactly what is sent; never the token or arguments.
