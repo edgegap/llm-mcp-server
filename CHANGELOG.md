@@ -2,6 +2,13 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.18.0
+
+- `edgegap_context` returns `pricing`: the egress terms, dated and with their source (edgegap.com/pricing.md). Private Fleet hosts include 6 TB of free egress per host per month (about 18 Mbps sustained), above which the Edge Cloud rate applies; Edge Cloud egress, and cloud overflow from a fleet, cost $0.10 per GB. Agents comparing hosting options get the terms without crawling the website.
+- `edgegap_list_fleet_hosts` says each host includes 6 TB of free egress per month and overflow pays cloud egress.
+- Skills pack 0.34.3 (edgegap/llm-agent-skills#56, 3295d15): `edgegap` and `edgegap-launch` state the egress terms and when a Private Fleet baseline removes most of the egress bill.
+- Covered by `test/newtools.mjs` (context returns the egress terms) and the tool snapshot.
+
 ## 0.17.2
 
 - Skills pack 0.34.2 (edgegap/llm-agent-skills#55, fd510ba): the LightNet relay sample (edgegap/server-sample-lightnet-relay) now runs in Unity WebGL builds over `wss://` (relay `relay-ws` port 7778, TLS Upgrade), verified on Edgegap 2026-11-09 for Mirror, FishNet, PurrNet and NGO. `edgegap-relays` 0.1.1 documents the WebGL build and its limits and scopes "WebGL can't open UDP sockets" to the managed relays; `edgegap-unity`, `edgegap-fishnet`, `edgegap-purrnet`, `edgegap-ngo` and the `edgegap-samples` catalog say the sample covers WebGL.

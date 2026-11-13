@@ -84,6 +84,22 @@ export const ARCHITECTURE_SUMMARY =
   'when the host quits. Use one only when the developer explicitly wants host/client; "it ' +
   'needs no server image" is not a reason. If unsure, ask before choosing a relay.';
 
+/**
+ * Egress terms, returned by edgegap_context so agents can weigh hosting costs
+ * without crawling the website. Source: edgegap.com/pricing.md and the Private
+ * Fleets docs page. Update as_of whenever a price here changes.
+ */
+export const PRICING_NOTES = {
+  as_of: '2026-11-13',
+  source: 'https://edgegap.com/pricing.md',
+  egress: {
+    private_fleet: 'free up to 6 TB per host per month (about 18 Mbps sustained per host), like bare-metal hosting; above that, the Edge Cloud rate',
+    edge_cloud: '$0.10 per GB',
+    cloud_overflow: 'deployments that overflow from a private fleet to the cloud pay the Edge Cloud rate',
+  },
+  guidance: 'Steady or bandwidth-heavy traffic (many players per server, large worlds, high tick rates) costs least on a Private Fleet baseline with cloud overflow for peaks. Prices change: check the source before quoting a total.',
+};
+
 /** Claude Code drops everything after this many characters of server instructions. */
 export const INSTRUCTIONS_MAX_CHARS = 4096;
 
@@ -901,7 +917,8 @@ export function registerTools(
         'Report which Edgegap API this server talks to, its version, whether it is the local or ' +
         'hosted server, and the guardrails in force: read-only mode, application allowlist, ' +
         'max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support ' +
-        'dry_run. Also says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
+        'dry_run. Also gives the egress terms (Private Fleet hosts include 6 TB of free egress per host per month; Edge Cloud egress ' +
+        'is $0.10 per GB) and says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
         'first when unsure what this session is allowed to do, before anything billable, or when tool calls fail ' +
         'with a token problem. Makes no API call unless check_token is true, and never shows the token.',
       inputSchema: {
@@ -959,6 +976,7 @@ export function registerTools(
           deletes: 'one exact app or version per call; refused while its deployments run; an app with versions needs max_versions',
           results: `every result starts with [${label}]`,
         },
+        pricing: PRICING_NOTES,
         user_agent: `edgegap-mcp/${VERSION} (<MCP client name>)`,
         works_without_token: TOKENLESS_TOOLS,
       }), { props: { token_state: String(tokenStatus.state) } });
@@ -3026,7 +3044,8 @@ export function registerTools(
       description:
         'List the hosts in one of the organization\'s private fleets (dedicated machines Edgegap manages for ' +
         'you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to ' +
-        'edgegap_deploy as private_host_ids to place a server on them first. Organizations without private ' +
+        'edgegap_deploy as private_host_ids to place a server on them first. Each host includes 6 TB of free egress per ' +
+        'month; deployments that overflow to the cloud pay cloud egress ($0.10 per GB). Organizations without private ' +
         'fleets get an error from the API.',
       inputSchema: {
         fleet_name: z.string().min(1).describe('The private fleet name, as shown in the dashboard.'),

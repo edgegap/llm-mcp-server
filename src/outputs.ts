@@ -70,6 +70,7 @@ const shapes = {
     skills_pack: str,
     forced_deploy_tag: str,
     guardrails: obj({}),
+    pricing: obj({}),
   },
   listApps: { ...page, applications: list({ name: str, active: bool, last_updated: str }) },
   listAppVersions: { application: str, ...page, versions: list(version) },
