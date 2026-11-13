@@ -147,7 +147,7 @@
       {
         "name": "edgegap_context",
         "title": "Show this Edgegap MCP server's configuration",
-        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
+        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also gives the egress terms (Private Fleet hosts include 6 TB of free egress per host per month; Edge Cloud egress is $0.10 per GB) and says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -186,6 +186,11 @@
               "type": "string"
             },
             "guardrails": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {}
+            },
+            "pricing": {
               "type": "object",
               "properties": {},
               "additionalProperties": {}
@@ -1919,7 +1924,7 @@
       {
         "name": "edgegap_list_fleet_hosts",
         "title": "List the hosts of a private fleet",
-        "description": "List the hosts in one of the organization's private fleets (dedicated machines Edgegap manages for you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to edgegap_deploy as private_host_ids to place a server on them first. Organizations without private fleets get an error from the API.",
+        "description": "List the hosts in one of the organization's private fleets (dedicated machines Edgegap manages for you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to edgegap_deploy as private_host_ids to place a server on them first. Each host includes 6 TB of free egress per month; deployments that overflow to the cloud pay cloud egress ($0.10 per GB). Organizations without private fleets get an error from the API.",
         "inputSchema": {
           "type": "object",
           "properties": {

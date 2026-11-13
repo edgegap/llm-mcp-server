@@ -792,6 +792,7 @@ r = json(await call('edgegap_context', {}));
 check('no API call', calls.length === 0);
 check('reports version, transport and host', /^@edgegap\/mcp \d+\.\d+\.\d+$/.test(r.server) && r.transport === 'local (stdio)' && r.api_host === custom.slice(1, -1));
 check('reports guardrails', r.forced_deploy_tag === 'edgegap-mcp' && r.read_only === false && r.max_duration_ceiling_minutes === 60 && /deploy/.test(r.guardrails?.dry_run ?? ''));
+check('gives the Private Fleet and Edge Cloud egress terms', /6 TB per host per month/.test(r.pricing?.egress?.private_fleet ?? '') && r.pricing?.egress?.edge_cloud === '$0.10 per GB' && /pricing\.md$/.test(r.pricing?.source ?? ''));
 check('token source shown, never the token', r.token === 'from EDGEGAP_API_TOKEN' && !JSON.stringify(r).includes(REAL));
 
 // ------------------------------------------------------ 19. User-Agent ----
