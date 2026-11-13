@@ -28,6 +28,17 @@ export interface Config {
   requestTimeoutMs: number;
   /** "local" for the stdio server, "hosted" for the Worker and HTTP server. */
   transport: 'local' | 'hosted';
+  /**
+   * What the credential is: an Edgegap API token, sent as "token <value>"
+   * (the default), or an OAuth access token from the hosted Worker's OAuth
+   * mode, forwarded unchanged as "Bearer <value>".
+   */
+  credential?: 'api_token' | 'oauth';
+}
+
+/** The Authorization scheme the Edgegap API expects for this credential. */
+export function authScheme(config: Pick<Config, 'credential'>): 'token' | 'Bearer' {
+  return config.credential === 'oauth' ? 'Bearer' : 'token';
 }
 
 /** Edgegap's production API. A base URL naming this host must be exactly it. */

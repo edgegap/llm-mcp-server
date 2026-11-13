@@ -6,7 +6,7 @@
  * picking the wrong one. This wraps only what the golden path needs.
  */
 
-import { Config, redact } from './config.js';
+import { Config, authScheme, redact } from './config.js';
 import { TokenSource } from './auth.js';
 import { VERSION } from './version.js';
 import type { UpstreamResult } from './callreport.js';
@@ -202,7 +202,7 @@ export class EdgegapClient {
         method,
         host: url.host,
         path: url.pathname + url.search,
-        headers: { Authorization: 'token ***', 'Content-Type': 'application/json', 'User-Agent': this.userAgent() },
+        headers: { Authorization: `${authScheme(this.config)} ***`, 'Content-Type': 'application/json', 'User-Agent': this.userAgent() },
         ...(options.body === undefined ? {} : { body: maskSecrets(options.body, this.auth.current) }),
       });
       return {} as T;
@@ -220,8 +220,9 @@ export class EdgegapClient {
       response = await fetch(url.toString(), {
         method,
         headers: {
-          // Edgegap expects the literal word "token" before the value.
-          Authorization: `token ${token}`,
+          // An API token needs the literal word "token" before the value; an
+          // OAuth access token is forwarded unchanged as a Bearer token.
+          Authorization: `${authScheme(this.config)} ${token}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
           'User-Agent': this.userAgent(),

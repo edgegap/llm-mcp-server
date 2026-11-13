@@ -40,6 +40,13 @@
  * tokens shows as two. is_internal is true when that hash is listed in
  * TELEMETRY_INTERNAL_IDS. With no token or no salt, sessions are anonymous.
  *
+ * In OAuth mode the token changes every few minutes, so it can't identify
+ * anyone: distinct_id is org_ + HMAC-SHA256(the verified token's org claim,
+ * TELEMETRY_SALT), one per organization, and user_id is user_ + HMAC of its
+ * user claim (sub) with the same salt, so users can be counted per
+ * organization. The raw ids are never sent. TELEMETRY_INTERNAL_IDS lists the
+ * org_ hash of an organization id there (`npm run telemetry:id` with the id).
+ *
  * Off unless POSTHOG_API_KEY is set. A client can opt out of any request with
  * "X-Edgegap-Telemetry: off" (or "DNT: 1"). Events are flushed through
  * ctx.waitUntil, so analytics never delays or breaks an MCP response.
@@ -117,7 +124,7 @@ const PROPERTIES = new Set([
   '$mcp_listed_tool_names', '$mcp_resource_name',
   // Ours: request facts (eventProperties).
   'read_only', 'has_token', 'auth_problem', 'country', 'skill', 'dry_run', 'prompt', 'prompt_name',
-  'error_cause', 'probe', 'is_probe', 'org_id_hash', 'is_internal', 'transport', 'server_version',
+  'error_cause', 'probe', 'is_probe', 'org_id_hash', 'user_id', 'is_internal', 'transport', 'server_version',
   'client_name', 'client_version', 'client_name_source',
   // Ours: what the call did (src/callreport.ts).
   'tool_name', 'success', 'error_code', 'error_message', 'upstream_status', 'upstream_calls',
@@ -274,9 +281,12 @@ async function hmac(key: string, value: string): Promise<string> {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
 }
 
-/** The org_ id for a token: the distinct_id, and the value TELEMETRY_INTERNAL_IDS lists. */
-export async function telemetryId(salt: string, token: string): Promise<string> {
-  return `org_${await hmac(salt, token)}`;
+/**
+ * The org_ id: the distinct_id, and the value TELEMETRY_INTERNAL_IDS lists.
+ * Hashes the API token in token mode, the organization id in OAuth mode.
+ */
+export async function telemetryId(salt: string, identifier: string): Promise<string> {
+  return `org_${await hmac(salt, identifier)}`;
 }
 
 function optedOut(request: Request): boolean {
@@ -304,6 +314,8 @@ export function createAnalytics(
     token: string | undefined;
     /** Why there is no usable token, from extractToken. */
     authProblem?: 'absent' | 'foreign';
+    /** OAuth mode: the verified token's organization and user, hashed before anything is sent. */
+    identity?: { org: string; user: string };
   }
 ): Analytics | undefined {
   const key = env.POSTHOG_API_KEY?.trim();
@@ -314,8 +326,11 @@ export function createAnalytics(
   const filter = allowlist(agentFields, clientFromUserAgent(request.headers.get('User-Agent')));
 
   const salt = env.TELEMETRY_SALT?.trim();
+  const identifier = context.identity ? context.identity.org : context.token;
   const distinctId: Promise<string | undefined> =
-    context.token && salt ? telemetryId(salt, context.token) : Promise.resolve(undefined);
+    identifier && salt ? telemetryId(salt, identifier) : Promise.resolve(undefined);
+  const userId: Promise<string | undefined> =
+    context.identity && salt ? hmac(salt, context.identity.user).then((h) => `user_${h}`) : Promise.resolve(undefined);
   const internalIds = new Set(
     (env.TELEMETRY_INTERNAL_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
   );
@@ -324,8 +339,9 @@ export function createAnalytics(
 
   /** Properties every event of this request carries. */
   const base = async (): Promise<Record<string, unknown>> => {
-    const id = await distinctId;
+    const [id, user] = await Promise.all([distinctId, userId]);
     return {
+      ...(user ? { user_id: user } : {}),
       read_only: context.readOnly,
       has_token: Boolean(context.token),
       ...(authProblem ? { auth_problem: authProblem } : {}),
@@ -362,6 +378,7 @@ export function createAnalytics(
             milestone: m,
             tool_name: p.tool_name,
             org_id_hash: p.org_id_hash ?? null,
+            ...(p.user_id ? { user_id: p.user_id } : {}),
             is_internal: p.is_internal ?? false,
             client_name: p.client_name,
             client_name_source: p.client_name_source,

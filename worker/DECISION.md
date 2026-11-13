@@ -93,15 +93,18 @@ agent's transcript. The "sign-in: not required" badge stays, and is now true.
 
 ## When to revisit
 
-The week Edgegap ships OAuth. At that point `@cloudflare/workers-oauth-provider`
-wired to `createMcpHandler` via `apiRoute` / `apiHandler` gives you a genuine
-one-URL install: the developer authorises in a browser, the Worker holds a
-scoped revocable grant, and no master key exists to leak. That is the version
-worth hosting.
+Edgegap now runs its own OAuth authorization server, and the Worker has an
+OAuth mode (`OAUTH_MODE`, src/oauth.ts) in which it is a resource server only:
+the developer authorises in a browser, the client holds a scoped, revocable
+grant, and the Worker verifies each short-lived access token and forwards it
+to the API, which checks it again. No master key exists to leak, and nothing
+is stored here. `@cloudflare/workers-oauth-provider` is not used: it makes the
+Worker the authorization server, which Edgegap's dashboard backend already is.
 
-`worker.ts` and `wrangler.jsonc` are the starting point for that work. Once
-OAuth exists, the `Authorization`-header path in `worker.ts` can be deleted
-outright and the hosted server becomes strictly better than the local one.
+It runs on the `staging` and `beta` environments first. Once
+`mcp.edgegap.dev` switches to it, the `Authorization`-header token path in
+`worker.ts` can be deleted outright and the hosted server becomes strictly
+better than the local one.
 
 ## Verified facts, so nobody re-derives them
 
