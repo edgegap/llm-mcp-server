@@ -15,7 +15,7 @@ import { accessToken, signingKey } from './oauth-keys.mjs';
 
 let failures = 0;
 function check(label, cond, detail = '') {
-  console.log(`  ${cond ? 'ok  ' : 'FAIL'} ${label}${cond || !detail ? '' : ` — ${detail}`}`);
+  console.log(`  ${cond ? 'ok  ' : 'FAIL'} ${label}${cond || !detail ? '' : `: ${detail}`}`);
   if (!cond) failures++;
 }
 
