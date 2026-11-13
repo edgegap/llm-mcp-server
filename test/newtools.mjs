@@ -993,10 +993,10 @@ check('metrics: a wildcard request_id is refused', res.isError === true);
 
 // delete registry tag
 calls.length = 0;
-r = json(await acall('edgegap_delete_registry_tag', { image_name: 'my-game-server', tag: 'build-41' }));
+r = json(await acall('edgegap_delete_registry_tag', { image_name: 'my-game-server', tag: 'build-41', confirm: true }));
 check('delete_registry_tag: one DELETE, result reported', calls.filter((x) => x.method === 'DELETE').length === 1 && r.deleted_tag === 'build-41' && r.image_deleted === true && r.freed_mb === 512);
 calls.length = 0;
-r = json(await acall('edgegap_delete_registry_tag', { image_name: 'registry.edgegap.com/my-org-abc123/my-game-server:build-41', tag: 'build-41' }));
+r = json(await acall('edgegap_delete_registry_tag', { image_name: 'registry.edgegap.com/my-org-abc123/my-game-server:build-41', tag: 'build-41', confirm: true }));
 check('delete_registry_tag: full reference reduced, project dropped after a 404', r.image_name === 'my-game-server' && calls.filter((x) => x.method === 'DELETE').length === 2);
 for (const bad of ['latest', '*', 'a,b', '']) {
   calls.length = 0;
@@ -1085,7 +1085,7 @@ calls.length = 0;
 res = await acall('edgegap_delete_app_version', { application: 'my-game', version: 'build-42' });
 check('delete_app_version: refused while a deployment of it runs, nothing deleted', res.isError && /7e709a0d8efd/.test(text(res)) && !calls.some((x) => x.method === 'DELETE'), text(res).slice(0, 160));
 calls.length = 0;
-r = json(await acall('edgegap_delete_app_version', { application: 'cleanup-game', version: 'old-1' }));
+r = json(await acall('edgegap_delete_app_version', { application: 'cleanup-game', version: 'old-1', confirm: true }));
 check('delete_app_version: deletes an idle version', r.deleted_version === 'old-1' && calls.some((x) => x.method === 'DELETE' && x.url === '/v1/app/cleanup-game/version/old-1'));
 res = await acall('edgegap_delete_app_version', { application: 'cleanup-game', version: 'old-*' });
 check('delete_app_version: a wildcard is refused', res.isError && /one exact version/.test(text(res)));
@@ -1093,7 +1093,7 @@ calls.length = 0;
 res = await acall('edgegap_delete_app', { application: 'cleanup-game' });
 check('delete_app: refused while it has versions (default max_versions 0), nothing deleted', res.isError && /old-1, old-2/.test(text(res)) && !calls.some((x) => x.method === 'DELETE'), text(res).slice(0, 160));
 calls.length = 0;
-r = json(await acall('edgegap_delete_app', { application: 'cleanup-game', max_versions: 2 }));
+r = json(await acall('edgegap_delete_app', { application: 'cleanup-game', max_versions: 2, confirm: true }));
 check('delete_app: with max_versions covering them, deleted', r.deleted_application === 'cleanup-game' && calls.some((x) => x.method === 'DELETE' && x.url === '/v1/app/cleanup-game'));
 res = await acall('edgegap_delete_app', { application: 'my-game', max_versions: 5 });
 check('delete_app: refused while a deployment runs', res.isError && /running deployments/.test(text(res)));

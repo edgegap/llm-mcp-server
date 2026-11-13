@@ -213,15 +213,15 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.18.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.19.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
-The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`:
+The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`, which takes the two main ones as connection headers instead (see below):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `EDGEGAP_API_TOKEN` | *(prompted)* | API token. Optional: omit it and you're asked at first use. The `token ` prefix is added for you. Never pass it as a command-line argument. |
 | `EDGEGAP_READ_ONLY` | `0` | Set to `1` and the tools that change something (marked ● in [Tools](#-tools)) are never registered, so the agent cannot be talked into calling them. |
-| `EDGEGAP_APP_ALLOWLIST` | *(empty)* | Comma-separated application names. Limits what the agent can create and deploy into. Reading (listing apps and versions) is not limited, and neither is touching deployments once running. See [DESIGN.md](DESIGN.md#scope-of-the-allowlist). |
+| `EDGEGAP_APP_ALLOWLIST` | *(empty)* | Comma-separated application names. Limits what the agent can create and deploy into, and which deployments it can stop, tag or report. Reading (listing apps, versions, deployments, logs) is not limited. See [DESIGN.md](DESIGN.md#scope-of-the-allowlist). |
 | `EDGEGAP_MAX_DURATION_MINUTES` | `60` | Ceiling on `max_duration` the agent may set on a version. `edgegap_deploy` also refuses a version whose `max_duration` is above it, or unlimited, unless the agent passes `allow_long_running: true` after asking you. |
 | `EDGEGAP_MAX_AGENT_DEPLOYMENTS` | `5` | `edgegap_deploy` refuses while this many deployments tagged `edgegap-mcp` are running. `0` turns the cap off. |
 | `EDGEGAP_MAX_DEPLOYS_PER_RUN` | `20` | Deploys one server process may send, failed ones included. Restart the server to reset it. `0` turns it off. |
@@ -229,6 +229,15 @@ The local server can also limit what an agent can do. These variables have no ef
 | `EDGEGAP_ENABLE_SKILLS_UPDATE` | `0` | Set to `1` to let `edgegap_update_skills` run `npx skills@1.7.4 update` or `claude plugin update` with `apply: true`. Without it, it lists those commands for you to run. Hand-copied skills are rewritten from the bundle either way. The updaters get only path, home, temp, locale, proxy and npm settings, never `EDGEGAP_*` variables or anything named like a token, secret, password or key. |
 | `EDGEGAP_TIMEOUT_MS` | `30000` | Per-request HTTP timeout. |
 | `EDGEGAP_SKILLS_CHECK` | `on` | Set to `off` and the skill tools never read the latest skills version from GitHub. |
+
+On the hosted endpoint (and the self-hosted Docker image), send these headers on the MCP connection, next to `Authorization`. They can only narrow what the server allows, never widen it:
+
+| Header | Purpose |
+| --- | --- |
+| `X-Edgegap-Read-Only: 1` | Same as `EDGEGAP_READ_ONLY=1`: no tool that changes something is offered. Use it for an ops or monitoring agent. |
+| `X-Edgegap-App-Allowlist: my-game,my-game-staging` | Same as `EDGEGAP_APP_ALLOWLIST`, for this connection. Combined with a server allowlist, only applications in both are allowed. |
+
+Your token stays organization-wide: Edgegap cannot scope tokens yet. These limit what this server's tools do with it.
 
 #### Windows
 
@@ -294,7 +303,7 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_validate_server_config` | Checks an existing Dockerfile, ports, resources, and image tag before you build. Catches ARM or Windows images (Edgegap runs `linux/amd64`), Unreal servers running as root, missing Unity `-batchmode -nographics`, servers bound to `localhost`, ports that don't match your netcode transport, and the `latest` tag. |
 | `edgegap_get_registry_credentials` ● | Returns push credentials for your private Edgegap container registry, with the exact `docker login`, build, and push commands. Edgegap only gives these to the Unity/Unreal plugins' quick-start token; with a regular API token, it tells your agent to ask you for the login from the dashboard's **Container Registry** page instead. |
 | `edgegap_list_registry_tags` | Confirms your image push landed before you register it. Takes the image name only, e.g. `my-game-server`: the project comes from your token. |
-| `edgegap_delete_registry_tag` ● | Deletes one tag, and the image it points to, to clean up old builds. One exact tag per call; `latest`, wildcards and lists are refused. |
+| `edgegap_delete_registry_tag` ● | Deletes one tag, and the image it points to, to clean up old builds. One exact tag per call; `latest`, wildcards and lists are refused. Needs `confirm: true`. |
 
 ### Dedicated Servers (Recommended)
 
@@ -307,8 +316,8 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_get_app_version` | Reads one version in full: image, resources, ports, max duration, image caching, restart policy, and env var names (never values). |
 | `edgegap_create_app_version` ● | Registers a container image as a deployable version. Supports TLS Upgrade on WS and HTTP ports, which browser (WebGL) clients need for `wss://`. |
 | `edgegap_update_app_version` ● | Changes an existing version: a new image tag, on/off, CPU and memory (both together), max duration, registry login, image caching (`force_cache`), shutdown grace period, ports, env vars, and the Endpoint Storage its logs go to. Only the fields passed change, but `ports` and `env` replace the whole list. Running deployments keep the old settings. |
-| `edgegap_delete_app_version` ● | Deletes one version, to clean up test versions. Refused while a deployment of it runs. The registry image is kept. |
-| `edgegap_delete_app` ● | Deletes an application and its versions. Refused while any of its deployments runs, and while it has more versions than `max_versions` (default 0). |
+| `edgegap_delete_app_version` ● | Deletes one version, to clean up test versions. Refused while a deployment of it runs. Needs `confirm: true`. The registry image is kept. |
+| `edgegap_delete_app` ● | Deletes an application and its versions. Refused while any of its deployments runs, and while it has more versions than `max_versions` (default 0). Needs `confirm: true`. |
 | `edgegap_list_locations` | Lists the cities Edgegap deploys to, or, for one version, only those with capacity right now. |
 | `edgegap_list_ping_beacons` | Lists the ping beacons game clients measure their latency to each region against. |
 | `edgegap_deploy` ● | Deploys an authoritative dedicated server close to your players. Always tagged `edgegap-mcp`, and reports when Edgegap will stop it. Optional: CPU and memory for this deployment only, webhooks Edgegap calls when the server is ready, fails or ends, `require_cached_locations` for faster starts, and `private_host_ids` to place it on your private fleet first. |
@@ -317,8 +326,11 @@ Your agent picks the right tool from your request. You don't need to name them, 
 | `edgegap_get_deployment` | Reads a deployment's status. |
 | `edgegap_list_deployments` | Lists running deployments, filtered by application, version, status, tags and more, and sorted by age. Finds servers left running; `only_agent_deployments: true` lists every one an agent started. See [Filter Deployments](https://docs.edgegap.com/learn/orchestration/deployments#filter-deployments). |
 | `edgegap_get_deployment_logs` | Reads container logs and crash details while the deployment runs. After it stops, logs are only kept if Endpoint Storage was set up. |
-| `edgegap_get_deployment_metrics` | Summarises CPU, CPU throttling, memory and network use (latest, average, peak), to size a version or check a crash. |
-| `edgegap_stop_deployment` ● | Stops one deployment, by its exact request ID. No bulk stop. |
+| `edgegap_get_deployment_metrics` | Summarises CPU, CPU throttling, memory and network use (latest, average, p95, peak) and flags anomalies: spikes, a rising trend such as a memory leak, CPU throttling. To size a version or check a crash. |
+| `edgegap_fleet_health` | One call for "is anything wrong right now?": running deployments by status, the ones in error or stuck starting, and totals per location and version with unhealthy ones flagged. `check_crashes: true` adds restarts and exit codes. |
+| `edgegap_search_deployment_logs` | Searches the logs of many running deployments at once and groups matching lines by error, e.g. every crash in one version since yesterday. |
+| `edgegap_compare_versions` | Compares two versions of an application from their running deployments: errors, crash restarts, and CPU and memory against what each version requests, for a rollback decision. |
+| `edgegap_stop_deployment` ● | Stops one deployment, by its exact request ID. No bulk stop. A deployment the agent did not start needs `confirm: true`. |
 | `edgegap_tag_deployment` ● | Adds or removes tags on a running deployment, e.g. to mark a match. The `edgegap-mcp` tag stays. |
 | `edgegap_report_deployment` ● | Reports a deployment to Edgegap with a reason, for a studio's moderation backend. It keeps running. |
 
@@ -365,6 +377,7 @@ Your API token can do anything in your organization, so the server adds its own 
 
 | Guardrail | What it does |
 | --- | --- |
+| Confirm | `edgegap_delete_app`, `edgegap_delete_app_version`, `edgegap_delete_registry_tag`, and `edgegap_stop_deployment` on a running deployment the agent did not start, send nothing without `confirm: true`. They return a preview of what would be stopped or deleted for the agent to show you first. |
 | Dry run | Every tool that changes something takes `dry_run: true`: it returns the exact method, host, path and body, with the token, registry tokens and env values masked, and sends nothing. Local checks still run. |
 | No token in containers | A deploy or version is refused, with nothing sent, if your API token appears in an env var name or value, a tag, or a webhook URL. Env values are never echoed back. |
 | Agent tag | Every deployment gets the `edgegap-mcp` tag, even when the agent passes its own tags. `edgegap_list_deployments` with `only_agent_deployments: true` finds them all. |

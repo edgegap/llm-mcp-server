@@ -53,7 +53,7 @@ const deployment = {
   next_step: str,
 };
 
-const series = obj({ latest: num, average: num, peak: num, samples: num, labels: strs, from: str, to: str });
+const series = obj({ latest: num, average: num, p95: num, peak: num, samples: num, nonzero_share: num, anomalies: strs, labels: strs, from: str, to: str });
 
 /** Loose at the top level too: a raw shape becomes additionalProperties: false
  *  in JSON Schema, and clients that validate results reject extra fields. */

@@ -2,6 +2,19 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.0
+
+Operating a live game, not only shipping one:
+
+- New `edgegap_fleet_health`: one call for "is anything wrong right now?" across running deployments (all, one application or one version): counts by status, deployments in error with their error detail, ones stuck starting for over 10 minutes, and totals per location and per version with unhealthy ones flagged. `check_crashes: true` adds restart counts and exit codes.
+- New `edgegap_search_deployment_logs`: searches the container and crash logs of many running deployments at once and groups matching lines by error (timestamps, IDs and numbers stripped), with counts, the deployments that printed them and exit codes. Default pattern finds errors, exceptions, fatal signals and out-of-memory kills; `started_after` limits it to recent deployments; a regex is opt-in and refused with nested quantifiers.
+- New `edgegap_compare_versions`: compares two versions of an application from their running deployments (errors, crash restarts, exit codes, and CPU and memory average/p95/peak against each version's requested resources) and spells out the differences, for a rollback decision.
+- `edgegap_get_deployment_metrics` adds p95 per series and anomaly flags (spikes above mean + 3 sd, a rising trend such as a memory leak, CPU throttling), collected in a top-level `anomalies` list.
+- `confirm` on destructive tools: `edgegap_delete_app`, `edgegap_delete_app_version`, `edgegap_delete_registry_tag`, and `edgegap_stop_deployment` on a running deployment without the `edgegap-mcp` tag, now send nothing unless `confirm: true`; without it they return `status: "confirmation_required"` with a preview to show the developer. **Behavior change** for agents that called these tools directly: they get the preview first. Stopping the agent's own deployments is unchanged.
+- `EDGEGAP_APP_ALLOWLIST` now also covers `edgegap_stop_deployment`, `edgegap_tag_deployment` and `edgegap_report_deployment`: a deployment of an application outside the list is refused.
+- Hosted endpoint and Docker image: the headers `X-Edgegap-Read-Only: 1` and `X-Edgegap-App-Allowlist: a,b` give a connection the local server's read-only mode and allowlist. They can only narrow the server's settings. The token stays organization-wide.
+- Covered by `test/ops.mjs` (new), `test/newtools.mjs` (deletes pass `confirm: true`) and the tool snapshot. The new tools are mock-tested only.
+
 ## 0.18.0
 
 - `edgegap_context` returns `pricing`: the egress terms, dated and with their source (edgegap.com/pricing.md). Private Fleet hosts include 6 TB of free egress per host per month (about 18 Mbps sustained), above which the Edge Cloud rate applies; Edge Cloud egress, and cloud overflow from a fleet, cost $0.10 per GB. Agents comparing hosting options get the terms without crawling the website.

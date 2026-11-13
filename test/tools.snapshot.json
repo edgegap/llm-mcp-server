@@ -145,6 +145,44 @@
         }
       },
       {
+        "name": "edgegap_compare_versions",
+        "title": "Compare two versions of an application",
+        "description": "Compare two versions of one application from their running deployments, to back a rollback or promote decision: deployments in error, crash restarts and exit codes, and CPU and memory (average, p95, peak) against each version's requested cpu_units and memory_mb, with the differences spelled out. Reads up to 20 running deployments per version, newest first, so both versions need deployments running now (stopped ones keep no logs or status). Read-only.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "type": "string",
+              "description": "Application name."
+            },
+            "version_a": {
+              "type": "string",
+              "description": "The baseline version, e.g. the one in production."
+            },
+            "version_b": {
+              "type": "string",
+              "description": "The version to compare against it, e.g. the new build."
+            },
+            "max_deployments_per_version": {
+              "description": "1-20. Default 5.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "application",
+            "version_a",
+            "version_b"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_context",
         "title": "Show this Edgegap MCP server's configuration",
         "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also gives the egress terms (Private Fleet hosts include 6 TB of free egress per host per month; Edge Cloud egress is $0.10 per GB) and says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
@@ -561,7 +599,7 @@
       {
         "name": "edgegap_delete_app",
         "title": "Delete an application and all its versions",
-        "description": "Delete one application and every version under it, to clean up a test application. Exactly one exact name; refused while any of its deployments is running, and refused when it has more versions than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise max_versions after the developer agreed). Registry images are not touched. Cannot be undone.",
+        "description": "Delete one application and every version under it, to clean up a test application. Exactly one exact name; refused while any of its deployments is running, and refused when it has more versions than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise max_versions after the developer agreed). Registry images are not touched. Cannot be undone, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -569,6 +607,10 @@
               "type": "string",
               "minLength": 1,
               "description": "The exact application name to delete."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "max_versions": {
               "description": "Delete only if it has at most this many versions. Default 0.",
@@ -595,7 +637,7 @@
       {
         "name": "edgegap_delete_app_version",
         "title": "Delete one application version",
-        "description": "Delete one version of an application, to clean up test versions. Exactly one exact version name; refused while any deployment of that version is running. The container image stays in the registry (edgegap_delete_registry_tag removes it). Cannot be undone, so confirm with the developer when the version is not one this conversation created.",
+        "description": "Delete one version of an application, to clean up test versions. Exactly one exact version name; refused while any deployment of that version is running. The container image stays in the registry (edgegap_delete_registry_tag removes it). Cannot be undone, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -607,6 +649,10 @@
               "type": "string",
               "minLength": 1,
               "description": "The exact version name to delete."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -696,7 +742,7 @@
       {
         "name": "edgegap_delete_registry_tag",
         "title": "Delete one image tag from the Edgegap registry",
-        "description": "Delete one tag, and the image it points to, from this organization's Edgegap container registry, to clean up old builds. Takes exactly one image name and one exact tag; wildcards, lists and \"latest\" are refused, and there is no bulk delete. A version that still uses the tag can no longer start deployments, so check edgegap_list_app_versions first. Cannot be undone.",
+        "description": "Delete one tag, and the image it points to, from this organization's Edgegap container registry, to clean up old builds. Takes exactly one image name and one exact tag; wildcards, lists and \"latest\" are refused, and there is no bulk delete. A version that still uses the tag can no longer start deployments, so check edgegap_list_app_versions first. Cannot be undone, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -708,6 +754,10 @@
             "tag": {
               "type": "string",
               "description": "The exact tag to delete, e.g. \"build-41\"."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -927,6 +977,39 @@
         "annotations": {
           "destructiveHint": false,
           "idempotentHint": false,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_fleet_health",
+        "title": "Summarise the health of running deployments",
+        "description": "One call for \"is anything wrong right now?\" across running deployments, instead of checking them one by one: counts by status, the deployments in error with their error detail, ones stuck starting for over 10 minutes, and totals per location and per version with unhealthy ones flagged. check_crashes: true also reads each deployment's crash data (restarts, exit codes). Covers what Edgegap still lists: stopped deployments are gone, so this is current state, not history. Inspects up to 100 deployments per call, newest first. Read-only. Next: edgegap_search_deployment_logs for what the errors say, edgegap_compare_versions for a rollback decision.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "description": "Only this application. Default: all.",
+              "type": "string"
+            },
+            "version": {
+              "description": "Only this version (needs application).",
+              "type": "string"
+            },
+            "max_deployments": {
+              "description": "How many to inspect, 1-100. Default 50.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "check_crashes": {
+              "description": "Also read crash data (restart count, exit code) per deployment. Default false.",
+              "type": "boolean"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
           "openWorldHint": true
         }
       },
@@ -1263,7 +1346,7 @@
       {
         "name": "edgegap_get_deployment_metrics",
         "title": "Get CPU, memory and network use of a deployment",
-        "description": "Summarise a deployment's resource use over time: CPU, CPU throttling, memory and network, each as latest, average and peak, with the API's own labels. Use it to size a version (cpu_units, memory_mb) from a real match, or to check whether a crash was memory or CPU starvation before redeploying. Defaults to the whole life of the deployment.",
+        "description": "Summarise a deployment's resource use over time: CPU, CPU throttling, memory and network, each as latest, average, p95 and peak, with the API's own labels, plus anomaly flags (spikes above mean + 3 sd, a rising trend such as a memory leak, any CPU throttling) collected in `anomalies`. Use it to size a version (cpu_units, memory_mb) from a real match, or to check whether a crash was memory or CPU starvation before redeploying. Defaults to the whole life of the deployment. To compare two versions, use edgegap_compare_versions.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1304,11 +1387,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1334,11 +1429,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1364,11 +1471,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1394,11 +1513,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1424,11 +1555,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -2332,15 +2475,66 @@
         }
       },
       {
+        "name": "edgegap_search_deployment_logs",
+        "title": "Search the logs of many deployments at once",
+        "description": "Search the container and crash logs of running deployments of an application (and version) for a pattern, and group the matching lines by error, with counts and which deployments printed them: \"every crash in version 1.4.2 since yesterday, grouped by error\". Without a pattern it looks for errors, exceptions, fatal signals and out-of-memory kills. Also counts crash exit codes. Logs only exist while a deployment runs (or in Endpoint Storage), so stopped deployments are not searched. Searches up to 100 deployments per call, newest first. Read-only.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "description": "Only this application. Default: all.",
+              "type": "string"
+            },
+            "version": {
+              "description": "Only this version (needs application).",
+              "type": "string"
+            },
+            "pattern": {
+              "description": "Text to find, case-insensitive. Default: common error and crash words.",
+              "type": "string"
+            },
+            "regex": {
+              "description": "Treat pattern as a regular expression. Default false.",
+              "type": "boolean"
+            },
+            "started_after": {
+              "description": "Only deployments started after this ISO 8601 time, e.g. \"2026-11-12T00:00:00Z\" for the last day.",
+              "type": "string"
+            },
+            "max_deployments": {
+              "description": "How many to search, 1-100. Default 30.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "max_groups": {
+              "description": "Most error groups to return, 1-50. Default 15.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_stop_deployment",
         "title": "Stop a deployment",
-        "description": "Gracefully stop one deployment by request_id, sending SIGTERM to the container. Stop every deployment you started for testing before ending your task. This tool stops exactly one deployment, named by its exact request_id: empty IDs, wildcards and lists are refused, and bulk stop is deliberately not exposed.",
+        "description": "Gracefully stop one deployment by request_id, sending SIGTERM to the container. Stop every deployment you started for testing before ending your task. This tool stops exactly one deployment, named by its exact request_id: empty IDs, wildcards and lists are refused, and bulk stop is deliberately not exposed. A deployment this server started (tagged \"edgegap-mcp\") stops right away; any other running deployment may be serving players, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
             "request_id": {
               "type": "string",
               "description": "The exact request_id of the one deployment to stop, e.g. \"61b1be8f54d9\"."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -2871,7 +3065,9 @@
   "read_only": {
     "tools": [
       "edgegap_build_matchmaker_config",
+      "edgegap_compare_versions",
       "edgegap_context",
+      "edgegap_fleet_health",
       "edgegap_generate_dockerfile",
       "edgegap_get_app_version",
       "edgegap_get_deployment",
@@ -2889,6 +3085,7 @@
       "edgegap_list_registry_tags",
       "edgegap_list_relay_sessions",
       "edgegap_list_skills",
+      "edgegap_search_deployment_logs",
       "edgegap_update_skills",
       "edgegap_validate_server_config",
       "edgegap_wait_for_deployment"

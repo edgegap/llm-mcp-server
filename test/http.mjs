@@ -95,6 +95,25 @@ check('skill prompts are listed over HTTP', (await c.listPrompts()).prompts.some
 check('hosted instructions open with the skills line', (c.getInstructions() ?? '').startsWith('Before acting, read edgegap-skill://edgegap/SKILL.md'));
 await c.close();
 
+// Per-connection limits (0.19.0): headers can narrow the server, never widen it.
+const withHeaders = async (headers) => {
+  const hc = new Client({ name: 'http-test', version: '1.0.0' });
+  await hc.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
+    requestInit: { headers: { Authorization: `token ${TOKEN}`, ...headers } },
+  }));
+  return hc;
+};
+c = await withHeaders({ 'X-Edgegap-Read-Only': '1' });
+let names = (await c.listTools()).tools.map((t) => t.name);
+check('X-Edgegap-Read-Only: 1 hides the write tools', !names.includes('edgegap_deploy') && !names.includes('edgegap_stop_deployment') && names.includes('edgegap_fleet_health'), names.length);
+r = await c.callTool({ name: 'edgegap_context', arguments: {} });
+check('...and edgegap_context reports read_only', /"read_only": true/.test(text(r)));
+await c.close();
+c = await withHeaders({ 'X-Edgegap-App-Allowlist': 'my-game' });
+r = await c.callTool({ name: 'edgegap_create_app', arguments: { name: 'other-game', image: 'x' } });
+check('X-Edgegap-App-Allowlist refuses another application', r.isError && /ALLOWLIST/.test(text(r)), text(r).slice(0, 160));
+await c.close();
+
 proc.kill('SIGTERM');
 mock.close();
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
