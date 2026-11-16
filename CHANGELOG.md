@@ -2,6 +2,14 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.1
+
+- Skills pack 0.35.1 (llm-agent-skills aa30540):
+  - 0.35.0 (edgegap/llm-agent-skills#53): new `edgegap-fal` skill for games written by fal Agent (fal.ai), verified on Edgegap 2026-11-09 with netcode-sample-fal-orb-arena. CI templates build images without provenance/SBOM attestations, which failed image pulls (`edgegap-threejs` 0.3.6, `edgegap-manus` 0.1.9, `edgegap-troubleshoot` 0.2.4).
+  - 0.35.1 (edgegap/llm-agent-skills#57): `edgegap-godot` 0.2.4 covers GodotSteam Server; Cocos extension links use `buildtool-cocos-plugin`; the samples catalog is rechecked.
+- Server instructions route fal.ai games to `edgegap-fal`.
+- Covered by the skills tests (the link resolves, instructions under 4096 characters) and the tool snapshot.
+
 ## 0.19.0
 
 Operating a live game, not only shipping one:
