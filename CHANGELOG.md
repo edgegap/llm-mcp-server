@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.2
+
+- Skills pack 0.36.0 (llm-agent-skills 707ae0a, edgegap/llm-agent-skills#58): `edgegap-fal` 0.2.0 leads with the way most fal.ai game makers work, a coding agent for the code and fal for the assets (fal MCP or the `genmedia` CLI), and keeps the fal Agent path. New references for the fal asset pipeline (concept image to rigged GLB, clips, sizes, Three.js loader pitfalls, no asset in the server image) and the Relic Rumble walkthrough; verified on Edgegap 2026-11-17 with netcode-sample-fal-relic-rumble. `edgegap` 0.36.0, `edgegap-vibe-coded` 0.1.4, `edgegap-samples` 0.1.6.
+- No tool or instruction changes. Covered by the skills tests and the tool snapshot.
+
 ## 0.19.1
 
 - Skills pack 0.35.1 (llm-agent-skills aa30540):
