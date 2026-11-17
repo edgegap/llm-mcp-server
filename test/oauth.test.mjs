@@ -89,11 +89,11 @@ test('settings: every URL var is required in OAuth mode, and the metadata URL is
   assert.equal(local.allowedOrigins.size, 0);
 });
 
-test('protected-resource metadata: exact resource, the issuer first, the four member-default read scopes only', () => {
+test('protected-resource metadata: exact resource, the issuer first, the member-default read scopes only', () => {
   const doc = protectedResourceMetadata(settings);
   assert.equal(doc.resource, RESOURCE);
   assert.deepEqual(doc.authorization_servers, [ISSUER]);
-  assert.deepEqual(doc.scopes_supported, ['apps:read', 'deployments:read', 'registry:read', 'relays:read']);
+  assert.deepEqual(doc.scopes_supported, ['apps:read', 'deployments:read', 'locations:read', 'registry:read', 'relays:read']);
   assert.ok(!doc.scopes_supported.includes('offline_access'));
 });
 
@@ -234,7 +234,7 @@ test('gate: an account tool signed out is a 401 missing_token naming the metadat
     `Bearer scope="${MEMBER_SCOPE}", resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource/mcp"`
   );
   const write = await gate(request(call('edgegap_create_app', { name: 'x' })), settings, cache);
-  assert.match(write.challenge, /scope="apps:read apps:write deployments:read registry:read relays:read"/);
+  assert.match(write.challenge, /scope="apps:read apps:write deployments:read locations:read registry:read relays:read"/);
   const check = await gate(request(call('edgegap_context', { check_token: true })), settings, cache);
   assert.equal(check.status, 401, 'check_token calls the API');
   const verify = await gate(request(call('edgegap_build_matchmaker_config', { application: 'a', version: 'v' })), settings, cache);
@@ -264,7 +264,7 @@ test('gate: a token with the scopes is served as its principal; without them, a 
   const stop = await gate(request(call('edgegap_stop_deployment', { request_id: 'r' }), `Bearer ${member}`), settings, cache);
   assert.equal(stop.status, 403);
   assert.equal(stop.body.error, 'insufficient_scope');
-  assert.equal(stop.challenge, `Bearer error="insufficient_scope", scope="apps:read deployments:read deployments:write registry:read relays:read", resource_metadata="${settings.resourceMetadataUrl}"`);
+  assert.equal(stop.challenge, `Bearer error="insufficient_scope", scope="apps:read deployments:read deployments:write locations:read registry:read relays:read", resource_metadata="${settings.resourceMetadataUrl}"`);
   assert.doesNotMatch(JSON.stringify(stop), /deployment\.stop/, 'never names a permission');
 
   const writer = await accessToken(KEY, claims({ scope: 'deployments:read deployments:write' }));
@@ -273,7 +273,7 @@ test('gate: a token with the scopes is served as its principal; without them, a 
   assert.match(deploy.challenge, /scope="apps:read deployments:read deployments:write"/);
 
   const logs = await gate(request(call('edgegap_get_deployment_logs', { request_id: 'r' }), `Bearer ${member}`), settings, cache);
-  assert.match(logs.challenge, /scope="apps:read deployments:logs deployments:read registry:read relays:read"/);
+  assert.match(logs.challenge, /scope="apps:read deployments:logs deployments:read locations:read registry:read relays:read"/);
 });
 
 test('gate: a batch needs the union of its calls', async () => {
@@ -304,16 +304,11 @@ test('gate: an unreachable JWKS is a 503, never a 401', async () => {
 // ------------------------------------------------------- tools to scopes ----
 
 const SNAPSHOT_TOOLS = JSON.parse(readFileSync(new URL('./tools.snapshot.json', import.meta.url))).normal.tools.map((t) => t.name);
-// The tools that call a route with no permission in the catalogue (plan
-// section 5.0). Each leaves this list when its routes get one and it is added
-// to TOOL_SCOPES; the change is deliberate, so this test names them.
-const HIDDEN = [
-  'edgegap_create_endpoint_storage', 'edgegap_create_pull_profile', 'edgegap_delete_app', 'edgegap_delete_app_version',
-  'edgegap_delete_endpoint_storage', 'edgegap_delete_pull_profile', 'edgegap_delete_registry_tag', 'edgegap_get_deployment_metrics',
-  'edgegap_link_pull_profile', 'edgegap_list_endpoint_storage', 'edgegap_list_fleet_hosts', 'edgegap_list_locations',
-  'edgegap_list_ping_beacons', 'edgegap_list_relay_sessions', 'edgegap_report_deployment', 'edgegap_revoke_relay_user',
-  'edgegap_tag_deployment', 'edgegap_update_app', 'edgegap_update_app_version',
-];
+// The tools that call a route with no permission in the catalogue: the relay
+// routes authorize through the relay profile and take no OAuth token yet. Each
+// leaves this list when its routes get one and it is added to TOOL_SCOPES; the
+// change is deliberate, so this test names them.
+const HIDDEN = ['edgegap_list_relay_sessions', 'edgegap_revoke_relay_user'];
 
 test('tool table: every tool is mapped or hidden, the hidden set is exactly the unscoped ones, and no mapping is stale', () => {
   assert.deepEqual(SNAPSHOT_TOOLS.filter(oauthHiddenTool), HIDDEN);
@@ -331,14 +326,23 @@ test('tool table: section 5.0 scopes, write tools without their read, the no-acc
     edgegap_get_registry_credentials: ['registry:credentials'], edgegap_list_registry_tags: ['registry:read'],
     edgegap_get_relay_session: ['relays:read'], edgegap_create_relay_session: ['relays:write'],
     edgegap_authorize_relay_user: ['relays:write'], edgegap_delete_relay_session: ['relays:write'],
+    edgegap_update_app: ['apps:write'], edgegap_update_app_version: ['apps:write'],
+    edgegap_delete_app: ['apps:delete', 'apps:read', 'deployments:read'], edgegap_delete_app_version: ['apps:delete'],
+    edgegap_list_locations: ['locations:read'], edgegap_list_ping_beacons: ['locations:read'],
+    edgegap_list_fleet_hosts: ['fleets:read'], edgegap_get_deployment_metrics: ['deployments:read'],
+    edgegap_tag_deployment: ['deployments:write'], edgegap_report_deployment: ['deployments:write'],
+    edgegap_delete_registry_tag: ['registry:write'], edgegap_list_endpoint_storage: ['storage:read'],
+    edgegap_create_endpoint_storage: ['storage:write'], edgegap_delete_endpoint_storage: ['storage:write'],
+    edgegap_create_pull_profile: ['storage:write'], edgegap_link_pull_profile: ['storage:write'],
+    edgegap_delete_pull_profile: ['storage:write'],
   };
   for (const [tool, scopes] of Object.entries(expect)) assert.deepEqual(toolNeed(tool), { kind: 'scopes', scopes }, tool);
   for (const tool of ['edgegap_context', 'edgegap_list_skills', 'edgegap_get_skill', 'edgegap_update_skills', 'edgegap_generate_dockerfile', 'edgegap_validate_server_config']) {
     assert.deepEqual(toolNeed(tool), { kind: 'none' }, tool);
   }
-  assert.equal(toolNeed('edgegap_deploy', { private_host_ids: ['h1'] }).kind, 'unavailable');
-  assert.match(oauthRefusal('edgegap_deploy', { private_host_ids: ['h1'] }), /private fleet/);
-  assert.equal(oauthRefusal('edgegap_deploy', { private_host_ids: [] }), undefined);
+  // A private fleet deployment needs the same scopes as a cloud one: the route takes deployment.create.
+  assert.deepEqual(toolNeed('edgegap_deploy', { private_host_ids: ['h1'] }), { kind: 'scopes', scopes: ['deployments:write', 'apps:read'] });
+  assert.equal(oauthRefusal('edgegap_deploy', { private_host_ids: ['h1'] }), undefined);
 });
 
 // ---------------------------------------------- the MCP server in OAuth mode ----
@@ -382,7 +386,7 @@ test('OAuth mode lists the scoped and no-account tools only, and its instruction
   }
 });
 
-test('OAuth mode forwards the access token unchanged as Bearer, and refuses a private-fleet deploy before any call', async () => {
+test('OAuth mode forwards the access token unchanged as Bearer', async () => {
   const token = await accessToken(KEY, claims());
   const s = await oauthServer(token);
   try {
@@ -390,11 +394,6 @@ test('OAuth mode forwards the access token unchanged as Bearer, and refuses a pr
     assert.ok(!listed.isError, JSON.stringify(listed));
     assert.deepEqual(s.calls.map((c) => [c.method, c.url, c.auth]), [['GET', '/v1/apps?limit=50', `Bearer ${token}`]]);
     assert.ok(!JSON.stringify(listed).includes(token), 'the token never reaches a result');
-
-    const refused = await s.client.callTool({ name: 'edgegap_deploy', arguments: { application: 'game', version: 'v1', users: { ip_addresses: ['203.0.113.7'] }, private_host_ids: ['host-1'] } });
-    assert.equal(refused.isError, true);
-    assert.match(text(refused), /private fleet/);
-    assert.equal(s.calls.length, 1, 'nothing was sent');
 
     const context = await s.client.callTool({ name: 'edgegap_context', arguments: {} });
     assert.match(text(context), /signed in with Edgegap/);

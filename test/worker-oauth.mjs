@@ -139,7 +139,7 @@ try {
   for (const path of ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-protected-resource']) {
     const res = await fetch(`${w.base}${path}`);
     const doc = await res.json();
-    check(`${path}: resource, issuer first, four read scopes`, res.status === 200 && doc.resource === RESOURCE && doc.authorization_servers?.[0] === ISSUER && JSON.stringify(doc.scopes_supported) === '["apps:read","deployments:read","registry:read","relays:read"]', JSON.stringify(doc));
+    check(`${path}: resource, issuer first, the member-default read scopes`, res.status === 200 && doc.resource === RESOURCE && doc.authorization_servers?.[0] === ISSUER && JSON.stringify(doc.scopes_supported) === '["apps:read","deployments:read","locations:read","registry:read","relays:read"]', JSON.stringify(doc));
   }
 
   console.log('\nlazy authentication');
@@ -147,16 +147,16 @@ try {
   check('initialize: 200 signed out, OAuth instructions', init.status === 200 && /signs in with Edgegap/.test(init.json?.result?.instructions ?? ''), `${init.status}`);
   const list = await w.post('tools/list', {});
   const names = (list.json?.result?.tools ?? []).map((t) => t.name);
-  check('tools/list: 200 signed out, 24 tools, unscoped ones hidden', list.status === 200 && names.length === 24 && names.includes('edgegap_deploy') && !names.includes('edgegap_update_app') && !names.includes('edgegap_list_locations'), `${list.status} ${names.length}`);
+  check('tools/list: 200 signed out, 41 tools, the two unscoped relay tools hidden', list.status === 200 && names.length === 41 && names.includes('edgegap_deploy') && names.includes('edgegap_list_locations') && !names.includes('edgegap_list_relay_sessions') && !names.includes('edgegap_revoke_relay_user'), `${list.status} ${names.length}`);
   const dockerfile = await w.post('tools/call', { name: 'edgegap_generate_dockerfile', arguments: { engine: 'godot', server_binary: 'server.x86_64' } });
   check('a no-account tool works signed out', dockerfile.status === 200 && dockerfile.json?.result && !dockerfile.json.result.isError, toolText(dockerfile).slice(0, 200));
 
   console.log('\n401 and 403 shapes (plan section 5.0)');
   const signedOut = await w.post('tools/call', { name: 'edgegap_list_apps', arguments: {} });
   check('account tool signed out: 401 missing_token', signedOut.status === 401 && signedOut.json?.error === 'missing_token' && typeof signedOut.json?.message === 'string');
-  check('  WWW-Authenticate: member default scope and resource_metadata', signedOut.headers.get('www-authenticate') === `Bearer scope="apps:read deployments:read registry:read relays:read", resource_metadata="${METADATA_URL}"`, signedOut.headers.get('www-authenticate'));
+  check('  WWW-Authenticate: member default scope and resource_metadata', signedOut.headers.get('www-authenticate') === `Bearer scope="apps:read deployments:read locations:read registry:read relays:read", resource_metadata="${METADATA_URL}"`, signedOut.headers.get('www-authenticate'));
   const writeSignedOut = await w.post('tools/call', { name: 'edgegap_create_app', arguments: { name: 'x' } });
-  check('write tool signed out: the 401 asks for apps:write too', /scope="apps:read apps:write deployments:read registry:read relays:read"/.test(writeSignedOut.headers.get('www-authenticate') ?? ''));
+  check('write tool signed out: the 401 asks for apps:write too', /scope="apps:read apps:write deployments:read locations:read registry:read relays:read"/.test(writeSignedOut.headers.get('www-authenticate') ?? ''));
   const pasted = await w.post('tools/list', {}, { Authorization: 'token 0f8b3c1e-e458-4592-b607-c2c28afd8b62' });
   check('a pasted API token: 401 invalid_token, never relayed', pasted.status === 401 && pasted.json?.error === 'invalid_token' && /^Bearer error="invalid_token"/.test(pasted.headers.get('www-authenticate') ?? ''));
   const expired = await w.post('tools/list', {}, bearer(await accessToken(KEY, { ...claims(ORG_A, USER_A), exp: Math.floor(Date.now() / 1000) - 5 })));
@@ -169,7 +169,7 @@ try {
   const allowed = await w.post('tools/list', {}, { Origin: 'https://allowed.example.test' });
   check('a listed Origin passes', allowed.status === 200);
   const fleet = await w.post('tools/call', { name: 'edgegap_deploy', arguments: { application: 'a', version: 'v', users: { ip_addresses: ['203.0.113.7'] }, private_host_ids: ['h1'], dry_run: true } }, bearer(await accessToken(KEY, claims(ORG_A, USER_A, 'apps:read deployments:read deployments:write'))));
-  check('deploy to private fleet hosts: a tool error, nothing sent', fleet.status === 200 && fleet.json?.result?.isError && /private fleet/.test(toolText(fleet)));
+  check('deploy to private fleet hosts with deployments:write: served like a cloud deploy', fleet.status === 200 && !/through OAuth yet/.test(toolText(fleet)), toolText(fleet).slice(0, 200));
 
   console.log('\nno state across requests');
   apiCalls.length = 0;

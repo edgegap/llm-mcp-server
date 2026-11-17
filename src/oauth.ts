@@ -102,7 +102,7 @@ export function resourceMetadataPaths(settings: OAuthSettings): string[] {
  * advertises: a first sign-in asks for these, and anything more is asked for
  * when a tool needs it (step-up).
  */
-export const MEMBER_DEFAULT_SCOPES = ['apps:read', 'deployments:read', 'registry:read', 'relays:read'] as const;
+export const MEMBER_DEFAULT_SCOPES = ['apps:read', 'deployments:read', 'locations:read', 'registry:read', 'relays:read'] as const;
 
 /** What a tool call needs: nothing (no account), these scopes, or something OAuth can't do. */
 export type ToolNeed =
@@ -140,25 +140,37 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   edgegap_get_app_version: ['apps:read'],
   edgegap_create_app: ['apps:write'],
   edgegap_create_app_version: ['apps:write'],
+  edgegap_update_app: ['apps:write'],
+  edgegap_update_app_version: ['apps:write'],
+  // Deleting is its own scope (apps:delete holds no read): delete_app first lists the versions and live deployments.
+  edgegap_delete_app: ['apps:delete', 'apps:read', 'deployments:read'],
+  edgegap_delete_app_version: ['apps:delete'],
 
-  edgegap_deploy: (args) =>
-    Array.isArray(args.private_host_ids) && args.private_host_ids.length > 0
-      ? {
-          kind: 'unavailable',
-          message:
-            'Deploying to private fleet hosts is not available when signed in with Edgegap through OAuth yet. ' +
-            'Deploy to the cloud without private_host_ids, or use the dashboard for private fleet deployments.',
-        }
-      : scopes('deployments:write', 'apps:read'),
+  edgegap_list_locations: ['locations:read'],
+  edgegap_list_ping_beacons: ['locations:read'],
+  edgegap_list_fleet_hosts: ['fleets:read'],
+
+  edgegap_deploy: ['deployments:write', 'apps:read'],
   edgegap_get_deployment: ['deployments:read'],
   edgegap_wait_for_deployment: ['deployments:read'],
   edgegap_list_deployments: ['deployments:read'],
   edgegap_stop_deployment: ['deployments:write'],
+  edgegap_get_deployment_metrics: ['deployments:read'],
+  edgegap_tag_deployment: ['deployments:write'],
+  edgegap_report_deployment: ['deployments:write'],
   // Explaining a missing log reads the deployment's status.
   edgegap_get_deployment_logs: ['deployments:logs', 'deployments:read'],
 
   edgegap_get_registry_credentials: ['registry:credentials'],
   edgegap_list_registry_tags: ['registry:read'],
+  edgegap_delete_registry_tag: ['registry:write'],
+
+  edgegap_list_endpoint_storage: ['storage:read'],
+  edgegap_create_endpoint_storage: ['storage:write'],
+  edgegap_delete_endpoint_storage: ['storage:write'],
+  edgegap_create_pull_profile: ['storage:write'],
+  edgegap_link_pull_profile: ['storage:write'],
+  edgegap_delete_pull_profile: ['storage:write'],
 
   edgegap_get_relay_session: ['relays:read'],
   edgegap_create_relay_session: ['relays:write'],
