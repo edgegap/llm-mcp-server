@@ -147,7 +147,7 @@ try {
   check('initialize: 200 signed out, OAuth instructions', init.status === 200 && /signs in with Edgegap/.test(init.json?.result?.instructions ?? ''), `${init.status}`);
   const list = await w.post('tools/list', {});
   const names = (list.json?.result?.tools ?? []).map((t) => t.name);
-  check('tools/list: 200 signed out, 41 tools, the two unscoped relay tools hidden', list.status === 200 && names.length === 41 && names.includes('edgegap_deploy') && names.includes('edgegap_list_locations') && !names.includes('edgegap_list_relay_sessions') && !names.includes('edgegap_revoke_relay_user'), `${list.status} ${names.length}`);
+  check('tools/list: 200 signed out, 40 tools, the two unscoped relay tools and registry credentials hidden', list.status === 200 && names.length === 40 && names.includes('edgegap_deploy') && names.includes('edgegap_list_locations') && !names.includes('edgegap_list_relay_sessions') && !names.includes('edgegap_revoke_relay_user') && !names.includes('edgegap_get_registry_credentials'), `${list.status} ${names.length}`);
   const dockerfile = await w.post('tools/call', { name: 'edgegap_generate_dockerfile', arguments: { engine: 'godot', server_binary: 'server.x86_64' } });
   check('a no-account tool works signed out', dockerfile.status === 200 && dockerfile.json?.result && !dockerfile.json.result.isError, toolText(dockerfile).slice(0, 200));
 

@@ -273,7 +273,7 @@ test('gate: a token with the scopes is served as its principal; without them, a 
   assert.match(deploy.challenge, /scope="apps:read deployments:read deployments:write"/);
 
   const logs = await gate(request(call('edgegap_get_deployment_logs', { request_id: 'r' }), `Bearer ${member}`), settings, cache);
-  assert.match(logs.challenge, /scope="apps:read deployments:logs deployments:read locations:read registry:read relays:read"/);
+  assert.equal(logs.action, 'serve', 'container logs are in deployments:read');
 });
 
 test('gate: a batch needs the union of its calls', async () => {
@@ -305,10 +305,11 @@ test('gate: an unreachable JWKS is a 503, never a 401', async () => {
 
 const SNAPSHOT_TOOLS = JSON.parse(readFileSync(new URL('./tools.snapshot.json', import.meta.url))).normal.tools.map((t) => t.name);
 // The tools that call a route with no permission in the catalogue: the relay
-// routes authorize through the relay profile and take no OAuth token yet. Each
+// routes authorize through the relay profile, and the registry credentials
+// (wizard) routes are kept off OAuth, so neither takes an OAuth token yet. Each
 // leaves this list when its routes get one and it is added to TOOL_SCOPES; the
 // change is deliberate, so this test names them.
-const HIDDEN = ['edgegap_list_relay_sessions', 'edgegap_revoke_relay_user'];
+const HIDDEN = ['edgegap_get_registry_credentials', 'edgegap_list_relay_sessions', 'edgegap_revoke_relay_user'];
 
 test('tool table: every tool is mapped or hidden, the hidden set is exactly the unscoped ones, and no mapping is stale', () => {
   assert.deepEqual(SNAPSHOT_TOOLS.filter(oauthHiddenTool), HIDDEN);
@@ -322,12 +323,12 @@ test('tool table: section 5.0 scopes, write tools without their read, the no-acc
     edgegap_create_app: ['apps:write'], edgegap_create_app_version: ['apps:write'],
     edgegap_deploy: ['deployments:write', 'apps:read'], edgegap_get_deployment: ['deployments:read'],
     edgegap_wait_for_deployment: ['deployments:read'], edgegap_list_deployments: ['deployments:read'],
-    edgegap_stop_deployment: ['deployments:write'], edgegap_get_deployment_logs: ['deployments:logs', 'deployments:read'],
-    edgegap_get_registry_credentials: ['registry:credentials'], edgegap_list_registry_tags: ['registry:read'],
+    edgegap_stop_deployment: ['deployments:write'], edgegap_get_deployment_logs: ['deployments:read'],
+    edgegap_list_registry_tags: ['registry:read'],
     edgegap_get_relay_session: ['relays:read'], edgegap_create_relay_session: ['relays:write'],
     edgegap_authorize_relay_user: ['relays:write'], edgegap_delete_relay_session: ['relays:write'],
     edgegap_update_app: ['apps:write'], edgegap_update_app_version: ['apps:write'],
-    edgegap_delete_app: ['apps:delete', 'apps:read', 'deployments:read'], edgegap_delete_app_version: ['apps:delete'],
+    edgegap_delete_app: ['apps:write', 'deployments:read'], edgegap_delete_app_version: ['apps:write'],
     edgegap_list_locations: ['locations:read'], edgegap_list_ping_beacons: ['locations:read'],
     edgegap_list_fleet_hosts: ['fleets:read'], edgegap_get_deployment_metrics: ['deployments:read'],
     edgegap_tag_deployment: ['deployments:write'], edgegap_report_deployment: ['deployments:write'],

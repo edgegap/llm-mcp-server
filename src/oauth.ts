@@ -142,9 +142,9 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   edgegap_create_app_version: ['apps:write'],
   edgegap_update_app: ['apps:write'],
   edgegap_update_app_version: ['apps:write'],
-  // Deleting is its own scope (apps:delete holds no read): delete_app first lists the versions and live deployments.
-  edgegap_delete_app: ['apps:delete', 'apps:read', 'deployments:read'],
-  edgegap_delete_app_version: ['apps:delete'],
+  // delete_app first lists the versions and live deployments.
+  edgegap_delete_app: ['apps:write', 'deployments:read'],
+  edgegap_delete_app_version: ['apps:write'],
 
   edgegap_list_locations: ['locations:read'],
   edgegap_list_ping_beacons: ['locations:read'],
@@ -158,10 +158,11 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   edgegap_get_deployment_metrics: ['deployments:read'],
   edgegap_tag_deployment: ['deployments:write'],
   edgegap_report_deployment: ['deployments:write'],
-  // Explaining a missing log reads the deployment's status.
-  edgegap_get_deployment_logs: ['deployments:logs', 'deployments:read'],
+  edgegap_get_deployment_logs: ['deployments:read'],
 
-  edgegap_get_registry_credentials: ['registry:credentials'],
+  // edgegap_get_registry_credentials stays hidden: its wizard routes hand out
+  // push credentials that outlive the grant and take no OAuth token. It returns
+  // with the short-lived registry credentials endpoint, under its own scope.
   edgegap_list_registry_tags: ['registry:read'],
   edgegap_delete_registry_tag: ['registry:write'],
 

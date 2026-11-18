@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.18.2
+
+- Hosted Worker, OAuth mode: the scopes follow the catalogue's one read and one write scope per resource (ARBI-12360). `edgegap_delete_app` needs `apps:write` and `deployments:read`, `edgegap_delete_app_version` needs `apps:write`, and `edgegap_get_deployment_logs` needs `deployments:read`, which now holds container logs; `apps:delete` and `deployments:logs` no longer exist. `edgegap_get_registry_credentials` is hidden in OAuth mode: its routes take no OAuth token, and it returns with a short-lived registry credentials endpoint.
+- Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`).
+
 ## 0.18.1
 
 - Hosted Worker, OAuth mode: the tools whose API routes now take OAuth tokens (ARBI-12326) are listed and gated by their scopes: `edgegap_update_app` and `edgegap_update_app_version` (`apps:write`), `edgegap_delete_app` (`apps:delete`, plus `apps:read` and `deployments:read` for its checks) and `edgegap_delete_app_version` (`apps:delete`), `edgegap_list_locations` and `edgegap_list_ping_beacons` (`locations:read`), `edgegap_list_fleet_hosts` (`fleets:read`), `edgegap_get_deployment_metrics` (`deployments:read`), `edgegap_tag_deployment` and `edgegap_report_deployment` (`deployments:write`), `edgegap_delete_registry_tag` (`registry:write`), `edgegap_list_endpoint_storage` (`storage:read`) and the five endpoint-storage and pull-profile write tools (`storage:write`). `edgegap_deploy` with `private_host_ids` now deploys like a cloud deployment (`deployments:write`, `apps:read`) instead of answering a tool error. `edgegap_list_relay_sessions` and `edgegap_revoke_relay_user` stay hidden: the relay routes take no OAuth token yet.
