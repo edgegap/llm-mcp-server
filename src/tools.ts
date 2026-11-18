@@ -136,7 +136,8 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Supabase backend: ${skillUri('edgegap-supabase', 'SKILL.md')}, ` +
     `Three.js or web game with a Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
-    `vibe-coded single-player web game going online: ${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
+    `browser/WebAssembly game, WASM physics (Rapier), wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
+    `vibe-coded single-player web game going online:${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
     `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +

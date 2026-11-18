@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.4
+
+- Skills pack 0.37.0 (llm-agent-skills d0a1df7, edgegap/llm-agent-skills#60): new skill `edgegap-browser-wasm` 0.1.0 for browser and WebAssembly games: the same WASM physics (Rapier) on an authoritative Node.js server and in the browser for client-side prediction, `wss://` with TLS Upgrade, the client on a CDN and a slim server image, and the exact Chrome/Edge messages for mixed content, certificate, TLS and port errors. From netcode-sample-threejs-rapier, verified locally 2026-11-18. `edgegap` 0.37.0, `edgegap-threejs` 0.3.7, `edgegap-samples` 0.1.7.
+- The server instructions list the new skill. No tool changes. Covered by the skills tests and the tool snapshot.
+
 ## 0.19.3
 
 - Skills pack 0.36.1 (llm-agent-skills c88b952, edgegap/llm-agent-skills#59): `edgegap-godot` 0.2.5. The GodotSteam Server reference now builds with the Edgegap Godot plugin's dock, as the sample does since 2026-11-18, with three Steam-specific settings: the export preset's exclude filter, the dock's Dockerfile path set to the project's Dockerfile, and a `.dockerignore` that sends only `build/`.
