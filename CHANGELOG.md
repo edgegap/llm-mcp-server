@@ -2,24 +2,53 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
-## 0.18.2
+## 0.20.0
 
-- Hosted Worker, OAuth mode: the scopes follow the catalogue's one read and one write scope per resource (ARBI-12360). `edgegap_delete_app` needs `apps:write` and `deployments:read`, `edgegap_delete_app_version` needs `apps:write`, and `edgegap_get_deployment_logs` needs `deployments:read`, which now holds container logs; `apps:delete` and `deployments:logs` no longer exist. `edgegap_get_registry_credentials` is hidden in OAuth mode: its routes take no OAuth token, and it returns with a short-lived registry credentials endpoint.
-- Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`).
-
-## 0.18.1
-
-- Hosted Worker, OAuth mode: the tools whose API routes now take OAuth tokens (ARBI-12326) are listed and gated by their scopes: `edgegap_update_app` and `edgegap_update_app_version` (`apps:write`), `edgegap_delete_app` (`apps:delete`, plus `apps:read` and `deployments:read` for its checks) and `edgegap_delete_app_version` (`apps:delete`), `edgegap_list_locations` and `edgegap_list_ping_beacons` (`locations:read`), `edgegap_list_fleet_hosts` (`fleets:read`), `edgegap_get_deployment_metrics` (`deployments:read`), `edgegap_tag_deployment` and `edgegap_report_deployment` (`deployments:write`), `edgegap_delete_registry_tag` (`registry:write`), `edgegap_list_endpoint_storage` (`storage:read`) and the five endpoint-storage and pull-profile write tools (`storage:write`). `edgegap_deploy` with `private_host_ids` now deploys like a cloud deployment (`deployments:write`, `apps:read`) instead of answering a tool error. `edgegap_list_relay_sessions` and `edgegap_revoke_relay_user` stay hidden: the relay routes take no OAuth token yet.
-- `locations:read` joins the member-default scopes, so the metadata's `scopes_supported` and every challenge's `scope` include it.
-- Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`).
-
-## 0.18.0
-
-- Hosted Worker: OAuth mode, for Edgegap's OAuth sign-in (ARBI-12109). With `OAUTH_MODE` `"1"` the Worker is an OAuth resource server: it serves RFC 9728 metadata (`/.well-known/oauth-protected-resource/mcp`, scopes `apps:read deployments:read registry:read relays:read`), verifies access tokens against the issuer's JWKS (RS256 and `typ: at+jwt` only, a `kid` from the JWKS, `iss`, `aud` containing its own MCP URL, `exp`; the JWKS is cached 10 minutes and refetched on an unknown `kid` at most once a minute), and forwards the token unchanged to the API as `Authorization: Bearer`. Discovery and the no-account tools work signed out; an account tool signed out gets 401 with `resource_metadata` and the scopes to ask for, a token without the tool's scopes gets 403 `insufficient_scope` with the scopes held plus the ones needed, and an invalid token (including a pasted API token) gets 401 `invalid_token`. Tools whose API routes don't accept OAuth tokens yet are not listed in this mode, and `edgegap_deploy` with `private_host_ids` answers a tool error. Browser requests must come from an origin in `ALLOWED_ORIGINS`.
+- Hosted Worker: OAuth mode, for Edgegap's OAuth sign-in (ARBI-12109, ARBI-12326, ARBI-12360). With `OAUTH_MODE` `"1"` the Worker is an OAuth resource server: it serves RFC 9728 metadata (`/.well-known/oauth-protected-resource/mcp`, scopes `apps:read deployments:read locations:read registry:read relays:read`, the member defaults), verifies access tokens against the issuer's JWKS (RS256 and `typ: at+jwt` only, a `kid` from the JWKS, `iss`, `aud` containing its own MCP URL, `exp`; the JWKS is cached 10 minutes and refetched on an unknown `kid` at most once a minute), and forwards the token unchanged to the API as `Authorization: Bearer`. Discovery and the no-account tools work signed out; an account tool signed out gets 401 with `resource_metadata` and the scopes to ask for, a token without the tool's scopes gets 403 `insufficient_scope` with the scopes held plus the ones needed, and an invalid token (including a pasted API token) gets 401 `invalid_token`. Browser requests must come from an origin in `ALLOWED_ORIGINS`. The per-connection limit headers (`X-Edgegap-Read-Only`, `X-Edgegap-App-Allowlist`) narrow OAuth connections too.
+- Scopes, one read and one write per resource (a `*:write` comes with its `*:read`): `apps:read` (list apps and versions, `edgegap_compare_versions` with `deployments:read`), `apps:write` (create, update and delete apps and versions; `edgegap_delete_app` also needs `deployments:read` for its checks), `deployments:read` (list, status, metrics, container logs: `edgegap_get_deployment_logs`, `edgegap_search_deployment_logs`, `edgegap_fleet_health`), `deployments:write` (deploy, including to private fleet hosts, stop, tag, report), `locations:read` (locations, ping beacons), `fleets:read` (fleet hosts), `registry:read` (list tags), `registry:write` (delete tags), `relays:read`, `relays:write`, `storage:read`, `storage:write` (endpoint storage and pull profiles).
+- Hidden in OAuth mode, because their API routes take no OAuth token: `edgegap_list_relay_sessions` and `edgegap_revoke_relay_user` (relay profile auth), and `edgegap_get_registry_credentials` (the quick-start wizard routes; it returns with a short-lived registry credentials endpoint). 43 tools are listed.
 - New wrangler environments `staging` (`mcp-staging.edgegap.dev`) and `beta` (`mcp-beta.edgegap.dev`), both in OAuth mode. `mcp.edgegap.dev` stays in token mode. The Edgegap API base URL is now a var, `EDGEGAP_API_URL`, defaulting to `https://api.edgegap.com`. Deploy runbook in the README.
 - Analytics in OAuth mode: the distinct_id is the salted hash of the organization id from the token, and a `user_id` property holds the salted hash of its user, so users can be counted per organization. The raw ids are never sent.
 - `npm run test:worker` now runs in CI.
 - Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`).
+
+## 0.19.3
+
+- Skills pack 0.36.1 (llm-agent-skills c88b952, edgegap/llm-agent-skills#59): `edgegap-godot` 0.2.5. The GodotSteam Server reference now builds with the Edgegap Godot plugin's dock, as the sample does since 2026-11-18, with three Steam-specific settings: the export preset's exclude filter, the dock's Dockerfile path set to the project's Dockerfile, and a `.dockerignore` that sends only `build/`.
+- No tool changes. Covered by the skills tests and the tool snapshot.
+
+## 0.19.2
+
+- Skills pack 0.36.0 (llm-agent-skills 707ae0a, edgegap/llm-agent-skills#58): `edgegap-fal` 0.2.0 leads with the way most fal.ai game makers work, a coding agent for the code and fal for the assets (fal MCP or the `genmedia` CLI), and keeps the fal Agent path. New references for the fal asset pipeline (concept image to rigged GLB, clips, sizes, Three.js loader pitfalls, no asset in the server image) and the Relic Rumble walkthrough; verified on Edgegap 2026-11-17 with netcode-sample-fal-relic-rumble. `edgegap` 0.36.0, `edgegap-vibe-coded` 0.1.4, `edgegap-samples` 0.1.6.
+- No tool or instruction changes. Covered by the skills tests and the tool snapshot.
+
+## 0.19.1
+
+- Skills pack 0.35.1 (llm-agent-skills aa30540):
+  - 0.35.0 (edgegap/llm-agent-skills#53): new `edgegap-fal` skill for games written by fal Agent (fal.ai), verified on Edgegap 2026-11-09 with netcode-sample-fal-orb-arena. CI templates build images without provenance/SBOM attestations, which failed image pulls (`edgegap-threejs` 0.3.6, `edgegap-manus` 0.1.9, `edgegap-troubleshoot` 0.2.4).
+  - 0.35.1 (edgegap/llm-agent-skills#57): `edgegap-godot` 0.2.4 covers GodotSteam Server; Cocos extension links use `buildtool-cocos-plugin`; the samples catalog is rechecked.
+- Server instructions route fal.ai games to `edgegap-fal`.
+- Covered by the skills tests (the link resolves, instructions under 4096 characters) and the tool snapshot.
+
+## 0.19.0
+
+Operating a live game, not only shipping one:
+
+- New `edgegap_fleet_health`: one call for "is anything wrong right now?" across running deployments (all, one application or one version): counts by status, deployments in error with their error detail, ones stuck starting for over 10 minutes, and totals per location and per version with unhealthy ones flagged. `check_crashes: true` adds restart counts and exit codes.
+- New `edgegap_search_deployment_logs`: searches the container and crash logs of many running deployments at once and groups matching lines by error (timestamps, IDs and numbers stripped), with counts, the deployments that printed them and exit codes. Default pattern finds errors, exceptions, fatal signals and out-of-memory kills; `started_after` limits it to recent deployments; a regex is opt-in and refused with nested quantifiers.
+- New `edgegap_compare_versions`: compares two versions of an application from their running deployments (errors, crash restarts, exit codes, and CPU and memory average/p95/peak against each version's requested resources) and spells out the differences, for a rollback decision.
+- `edgegap_get_deployment_metrics` adds p95 per series and anomaly flags (spikes above mean + 3 sd, a rising trend such as a memory leak, CPU throttling), collected in a top-level `anomalies` list.
+- `confirm` on destructive tools: `edgegap_delete_app`, `edgegap_delete_app_version`, `edgegap_delete_registry_tag`, and `edgegap_stop_deployment` on a running deployment without the `edgegap-mcp` tag, now send nothing unless `confirm: true`; without it they return `status: "confirmation_required"` with a preview to show the developer. **Behavior change** for agents that called these tools directly: they get the preview first. Stopping the agent's own deployments is unchanged.
+- `EDGEGAP_APP_ALLOWLIST` now also covers `edgegap_stop_deployment`, `edgegap_tag_deployment` and `edgegap_report_deployment`: a deployment of an application outside the list is refused.
+- Hosted endpoint and Docker image: the headers `X-Edgegap-Read-Only: 1` and `X-Edgegap-App-Allowlist: a,b` give a connection the local server's read-only mode and allowlist. They can only narrow the server's settings. The token stays organization-wide.
+- Covered by `test/ops.mjs` (new), `test/newtools.mjs` (deletes pass `confirm: true`) and the tool snapshot. The new tools are mock-tested only.
+
+## 0.18.0
+
+- `edgegap_context` returns `pricing`: the egress terms, dated and with their source (edgegap.com/pricing.md). Private Fleet hosts include 6 TB of free egress per host per month (about 18 Mbps sustained), above which the Edge Cloud rate applies; Edge Cloud egress, and cloud overflow from a fleet, cost $0.10 per GB. Agents comparing hosting options get the terms without crawling the website.
+- `edgegap_list_fleet_hosts` says each host includes 6 TB of free egress per month and overflow pays cloud egress.
+- Skills pack 0.34.3 (edgegap/llm-agent-skills#56, 3295d15): `edgegap` and `edgegap-launch` state the egress terms and when a Private Fleet baseline removes most of the egress bill.
+- Covered by `test/newtools.mjs` (context returns the egress terms) and the tool snapshot.
 
 ## 0.17.2
 

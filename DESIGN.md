@@ -86,7 +86,7 @@ contradicted the README and stopped agents from checking a version's settings.
 Relay sessions and the container registry belong to the organization, not to an
 application, so the relay and registry tools are not covered by it either.
 
-It is **not** enforced by the five tools keyed on `request_id`:
+Before 0.19.0 it was **not** enforced by the five tools keyed on `request_id`:
 `edgegap_get_deployment`, `edgegap_wait_for_deployment`,
 `edgegap_list_deployments`, `edgegap_stop_deployment`, and
 `edgegap_get_deployment_logs`. An agent running with an allowlist set can list
@@ -94,13 +94,26 @@ every deployment in the organization and then inspect, read the logs of, or stop
 any of them — including deployments belonging to applications outside the list.
 
 So the allowlist scopes what an agent can **create and deploy into**, not what it
-can **touch once running**. That is narrower than earlier versions of this
-document implied.
+can **read once running**.
 
-The tools added in 0.14.0 keyed on `request_id` (`edgegap_tag_deployment`,
-`edgegap_report_deployment`) are not covered either. `EDGEGAP_STOP_OWN_ONLY=1`
-narrows the stop part of this gap: the stop tool then refuses any deployment
-without the `edgegap-mcp` tag, whichever application it belongs to.
+Since 0.19.0 the write tools keyed on `request_id` are covered:
+`edgegap_stop_deployment`, `edgegap_tag_deployment` and
+`edgegap_report_deployment` first read the deployment's status and refuse one
+whose application is not in the list (one extra API call, only when an allowlist
+is set). The read tools keyed on `request_id` (get, wait, list, logs, metrics)
+and the 0.19.0 operations tools (`edgegap_fleet_health`,
+`edgegap_search_deployment_logs`, `edgegap_compare_versions`) stay open, so an
+agent with an allowlist can still read every deployment in the organization.
+`EDGEGAP_STOP_OWN_ONLY=1` narrows stop further: only deployments with the
+`edgegap-mcp` tag.
+
+On the hosted endpoint and the Docker image, the same two limits come from
+connection headers: `X-Edgegap-Read-Only: 1` and `X-Edgegap-App-Allowlist`.
+They can only narrow the server's own settings (read-only cannot be switched
+off; a header allowlist is intersected with the server's, and one that shares
+no application allows none, never all). They are a stopgap for scoped tokens:
+the token itself stays organization-wide, and a client that drops the header
+gets the unscoped server.
 
 For a stronger guarantee today, use `EDGEGAP_READ_ONLY=1`, which never registers
 the mutating tools at all, or point the agent at a separate non-production
@@ -196,6 +209,31 @@ from the token, so `/v1/container-registry/images/<project>/<image>/tags` is a
 404. The tool tries the name as given first (nested image names are valid),
 then retries without a leading `<project>/`, and strips a registry host or tag
 if the agent passes a full image reference.
+
+**Destructive calls need confirm.** `edgegap_delete_app`,
+`edgegap_delete_app_version`, `edgegap_delete_registry_tag`, and
+`edgegap_stop_deployment` on a running deployment without the `edgegap-mcp`
+tag, send nothing unless the call carries `confirm: true`. Without it they run
+their local checks and return `status: "confirmation_required"` with a preview
+(the deployment's application, version and location; the versions an
+application delete takes with it), as a normal result rather than an error, so
+the agent shows it to the developer instead of retrying. Stopping a deployment
+this server started needs no confirm: it is the cleanup every task ends with,
+and a speed bump there would teach agents to pass `confirm: true` by reflex.
+`dry_run` is unchanged and needs no confirm. The parameter is a speed bump for a
+well-behaved agent, not a security boundary: an agent can always pass it.
+
+**Operations tools read many deployments per call, within a budget.**
+`edgegap_fleet_health`, `edgegap_search_deployment_logs` and
+`edgegap_compare_versions` make one API call per deployment they read (status,
+logs, metrics), at most 8 at a time. The hosted Worker runs inside a
+per-request subrequest budget, so it reads at most 20 deployments per call (6
+per version for a comparison) against 100 (20) locally, and every result says
+how many were left out. They only see deployments Edgegap still lists, so they
+report current state, not history; there is no API for past deployments,
+costs or fleet utilization yet. A log search regex is opt-in, capped at 200
+characters, refuses nested quantifiers, and only reads the last 200 KB of each
+log, since it runs on the hosted server.
 
 **Bulk operations are deliberately absent.** `stop` takes one `request_id`.
 There is no bulk-stop tool, because an agent with a filter expression and a bug

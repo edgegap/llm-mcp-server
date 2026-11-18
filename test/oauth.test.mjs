@@ -336,6 +336,8 @@ test('tool table: section 5.0 scopes, write tools without their read, the no-acc
     edgegap_create_endpoint_storage: ['storage:write'], edgegap_delete_endpoint_storage: ['storage:write'],
     edgegap_create_pull_profile: ['storage:write'], edgegap_link_pull_profile: ['storage:write'],
     edgegap_delete_pull_profile: ['storage:write'],
+    edgegap_search_deployment_logs: ['deployments:read'], edgegap_fleet_health: ['deployments:read'],
+    edgegap_compare_versions: ['apps:read', 'deployments:read'],
   };
   for (const [tool, scopes] of Object.entries(expect)) assert.deepEqual(toolNeed(tool), { kind: 'scopes', scopes }, tool);
   for (const tool of ['edgegap_context', 'edgegap_list_skills', 'edgegap_get_skill', 'edgegap_update_skills', 'edgegap_generate_dockerfile', 'edgegap_validate_server_config']) {

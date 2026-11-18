@@ -159,6 +159,10 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   edgegap_tag_deployment: ['deployments:write'],
   edgegap_report_deployment: ['deployments:write'],
   edgegap_get_deployment_logs: ['deployments:read'],
+  edgegap_search_deployment_logs: ['deployments:read'],
+  edgegap_fleet_health: ['deployments:read'],
+  // Reads both versions' settings and their running deployments.
+  edgegap_compare_versions: ['apps:read', 'deployments:read'],
 
   // edgegap_get_registry_credentials stays hidden: its wizard routes hand out
   // push credentials that outlive the grant and take no OAuth token. It returns

@@ -19,7 +19,7 @@ import { EdgegapClient } from './client.js';
 import { registerTools, serverInstructions } from './tools.js';
 import { VERSION } from './version.js';
 import { StaticTokenProvider } from './auth.js';
-import { extractToken, unavailableMessage } from './hosted.js';
+import { extractToken, narrowConfig, unavailableMessage } from './hosted.js';
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -106,10 +106,15 @@ function main(): void {
       { name: 'edgegap', version: VERSION },
       { instructions: serverInstructions('hosted') }
     );
-    const client = new EdgegapClient(config, auth, {
+    // Per-connection limits from X-Edgegap-Read-Only / X-Edgegap-App-Allowlist (narrow only).
+    const requestConfig = narrowConfig(config, (name) => {
+      const v = req.headers[name];
+      return Array.isArray(v) ? v.join(',') : v;
+    });
+    const client = new EdgegapClient(requestConfig, auth, {
       clientName: () => server.server.getClientVersion()?.name,
     });
-    registerTools(server, client, config, auth);
+    registerTools(server, client, requestConfig, auth);
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

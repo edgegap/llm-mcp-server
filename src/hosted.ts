@@ -84,3 +84,35 @@ export function unavailableMessage(problem: 'absent' | 'foreign'): string {
     common
   );
 }
+
+/** Shown as the allowlist when the connection's and the server's lists share no application. */
+export const NO_SHARED_APPS = '(none: the X-Edgegap-App-Allowlist header and the server allowlist share no application)';
+
+/**
+ * Narrows a hosted request's config from its headers, so a developer on the
+ * hosted endpoint gets the same limits EDGEGAP_READ_ONLY and
+ * EDGEGAP_APP_ALLOWLIST give the local server:
+ *
+ *   X-Edgegap-Read-Only: 1             no write tool is registered
+ *   X-Edgegap-App-Allowlist: a,b       writes only in these applications
+ *
+ * Headers can only narrow: read-only cannot be switched off, and an allowlist
+ * already set on the server is intersected, never widened. The token is still
+ * organization-wide; this limits what this connection's tools will do with it.
+ */
+export function narrowConfig<T extends { readOnly: boolean; appAllowlist: string[] }>(
+  config: T,
+  header: (name: string) => string | null | undefined
+): T {
+  const ro = header('x-edgegap-read-only')?.trim().toLowerCase();
+  const readOnly = config.readOnly || ro === '1' || ro === 'true';
+  const raw = header('x-edgegap-app-allowlist');
+  let appAllowlist = config.appAllowlist;
+  if (raw !== null && raw !== undefined && raw.trim() !== '') {
+    const asked = [...new Set(raw.split(',').map((s) => s.trim()).filter((s) => /^[A-Za-z0-9._-]{1,128}$/.test(s)))].slice(0, 50);
+    const narrowed = config.appAllowlist.length ? asked.filter((a) => config.appAllowlist.includes(a)) : asked;
+    // A header naming no valid or shared application must not fall back to "all".
+    appAllowlist = narrowed.length ? narrowed : [NO_SHARED_APPS];
+  }
+  return { ...config, readOnly, appAllowlist };
+}

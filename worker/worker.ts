@@ -48,7 +48,7 @@ import { StaticTokenProvider, type TokenSource } from '../src/auth.js';
 import { registerTools, serverInstructions, type RegisterOptions } from '../src/tools.js';
 import { skillsCheckFromEnv } from '../src/skillsversion.js';
 import { ConfigError, parseBaseUrl, type Config } from '../src/config.js';
-import { extractToken, unavailableMessage } from '../src/hosted.js';
+import { extractToken, narrowConfig, unavailableMessage } from '../src/hosted.js';
 import {
   JwksCache,
   OAuthTokenSource,
@@ -198,7 +198,8 @@ async function serveMcp(request: Request, env: Env, ctx: ExecutionContext, sessi
 async function tokenMode(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const { token, problem } = extractToken(request.headers.get('Authorization'));
   return serveMcp(request, env, ctx, {
-    config: configForRequest(env, 'api_token'),
+    // Per-connection limits from X-Edgegap-Read-Only / X-Edgegap-App-Allowlist (narrow only).
+    config: narrowConfig(configForRequest(env, 'api_token'), (name) => request.headers.get(name)),
     auth: new StaticTokenProvider(token, problem ? unavailableMessage(problem) : undefined, problem),
     instructions: serverInstructions('hosted'),
     token,
@@ -225,7 +226,8 @@ async function oauthMode(request: Request, env: Env, ctx: ExecutionContext, sett
   }
 
   return serveMcp(request, env, ctx, {
-    config: configForRequest(env, 'oauth'),
+    // Per-connection limits from X-Edgegap-Read-Only / X-Edgegap-App-Allowlist (narrow only).
+    config: narrowConfig(configForRequest(env, 'oauth'), (name) => request.headers.get(name)),
     auth: new OAuthTokenSource(decision.token),
     instructions: serverInstructions('oauth'),
     token: decision.token,

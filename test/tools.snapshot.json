@@ -1,6 +1,6 @@
 {
   "normal": {
-    "instructions": "Before acting, read edgegap-skill://edgegap/SKILL.md (Unity: edgegap-skill://edgegap-unity/SKILL.md, NGO: edgegap-skill://edgegap-ngo/SKILL.md, FishNet: edgegap-skill://edgegap-fishnet/SKILL.md, PurrNet: edgegap-skill://edgegap-purrnet/SKILL.md, Photon Fusion: edgegap-skill://edgegap-fusion/SKILL.md, Simple FPS: edgegap-skill://edgegap-fusion-simplefps/SKILL.md, Unreal: edgegap-skill://edgegap-unreal/SKILL.md, Unreal voice chat: edgegap-skill://edgegap-eos-voice/SKILL.md, Godot 4: edgegap-skill://edgegap-godot/SKILL.md, Colyseus: edgegap-skill://edgegap-colyseus/SKILL.md, Cocos Creator: edgegap-skill://edgegap-cocos/SKILL.md, Unity Matchmaker (UGS): edgegap-skill://edgegap-ugs-matchmaker/SKILL.md, Nakama: edgegap-skill://edgegap-nakama/SKILL.md, PlayFab: edgegap-skill://edgegap-playfab/SKILL.md, Supabase backend: edgegap-skill://edgegap-supabase/SKILL.md, Three.js or web game with a Node server: edgegap-skill://edgegap-threejs/SKILL.md, vibe-coded single-player web game going online: edgegap-skill://edgegap-vibe-coded/SKILL.md, Manus game: edgegap-skill://edgegap-manus/SKILL.md, matchmaking, parties, regions or backfill design: edgegap-skill://edgegap-matchmaking/SKILL.md, host/client games on Edgegap relays: edgegap-skill://edgegap-relays/SKILL.md, sample projects: edgegap-skill://edgegap-samples/SKILL.md). If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\nDeployments and relay sessions cost money while running. Stop deployments and delete relay sessions you created before ending the task; edgegap_list_deployments with only_agent_deployments: true lists every deployment tagged \"edgegap-mcp\". If a deployment errors, read the container logs before redeploying.\n\nGuardrails: edgegap_context shows this session's API and limits. Every write tool takes dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the API token in env vars, tags or URLs: such calls are refused.\n\nCredentials: if no token was configured, the first tool call asks the developer for one. The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked for, do not enumerate or modify unrelated applications, and do not probe what it allows. If the developer declines to provide a token, stop and report which operation needed it; do not retry.\n\nDedicated server vs relay — recommend a dedicated server by default (edgegap_deploy): the server owns the game state, so no host advantage, much harder cheating, and the match survives any player leaving. Relay (edgegap_create_relay_session): NOT a game server; one player's game hosts and owns the state, everyone else gets two hops, and the match ends when the host quits. Use one only when the developer explicitly wants host/client; \"it needs no server image\" is not a reason. If unsure, ask before choosing a relay.\n\nGolden path for a first dedicated-server deployment:\n1. edgegap_generate_dockerfile (no Dockerfile yet) or edgegap_validate_server_config (existing one)\n2. edgegap_get_registry_credentials, then docker build --platform linux/amd64 and push\n3. edgegap_list_registry_tags to confirm the push\n4. edgegap_list_apps, then edgegap_create_app if none fits\n5. edgegap_create_app_version to register the image\n6. edgegap_deploy near the players\n7. edgegap_wait_for_deployment for the connection address\n8. edgegap_stop_deployment when finished\nedgegap_build_matchmaker_config makes the matchmaker config to upload in the dashboard. For later builds, suggest CI over repeating steps 2-7: the GitHub Action edgegap/deploy-action (edgegap-launch skill) creates the version from an existing one, smoke-tests and promotes it. Do not write Deploy API code for a CI job that only ships a build.",
+    "instructions": "Before acting, read edgegap-skill://edgegap/SKILL.md (Unity: edgegap-skill://edgegap-unity/SKILL.md, NGO: edgegap-skill://edgegap-ngo/SKILL.md, FishNet: edgegap-skill://edgegap-fishnet/SKILL.md, PurrNet: edgegap-skill://edgegap-purrnet/SKILL.md, Photon Fusion: edgegap-skill://edgegap-fusion/SKILL.md, Simple FPS: edgegap-skill://edgegap-fusion-simplefps/SKILL.md, Unreal: edgegap-skill://edgegap-unreal/SKILL.md, Unreal voice chat: edgegap-skill://edgegap-eos-voice/SKILL.md, Godot 4: edgegap-skill://edgegap-godot/SKILL.md, Colyseus: edgegap-skill://edgegap-colyseus/SKILL.md, Cocos Creator: edgegap-skill://edgegap-cocos/SKILL.md, Unity Matchmaker (UGS): edgegap-skill://edgegap-ugs-matchmaker/SKILL.md, Nakama: edgegap-skill://edgegap-nakama/SKILL.md, PlayFab: edgegap-skill://edgegap-playfab/SKILL.md, Supabase backend: edgegap-skill://edgegap-supabase/SKILL.md, Three.js or web game with a Node server: edgegap-skill://edgegap-threejs/SKILL.md, vibe-coded single-player web game going online: edgegap-skill://edgegap-vibe-coded/SKILL.md, fal.ai game: edgegap-skill://edgegap-fal/SKILL.md, Manus game: edgegap-skill://edgegap-manus/SKILL.md, matchmaking, parties, regions or backfill design: edgegap-skill://edgegap-matchmaking/SKILL.md, host/client games on Edgegap relays: edgegap-skill://edgegap-relays/SKILL.md, sample projects: edgegap-skill://edgegap-samples/SKILL.md). If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\nDeployments and relay sessions cost money while running. Stop deployments and delete relay sessions you created before ending the task; edgegap_list_deployments with only_agent_deployments: true lists every deployment tagged \"edgegap-mcp\". If a deployment errors, read the container logs before redeploying.\n\nGuardrails: edgegap_context shows this session's API and limits. Every write tool takes dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the API token in env vars, tags or URLs: such calls are refused.\n\nCredentials: if no token was configured, the first tool call asks the developer for one. The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked for, do not enumerate or modify unrelated applications, and do not probe what it allows. If the developer declines to provide a token, stop and report which operation needed it; do not retry.\n\nDedicated server vs relay — recommend a dedicated server by default (edgegap_deploy): the server owns the game state, so no host advantage, much harder cheating, and the match survives any player leaving. Relay (edgegap_create_relay_session): NOT a game server; one player's game hosts and owns the state, everyone else gets two hops, and the match ends when the host quits. Use one only when the developer explicitly wants host/client; \"it needs no server image\" is not a reason. If unsure, ask before choosing a relay.\n\nGolden path for a first dedicated-server deployment:\n1. edgegap_generate_dockerfile (no Dockerfile yet) or edgegap_validate_server_config (existing one)\n2. edgegap_get_registry_credentials, then docker build --platform linux/amd64 and push\n3. edgegap_list_registry_tags to confirm the push\n4. edgegap_list_apps, then edgegap_create_app if none fits\n5. edgegap_create_app_version to register the image\n6. edgegap_deploy near the players\n7. edgegap_wait_for_deployment for the connection address\n8. edgegap_stop_deployment when finished\nedgegap_build_matchmaker_config makes the matchmaker config to upload in the dashboard. For later builds, suggest CI over repeating steps 2-7: the GitHub Action edgegap/deploy-action (edgegap-launch skill) creates the version from an existing one, smoke-tests and promotes it. Do not write Deploy API code for a CI job that only ships a build.",
     "tools": [
       {
         "name": "edgegap_authorize_relay_user",
@@ -145,9 +145,47 @@
         }
       },
       {
+        "name": "edgegap_compare_versions",
+        "title": "Compare two versions of an application",
+        "description": "Compare two versions of one application from their running deployments, to back a rollback or promote decision: deployments in error, crash restarts and exit codes, and CPU and memory (average, p95, peak) against each version's requested cpu_units and memory_mb, with the differences spelled out. Reads up to 20 running deployments per version, newest first, so both versions need deployments running now (stopped ones keep no logs or status). Read-only.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "type": "string",
+              "description": "Application name."
+            },
+            "version_a": {
+              "type": "string",
+              "description": "The baseline version, e.g. the one in production."
+            },
+            "version_b": {
+              "type": "string",
+              "description": "The version to compare against it, e.g. the new build."
+            },
+            "max_deployments_per_version": {
+              "description": "1-20. Default 5.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "application",
+            "version_a",
+            "version_b"
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_context",
         "title": "Show this Edgegap MCP server's configuration",
-        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
+        "description": "Report which Edgegap API this server talks to, its version, whether it is the local or hosted server, and the guardrails in force: read-only mode, application allowlist, max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support dry_run. Also gives the egress terms (Private Fleet hosts include 6 TB of free egress per host per month; Edge Cloud egress is $0.10 per GB) and says whether this session has a usable token and, if not, why and how to fix it. Call it first when unsure what this session is allowed to do, before anything billable, or when tool calls fail with a token problem. Makes no API call unless check_token is true, and never shows the token.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -186,6 +224,11 @@
               "type": "string"
             },
             "guardrails": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {}
+            },
+            "pricing": {
               "type": "object",
               "properties": {},
               "additionalProperties": {}
@@ -556,7 +599,7 @@
       {
         "name": "edgegap_delete_app",
         "title": "Delete an application and all its versions",
-        "description": "Delete one application and every version under it, to clean up a test application. Exactly one exact name; refused while any of its deployments is running, and refused when it has more versions than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise max_versions after the developer agreed). Registry images are not touched. Cannot be undone.",
+        "description": "Delete one application and every version under it, to clean up a test application. Exactly one exact name; refused while any of its deployments is running, and refused when it has more versions than max_versions (default 0: delete its versions first with edgegap_delete_app_version, or raise max_versions after the developer agreed). Registry images are not touched. Cannot be undone, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -564,6 +607,10 @@
               "type": "string",
               "minLength": 1,
               "description": "The exact application name to delete."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "max_versions": {
               "description": "Delete only if it has at most this many versions. Default 0.",
@@ -590,7 +637,7 @@
       {
         "name": "edgegap_delete_app_version",
         "title": "Delete one application version",
-        "description": "Delete one version of an application, to clean up test versions. Exactly one exact version name; refused while any deployment of that version is running. The container image stays in the registry (edgegap_delete_registry_tag removes it). Cannot be undone, so confirm with the developer when the version is not one this conversation created.",
+        "description": "Delete one version of an application, to clean up test versions. Exactly one exact version name; refused while any deployment of that version is running. The container image stays in the registry (edgegap_delete_registry_tag removes it). Cannot be undone, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -602,6 +649,10 @@
               "type": "string",
               "minLength": 1,
               "description": "The exact version name to delete."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -691,7 +742,7 @@
       {
         "name": "edgegap_delete_registry_tag",
         "title": "Delete one image tag from the Edgegap registry",
-        "description": "Delete one tag, and the image it points to, from this organization's Edgegap container registry, to clean up old builds. Takes exactly one image name and one exact tag; wildcards, lists and \"latest\" are refused, and there is no bulk delete. A version that still uses the tag can no longer start deployments, so check edgegap_list_app_versions first. Cannot be undone.",
+        "description": "Delete one tag, and the image it points to, from this organization's Edgegap container registry, to clean up old builds. Takes exactly one image name and one exact tag; wildcards, lists and \"latest\" are refused, and there is no bulk delete. A version that still uses the tag can no longer start deployments, so check edgegap_list_app_versions first. Cannot be undone, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -703,6 +754,10 @@
             "tag": {
               "type": "string",
               "description": "The exact tag to delete, e.g. \"build-41\"."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -922,6 +977,39 @@
         "annotations": {
           "destructiveHint": false,
           "idempotentHint": false,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "edgegap_fleet_health",
+        "title": "Summarise the health of running deployments",
+        "description": "One call for \"is anything wrong right now?\" across running deployments, instead of checking them one by one: counts by status, the deployments in error with their error detail, ones stuck starting for over 10 minutes, and totals per location and per version with unhealthy ones flagged. check_crashes: true also reads each deployment's crash data (restarts, exit codes). Covers what Edgegap still lists: stopped deployments are gone, so this is current state, not history. Inspects up to 100 deployments per call, newest first. Read-only. Next: edgegap_search_deployment_logs for what the errors say, edgegap_compare_versions for a rollback decision.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "description": "Only this application. Default: all.",
+              "type": "string"
+            },
+            "version": {
+              "description": "Only this version (needs application).",
+              "type": "string"
+            },
+            "max_deployments": {
+              "description": "How many to inspect, 1-100. Default 50.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "check_crashes": {
+              "description": "Also read crash data (restart count, exit code) per deployment. Default false.",
+              "type": "boolean"
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
           "openWorldHint": true
         }
       },
@@ -1258,7 +1346,7 @@
       {
         "name": "edgegap_get_deployment_metrics",
         "title": "Get CPU, memory and network use of a deployment",
-        "description": "Summarise a deployment's resource use over time: CPU, CPU throttling, memory and network, each as latest, average and peak, with the API's own labels. Use it to size a version (cpu_units, memory_mb) from a real match, or to check whether a crash was memory or CPU starvation before redeploying. Defaults to the whole life of the deployment.",
+        "description": "Summarise a deployment's resource use over time: CPU, CPU throttling, memory and network, each as latest, average, p95 and peak, with the API's own labels, plus anomaly flags (spikes above mean + 3 sd, a rising trend such as a memory leak, any CPU throttling) collected in `anomalies`. Use it to size a version (cpu_units, memory_mb) from a real match, or to check whether a crash was memory or CPU starvation before redeploying. Defaults to the whole life of the deployment. To compare two versions, use edgegap_compare_versions.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1299,11 +1387,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1329,11 +1429,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1359,11 +1471,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1389,11 +1513,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1419,11 +1555,23 @@
                 "average": {
                   "type": "number"
                 },
+                "p95": {
+                  "type": "number"
+                },
                 "peak": {
                   "type": "number"
                 },
                 "samples": {
                   "type": "number"
+                },
+                "nonzero_share": {
+                  "type": "number"
+                },
+                "anomalies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
                 },
                 "labels": {
                   "type": "array",
@@ -1527,7 +1675,7 @@
           "properties": {
             "skill": {
               "type": "string",
-              "description": "Skill name, from edgegap_list_skills: edgegap, edgegap-cocos, edgegap-colyseus, edgegap-containerize, edgegap-deployments-api, edgegap-eos-voice, edgegap-fishnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-godot, edgegap-launch, edgegap-local-testing, edgegap-manus, edgegap-matchmaking, edgegap-nakama, edgegap-ngo, edgegap-playfab, edgegap-purrnet, edgegap-relays, edgegap-samples, edgegap-server-design, edgegap-supabase, edgegap-threejs, edgegap-troubleshoot, edgegap-ugs-matchmaker, edgegap-unity, edgegap-unreal, edgegap-vibe-coded."
+              "description": "Skill name, from edgegap_list_skills: edgegap, edgegap-cocos, edgegap-colyseus, edgegap-containerize, edgegap-deployments-api, edgegap-eos-voice, edgegap-fal, edgegap-fishnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-godot, edgegap-launch, edgegap-local-testing, edgegap-manus, edgegap-matchmaking, edgegap-nakama, edgegap-ngo, edgegap-playfab, edgegap-purrnet, edgegap-relays, edgegap-samples, edgegap-server-design, edgegap-supabase, edgegap-threejs, edgegap-troubleshoot, edgegap-ugs-matchmaker, edgegap-unity, edgegap-unreal, edgegap-vibe-coded."
             },
             "file": {
               "description": "A file inside the skill, e.g. \"references/deploy.md\" or \"assets/docker/Dockerfile\". Default SKILL.md.",
@@ -1919,7 +2067,7 @@
       {
         "name": "edgegap_list_fleet_hosts",
         "title": "List the hosts of a private fleet",
-        "description": "List the hosts in one of the organization's private fleets (dedicated machines Edgegap manages for you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to edgegap_deploy as private_host_ids to place a server on them first. Organizations without private fleets get an error from the API.",
+        "description": "List the hosts in one of the organization's private fleets (dedicated machines Edgegap manages for you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to edgegap_deploy as private_host_ids to place a server on them first. Each host includes 6 TB of free egress per month; deployments that overflow to the cloud pay cloud egress ($0.10 per GB). Organizations without private fleets get an error from the API.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -2327,15 +2475,66 @@
         }
       },
       {
+        "name": "edgegap_search_deployment_logs",
+        "title": "Search the logs of many deployments at once",
+        "description": "Search the container and crash logs of running deployments of an application (and version) for a pattern, and group the matching lines by error, with counts and which deployments printed them: \"every crash in version 1.4.2 since yesterday, grouped by error\". Without a pattern it looks for errors, exceptions, fatal signals and out-of-memory kills. Also counts crash exit codes. Logs only exist while a deployment runs (or in Endpoint Storage), so stopped deployments are not searched. Searches up to 100 deployments per call, newest first. Read-only.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "application": {
+              "description": "Only this application. Default: all.",
+              "type": "string"
+            },
+            "version": {
+              "description": "Only this version (needs application).",
+              "type": "string"
+            },
+            "pattern": {
+              "description": "Text to find, case-insensitive. Default: common error and crash words.",
+              "type": "string"
+            },
+            "regex": {
+              "description": "Treat pattern as a regular expression. Default false.",
+              "type": "boolean"
+            },
+            "started_after": {
+              "description": "Only deployments started after this ISO 8601 time, e.g. \"2026-11-12T00:00:00Z\" for the last day.",
+              "type": "string"
+            },
+            "max_deployments": {
+              "description": "How many to search, 1-100. Default 30.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "max_groups": {
+              "description": "Most error groups to return, 1-50. Default 15.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "annotations": {
+          "readOnlyHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
         "name": "edgegap_stop_deployment",
         "title": "Stop a deployment",
-        "description": "Gracefully stop one deployment by request_id, sending SIGTERM to the container. Stop every deployment you started for testing before ending your task. This tool stops exactly one deployment, named by its exact request_id: empty IDs, wildcards and lists are refused, and bulk stop is deliberately not exposed.",
+        "description": "Gracefully stop one deployment by request_id, sending SIGTERM to the container. Stop every deployment you started for testing before ending your task. This tool stops exactly one deployment, named by its exact request_id: empty IDs, wildcards and lists are refused, and bulk stop is deliberately not exposed. A deployment this server started (tagged \"edgegap-mcp\") stops right away; any other running deployment may be serving players, so without confirm: true the result only previews it and nothing is sent.",
         "inputSchema": {
           "type": "object",
           "properties": {
             "request_id": {
               "type": "string",
               "description": "The exact request_id of the one deployment to stop, e.g. \"61b1be8f54d9\"."
+            },
+            "confirm": {
+              "description": "Set true only after the developer approved this exact call. Without it nothing is sent: the result previews what would be stopped or deleted (status \"confirmation_required\").",
+              "type": "boolean"
             },
             "dry_run": {
               "description": "Show the exact request (method, host, path, body) with secrets masked, and send nothing. Local checks still run. Use it to confirm a billable or destructive call before making it.",
@@ -2866,7 +3065,9 @@
   "read_only": {
     "tools": [
       "edgegap_build_matchmaker_config",
+      "edgegap_compare_versions",
       "edgegap_context",
+      "edgegap_fleet_health",
       "edgegap_generate_dockerfile",
       "edgegap_get_app_version",
       "edgegap_get_deployment",
@@ -2884,6 +3085,7 @@
       "edgegap_list_registry_tags",
       "edgegap_list_relay_sessions",
       "edgegap_list_skills",
+      "edgegap_search_deployment_logs",
       "edgegap_update_skills",
       "edgegap_validate_server_config",
       "edgegap_wait_for_deployment"
