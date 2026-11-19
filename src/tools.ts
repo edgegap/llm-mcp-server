@@ -1032,7 +1032,7 @@ export function registerTools(
           .describe('Make one read-only API call (list one application) to confirm Edgegap accepts the token. Default false.'),
       },
       outputSchema: OUTPUT.context,
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ check_token }) => {
       const hosted = config.transport === 'hosted';
@@ -1127,7 +1127,7 @@ export function registerTools(
         page: z.number().int().optional(),
       },
       outputSchema: OUTPUT.listApps,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ limit, page }) =>
       guard(auth, async () => {
@@ -1183,7 +1183,7 @@ export function registerTools(
           is_active: z.boolean().optional().describe('Whether deployments are allowed. Default true.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async ({ name, is_active, dry_run }) =>
         guard(auth, async () => {
@@ -1222,7 +1222,7 @@ export function registerTools(
           is_active: z.boolean().describe('false blocks new deployments; true allows them again.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, is_active, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1271,7 +1271,7 @@ export function registerTools(
         application: z.string().optional().describe('Application name, as returned by edgegap_list_apps. Required; without it the applications are listed.'),
       },
       outputSchema: OUTPUT.listAppVersions,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application }) =>
       // Read-only, so not subject to EDGEGAP_APP_ALLOWLIST: the allowlist
@@ -1317,7 +1317,7 @@ export function registerTools(
         version: z.string().optional().describe('Version name, as listed by edgegap_list_app_versions. Required; without it the versions are listed.'),
       },
       outputSchema: OUTPUT.getAppVersion,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -1452,7 +1452,7 @@ export function registerTools(
             .describe('Environment variables injected into the container. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1683,7 +1683,7 @@ export function registerTools(
             .describe('REPLACES every env var on the version; [] removes them all. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1831,7 +1831,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('Results per page, 1-200. Default 100.'),
       },
       outputSchema: OUTPUT.listLocations,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version, page, limit }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -1869,7 +1869,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('Results per page, 1-200. Default 100.'),
       },
       outputSchema: OUTPUT.listPingBeacons,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ page, limit }) =>
       guard(auth, async () => {
@@ -1960,7 +1960,7 @@ export function registerTools(
           dry_run: dryRunParam,
         },
         outputSchema: OUTPUT.deploy,
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -2192,7 +2192,7 @@ export function registerTools(
         request_id: z.string().describe('The request_id returned by edgegap_deploy.'),
       },
       outputSchema: OUTPUT.deployment,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ request_id }) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2226,7 +2226,7 @@ export function registerTools(
           .describe('How long to wait before giving up, 5-600. Default 180.'),
       },
       outputSchema: OUTPUT.waitForDeployment,
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ request_id, timeout_seconds }, extra) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2377,7 +2377,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('1-100. Default 50.'),
       },
       outputSchema: OUTPUT.listDeployments,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ only_agent_deployments, filters: given, order_by, limit }) =>
       guard(auth, async () => {
@@ -2451,7 +2451,7 @@ export function registerTools(
           confirm: confirmParam,
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ request_id, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2536,7 +2536,7 @@ export function registerTools(
           .optional()
           .describe('Truncate logs to this length (500-50000), keeping the tail. Default 8000.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ request_id, max_characters }) =>
       guarded(auth, NOT_FOUND.logs, async () => {
@@ -2598,7 +2598,7 @@ export function registerTools(
         step: z.string().optional().describe('Averaging step, e.g. "30s" or "5m". Default: the API\'s.'),
       },
       outputSchema: OUTPUT.metrics,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ request_id, start_time, end_time, step }) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2735,7 +2735,7 @@ export function registerTools(
         max_deployments: z.number().int().optional().describe(`How many to inspect, 1-${OPS_CAP}. Default ${Math.min(50, OPS_CAP)}.`),
         check_crashes: z.boolean().optional().describe('Also read crash data (restart count, exit code) per deployment. Default false.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version, max_deployments, check_crashes }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -2843,7 +2843,7 @@ export function registerTools(
         max_deployments: z.number().int().optional().describe(`How many to search, 1-${OPS_CAP}. Default ${Math.min(30, OPS_CAP)}.`),
         max_groups: z.number().int().optional().describe('Most error groups to return, 1-50. Default 15.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version, pattern, regex, started_after, max_deployments, max_groups }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -2920,7 +2920,7 @@ export function registerTools(
         version_b: z.string().describe('The version to compare against it, e.g. the new build.'),
         max_deployments_per_version: z.number().int().optional().describe(`1-${COMPARE_CAP}. Default ${Math.min(5, COMPARE_CAP)}.`),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version_a, version_b, max_deployments_per_version }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -3047,7 +3047,7 @@ export function registerTools(
           .describe('Extra server arguments, one per entry, e.g. ["-log", "-port=7777"].'),
         base_image: z.string().optional().describe('Default "ubuntu:22.04".'),
       },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       let generated;
@@ -3143,7 +3143,7 @@ export function registerTools(
         docker_tag: z.string().optional(),
       },
       outputSchema: OUTPUT.validateServerConfig,
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       const { engine, errors, warnings } = validateServerConfig(args);
@@ -3309,7 +3309,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('1-100. Default 20.'),
       },
       outputSchema: OUTPUT.listRegistryTags,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ image_name, page, limit }) =>
       guard(auth, async () => {
@@ -3410,7 +3410,7 @@ export function registerTools(
           confirm: confirmParam,
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ image_name, tag, confirm, dry_run }) =>
         guard(auth, async () => {
@@ -3483,7 +3483,7 @@ export function registerTools(
           remove: z.array(z.string().min(1).max(40)).optional().describe('Tags to remove.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async ({ request_id, add, remove, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -3539,7 +3539,7 @@ export function registerTools(
           metadata: z.record(z.string(), z.string()).optional().describe('Extra key/value details, e.g. {"match_id": "m-42"}.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async ({ request_id, reason, metadata, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -3582,7 +3582,7 @@ export function registerTools(
           confirm: confirmParam,
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, version, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -3630,7 +3630,7 @@ export function registerTools(
             .describe('Delete only if it has at most this many versions. Default 0.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, max_versions, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -3714,7 +3714,7 @@ export function registerTools(
       inputSchema: {
         fleet_name: z.string().min(1).describe('The private fleet name, as shown in the dashboard.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ fleet_name }) =>
       guard(auth, async () => {
@@ -3745,7 +3745,7 @@ export function registerTools(
         'for logs through edgegap_create_app_version / edgegap_update_app_version endpoint_storage, and a pull ' +
         'profile through edgegap_link_pull_profile.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async () =>
       guard(auth, async () => {
@@ -3800,7 +3800,7 @@ export function registerTools(
             .describe('v1 (default) writes one file per deployment; v2 streams chunks while it runs.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -3859,7 +3859,7 @@ export function registerTools(
           destination: z.string().min(1).describe('Absolute path in the container, e.g. "/data/maps".'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -3904,7 +3904,7 @@ export function registerTools(
           unlink: z.boolean().optional().describe('true removes the link instead.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -3940,7 +3940,7 @@ export function registerTools(
           pull_profile: z.string().min(1).describe('The exact pull profile name to delete.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ endpoint_storage, pull_profile, dry_run }) =>
         guard(auth, async () => {
@@ -3976,7 +3976,7 @@ export function registerTools(
             .describe('Delete only if it has at most this many pull profiles, which go with it. Default 0.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ endpoint_storage, max_pull_profiles, dry_run }) =>
         guard(auth, async () => {
@@ -4038,7 +4038,7 @@ export function registerTools(
           timeout_seconds: z.number().int().min(5).max(120).optional().describe('Default 30.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async ({ user_ips, webhook_url, wait_until_ready, timeout_seconds, dry_run }) =>
         guard(auth, async () => {
@@ -4097,7 +4097,7 @@ export function registerTools(
         'authorized player with their authorization token. edgegap_create_relay_session already ' +
         'waits for readiness; use this to re-read a session or one created with wait_until_ready false.',
       inputSchema: { session_id: z.string().describe('Returned by edgegap_create_relay_session.') },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ session_id }) =>
       guarded(auth, NOT_FOUND.relay, async () => ok(compactRelay(await client.getRelaySession(session_id))))
@@ -4115,7 +4115,7 @@ export function registerTools(
         'read one session with edgegap_get_relay_session.',
       inputSchema: {},
       outputSchema: OUTPUT.listRelaySessions,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async () =>
       guard(auth, async () => {
@@ -4164,7 +4164,7 @@ export function registerTools(
           user_ip: z.string().min(3).describe('Public IP of the joining player.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async ({ session_id, user_ip, dry_run }) =>
         guarded(auth, NOT_FOUND.relay, async () => {
@@ -4197,7 +4197,7 @@ export function registerTools(
           user_authorization_token: z.number().int().describe('The player\'s authorization token, not the session\'s.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ session_id, user_authorization_token, dry_run }) =>
         guarded(auth, NOT_FOUND.relay, async () => {
@@ -4228,7 +4228,7 @@ export function registerTools(
           session_id: z.string().describe('The exact session_id of the one session to delete, e.g. "0724828881e2-S".'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ session_id, dry_run }) =>
         guarded(auth, NOT_FOUND.relay, async () => {
@@ -4300,7 +4300,7 @@ export function registerTools(
               'block matchmaker calls from any origin not listed. Scheme and host only, no path.'
           ),
       },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async (args) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -4424,7 +4424,7 @@ function registerSkills(
         'and routes to the rest. Also says whether a newer skills pack is on GitHub (reads one ' +
         'version number, no Edgegap API call).',
       inputSchema: {},
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async () => {
       const status = servedPackStatus(await latestPack(check), hosted);
@@ -4468,7 +4468,7 @@ function registerSkills(
           .optional()
           .describe('A file inside the skill, e.g. "references/deploy.md" or "assets/docker/Dockerfile". Default SKILL.md.'),
       },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ skill: name, file }) => {
       if (!name?.trim()) {
