@@ -329,7 +329,7 @@ test('tool table: per-tool scopes, write tools without their read, the no-accoun
     edgegap_stop_deployment: ['deployments:write'], edgegap_get_deployment_logs: ['deployments:read'],
     edgegap_list_registry_tags: ['registry:read'],
     edgegap_update_app: ['apps:write'], edgegap_update_app_version: ['apps:write'],
-    edgegap_delete_app: ['apps:write', 'deployments:read'], edgegap_delete_app_version: ['apps:write'],
+    edgegap_delete_app: ['apps:write', 'deployments:read'], edgegap_delete_app_version: ['apps:write', 'deployments:read'],
     edgegap_list_locations: ['locations:read'], edgegap_list_ping_beacons: ['locations:read'],
     edgegap_list_fleet_hosts: ['fleets:read'], edgegap_get_deployment_metrics: ['deployments:read'],
     edgegap_tag_deployment: ['deployments:write'], edgegap_report_deployment: ['deployments:write'],

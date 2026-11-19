@@ -142,9 +142,9 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   edgegap_create_app_version: ['apps:write'],
   edgegap_update_app: ['apps:write'],
   edgegap_update_app_version: ['apps:write'],
-  // delete_app first lists the versions and live deployments.
+  // Both deletes first list the live deployments they would break.
   edgegap_delete_app: ['apps:write', 'deployments:read'],
-  edgegap_delete_app_version: ['apps:write'],
+  edgegap_delete_app_version: ['apps:write', 'deployments:read'],
 
   edgegap_list_locations: ['locations:read'],
   edgegap_list_ping_beacons: ['locations:read'],
