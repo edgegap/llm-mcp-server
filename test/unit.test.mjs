@@ -49,6 +49,25 @@ test('codeForStatus maps statuses to stable codes, per resource', () => {
   assert.equal(codeForStatus(403, undefined, 'NO_RELAY_ACCESS'), 'NO_RELAY_ACCESS');
   assert.equal(codeForStatus(403, undefined, undefined, 'Deployment quota reached for your plan'), 'QUOTA_REACHED');
   assert.equal(codeForStatus(503), 'UPSTREAM_ERROR');
+  // Live wording, 2026-10-29: a plan limit, not a missing feature.
+  assert.equal(
+    codeForStatus(403, undefined, undefined, "Your plan allows you to create only 1 active deployments, and it appears you've reached this limit."),
+    'QUOTA_REACHED'
+  );
+  // A 422 about the request is not a capacity problem (live, 2026-11).
+  assert.equal(codeForStatus(422, undefined, undefined, 'start_time cannot be in the future.'), 'UPSTREAM_REJECTED');
+  assert.equal(codeForStatus(422, undefined, undefined, 'Deployment is terminated. Cannot fetch metrics.'), 'UPSTREAM_REJECTED');
+  assert.equal(codeForStatus(422, undefined, undefined, 'No hosts are currently available'), 'NO_CAPACITY');
+});
+
+test('finishReport: a failed call reports the status that failed it', () => {
+  // A deploy 403 followed by a 200 lookup used to report upstream_status 200.
+  const failed = finishReport({ tool: 'edgegap_deploy', isError: true, text: 'Edgegap API 403: x', upstream: [403, 200], latencyMs: 1 });
+  assert.equal(failed.upstream_status, 403);
+  const ok = finishReport({ tool: 'edgegap_list_apps', isError: false, text: '{}', upstream: [503, 200], latencyMs: 1 });
+  assert.equal(ok.upstream_status, 200);
+  const overridden = finishReport({ tool: 'edgegap_wait_for_deployment', isError: true, text: 'failed', upstream: [200, 404], latencyMs: 1, meta: { code: 'IMAGE_PULL_FAILED', upstreamStatus: 200 } });
+  assert.equal(overridden.upstream_status, 200);
 });
 
 test('codeForToolFailure reads refusals after the host label', () => {

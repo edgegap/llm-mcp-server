@@ -2,6 +2,19 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.5
+
+Fixes for the errors real agents hit on the hosted server (PostHog, 2026-10-20 to 11-19):
+
+- `edgegap_update_app_version`: Edgegap's 400 "Image validation unsuccessful ... Unable to login" now says nothing was changed and how to fix it (`verify_image: false` plus the dashboard, or a registry login), as `edgegap_create_app_version` already did. Three organizations hit the raw 400.
+- `edgegap_wait_for_deployment`: "Unable to pull image from registry" fails as `IMAGE_PULL_FAILED` and names the image reference and the version's registry login, without a log lookup that cannot succeed.
+- `edgegap_get_deployment_metrics`: an ended deployment ("Deployment is terminated") is a normal `expired` result, a deployment too new for the API's default window is `not_ready`, and a `start_time` in the future is refused before sending (`end_time` in the future is dropped). These 422s no longer get the deploy capacity hint.
+- `edgegap_get_deployment_logs`: a logs read that times out is a `not_ready` result that says to retry in 30 seconds.
+- A 429 says how many seconds to wait. Edgegap's "Your plan allows you to create only 1 active deployments" is `QUOTA_REACHED` with the stop-a-deployment hint, not "this organization may not use this feature".
+- Called without their required names, `edgegap_list_app_versions`, `edgegap_get_app_version` and `edgegap_get_skill` return what to pick from (`status: "needs_input"`) instead of an argument error. `limit` above 200 on `edgegap_list_locations` and `edgegap_list_ping_beacons` is clamped instead of refused.
+- Hosted analytics: `qamcp`, `GlintbaseResearch` and `dollardollardollar-signals` are flagged `probe`; a failed call reports the status that failed it as `upstream_status`; this server's "Invalid arguments for edgegap_x" counts as `error_cause: validation`.
+- Covered by `test/errorreview.mjs` (new, mock API), unit tests for the codes and `upstream_status`, the Worker telemetry test, and the tool snapshot.
+
 ## 0.19.4
 
 - Skills pack 0.37.0 (llm-agent-skills d0a1df7, edgegap/llm-agent-skills#60): new skill `edgegap-browser-wasm` 0.1.0 for browser and WebAssembly games: the same WASM physics (Rapier) on an authoritative Node.js server and in the browser for client-side prediction, `wss://` with TLS Upgrade, the client on a CDN and a slim server image, and the exact Chrome/Edge messages for mixed content, certificate, TLS and port errors. From netcode-sample-threejs-rapier, verified locally 2026-11-18. `edgegap` 0.37.0, `edgegap-threejs` 0.3.7, `edgegap-samples` 0.1.7.

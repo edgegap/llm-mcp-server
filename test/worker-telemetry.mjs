@@ -104,6 +104,9 @@ try {
 
   await w.rpc('tools/call', { name: '__verifymcp_ping', arguments: {} });
   await w.rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'sentinel-probe', version: '1.0' } });
+  await w.rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'qamcp', version: '1.0' } });
+  // This server's own argument wording ("Invalid arguments for edgegap_x").
+  await w.rpc('tools/call', { name: 'edgegap_get_relay_session', arguments: {} });
   await settle();
 
   console.log('\nthe Worker still works');
@@ -149,7 +152,10 @@ try {
   check('an unknown skill: error_cause unknown_skill', props(badSkill).error_cause === 'unknown_skill', JSON.stringify(props(badSkill)));
   check('successful calls carry no error_cause', !('error_cause' in props(skill)) && !('error_cause' in props(deploy)));
   check('a scanner client is flagged probe', of('$mcp_initialize').some((e) => props(e).$mcp_client_name === 'sentinel-probe' && props(e).probe === true));
-  check('a real client is not', of('$mcp_initialize').every((e) => props(e).$mcp_client_name === 'sentinel-probe' || !('probe' in props(e))));
+  check('a real client is not', of('$mcp_initialize').every((e) => ['sentinel-probe', 'qamcp'].includes(props(e).$mcp_client_name) || !('probe' in props(e))));
+  check('qamcp (seen in PostHog) is flagged probe', of('$mcp_initialize').some((e) => props(e).$mcp_client_name === 'qamcp' && props(e).probe === true));
+  const badArgs = of('$mcp_tool_call').find((e) => props(e).$mcp_tool_name === 'edgegap_get_relay_session');
+  check('missing arguments: error_cause validation', props(badArgs).error_cause === 'validation', JSON.stringify(props(badArgs)));
 
   console.log('\nper-call facts (src/callreport.ts)');
   const calls = of('$mcp_tool_call');

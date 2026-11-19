@@ -140,8 +140,10 @@ const ERROR_CAUSES: Array<[RegExp, string | ((m: RegExpMatchArray) => string)]> 
   [/No Edgegap API token/, 'token_absent'],
   [/does not contain an Edgegap/, 'token_foreign'],
   [/Edgegap API (\d{3})/, (m) => `api_${m[1]}`],
-  [/Input validation error|Invalid arguments for tool/, 'validation'],
+  // "Invalid arguments for tool x" (SDK) and "Invalid arguments for edgegap_x" (this server).
+  [/Input validation error|Invalid arguments for /, 'validation'],
   [/Tool \S+ not found/, 'unknown_tool'],
+  [/No deployment with request_id/, 'api_400'],
   [/failed with status/, 'deployment_failed'],
   [/timed out after \d+ms/, 'request_timeout'],
   [/Network error calling/, 'network'],
@@ -173,7 +175,8 @@ const CAUSE_CODES: Record<string, string> = {
 
 /** MCP scanners and health-check crawlers seen in PostHog. They call tools
  *  without a token or with made-up names; flagged so dashboards can drop them. */
-const PROBE_CLIENTS = /^(sentinel-probe|verifymcp-probe|mcp-checkup-prober)$/i;
+const PROBE_CLIENTS =
+  /^(sentinel-probe|verifymcp-probe|mcp-checkup-prober|qamcp|GlintbaseResearch|dollardollardollar-signals)$/i;
 /** Tool names scanners invent ("__verifymcp_ping", "__mcpcheckup_x"). */
 const PROBE_TOOLS = /^__|verifymcp|mcpcheckup/i;
 
