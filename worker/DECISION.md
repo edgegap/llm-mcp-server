@@ -106,6 +106,55 @@ It runs on the `staging` and `beta` environments first. Once
 `worker.ts` can be deleted outright and the hosted server becomes strictly
 better than the local one.
 
+## OAuth mode: one token, two audiences
+
+In OAuth mode the Worker forwards the client's access token to the Edgegap
+API. That is a co-audience design, not token passthrough.
+
+**What the token is.** Edgegap's authorization server issues one access token
+(an RFC 9068 JWT) whose `aud` names two resources, both operated by Edgegap:
+the Worker's MCP URL, which the client asked for with `resource` (RFC 8707),
+and the Edgegap API. One issuer, two named audiences.
+
+**What each audience checks.**
+
+- The Worker accepts a token only when `aud` contains its own MCP URL, after
+  checking the signature against the issuer's JWKS, `typ`, `iss`, `exp` and
+  `nbf`. It sends the token to one place, the Edgegap API named in `aud`, as
+  `Authorization: Bearer`, and nowhere else. It never stores or logs it.
+- The Edgegap API verifies the token itself on every call: its own audience,
+  that the token and its connection are still live, the user's current role
+  in the organization, and the permission the route requires. It trusts
+  nothing the Worker says about the caller.
+
+**Why this is not token passthrough.** MCP forbids a server from passing
+through a token it received, because the downstream service would then act
+on a token that was never issued for it, on the relaying server's say-so, and
+could no longer tell who the request is for. None of that applies here:
+
+- The API is a named audience of the token, not a downstream that trusts the
+  Worker. RFC 9700 (section 2.3) allows a token for a small set of resource
+  servers when each checks that it is named, and both do.
+- The Worker adds no privilege. It holds no credential of its own, and every
+  call it makes carries exactly the user's token, which the API authorizes
+  on its own terms.
+- Accountability is kept: the API resolves the token to the user, the
+  organization and the client application that holds the connection, so its
+  records name who acted and through which app.
+- Exchanging the token (RFC 8693) for an API-only one would give the API the
+  same subject, client and scopes one round trip later, and nothing the API
+  does not already check.
+
+**What keeps it that way.** The reasoning holds while these do:
+
+- the Worker sends the token only to the API named in `aud`;
+- the API checks its audience and the token's live state on every call, and
+  never treats Worker traffic as trusted;
+- the Worker has no credential of its own;
+- the API's permission check is the authorization boundary. The Worker's own
+  limits (read-only mode, the application allowlist, deployment caps, hidden
+  tools) shape what an agent attempts, on top of it.
+
 ## Verified facts, so nobody re-derives them
 
 - `agents@0.23.0` exports `createMcpHandler` from `agents/mcp/server`
