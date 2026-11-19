@@ -904,6 +904,8 @@ export interface RegisterOptions {
   onToolCall?: (report: ToolCallReport) => void | Promise<void>;
   /** Tools not to register. The hosted Worker's OAuth mode hides tools its tokens can't call. */
   hidden?: (tool: string) => boolean;
+  /** The hosted Worker's OAuth mode: each tool's `securitySchemes`, declared in its `_meta`. */
+  securitySchemes?: (tool: string) => unknown[] | undefined;
 }
 
 export function registerTools(
@@ -931,7 +933,13 @@ export function registerTools(
   const tool = ((name: string, def: unknown, cb: (...a: unknown[]) => Promise<ToolResult>) => {
     if (options.hidden?.(name)) return undefined;
     inputs.set(name, ((def as { inputSchema?: Record<string, z.ZodType> }).inputSchema) ?? {});
-    return server.registerTool(name, def as never, (async (...a: unknown[]) => {
+    // Both MCP SDKs list a tool's _meta but drop unknown top-level fields, so
+    // securitySchemes goes in _meta, which OpenAI's Apps SDK also reads.
+    const schemes = options.securitySchemes?.(name);
+    const definition = schemes
+      ? { ...(def as object), _meta: { ...(def as { _meta?: Record<string, unknown> })._meta, securitySchemes: schemes } }
+      : def;
+    return server.registerTool(name, definition as never, (async (...a: unknown[]) => {
       const startedAt = Date.now();
       const from = client.upstream.length;
       inFlight++;

@@ -148,6 +148,8 @@ try {
   const list = await w.post('tools/list', {});
   const names = (list.json?.result?.tools ?? []).map((t) => t.name);
   check('tools/list: 200 signed out, 40 tools, every relay tool hidden', list.status === 200 && names.length === 40 && names.includes('edgegap_deploy') && names.includes('edgegap_get_registry_credentials') && !names.some((n) => n.includes('relay')), `${list.status} ${names.length}`);
+  const schemes = Object.fromEntries((list.json?.result?.tools ?? []).map((t) => [t.name, JSON.stringify(t._meta?.securitySchemes)]));
+  check('tools/list: every tool declares _meta.securitySchemes', Object.values(schemes).every((x) => x !== undefined) && schemes.edgegap_generate_dockerfile === '[{"type":"noauth"}]' && schemes.edgegap_create_app === '[{"type":"oauth2","scopes":["apps:read","apps:write","deployments:read","locations:read","registry:read"]}]', `${schemes.edgegap_generate_dockerfile} ${schemes.edgegap_create_app}`);
   const dockerfile = await w.post('tools/call', { name: 'edgegap_generate_dockerfile', arguments: { engine: 'godot', server_binary: 'server.x86_64' } });
   check('a no-account tool works signed out', dockerfile.status === 200 && dockerfile.json?.result && !dockerfile.json.result.isError, toolText(dockerfile).slice(0, 200));
 

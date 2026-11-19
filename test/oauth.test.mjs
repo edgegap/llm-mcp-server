@@ -22,6 +22,7 @@ import {
   neededScopes,
   oauthHiddenTool,
   protectedResourceMetadata,
+  securitySchemes,
   resourceMetadataPaths,
   toolNeed,
   verifyAccessToken,
@@ -384,7 +385,7 @@ async function oauthServer(token, reply = { status: 200, body: { applications: [
   };
   const auth = new OAuthTokenSource(token);
   const server = new McpServer({ name: 'edgegap', version: 'test' }, { instructions: serverInstructions('oauth') });
-  registerTools(server, new EdgegapClient(config, auth), config, auth, { hidden: oauthHiddenTool, skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
+  registerTools(server, new EdgegapClient(config, auth), config, auth, { hidden: oauthHiddenTool, securitySchemes, skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '1' });
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -502,6 +503,43 @@ test('OAuth mode: each API 403 and 503 code gets its own explanation', async () 
       await s.close();
     }
   }
+});
+
+test('OAuth mode: every listed tool declares its securitySchemes in _meta, asking for what its 401 asks', async () => {
+  const s = await oauthServer(undefined);
+  try {
+    const { tools } = await s.client.listTools();
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t._meta?.securitySchemes]));
+    for (const [name, schemes] of Object.entries(byName)) assert.ok(Array.isArray(schemes) && schemes.length > 0, name);
+    assert.deepEqual(byName.edgegap_generate_dockerfile, [{ type: 'noauth' }]);
+    assert.deepEqual(byName.edgegap_get_registry_credentials, [{ type: 'noauth' }]);
+    assert.deepEqual(byName.edgegap_list_apps, [{ type: 'oauth2', scopes: ['apps:read', 'deployments:read', 'locations:read', 'registry:read'] }]);
+    assert.deepEqual(byName.edgegap_create_app, [{ type: 'oauth2', scopes: ['apps:read', 'apps:write', 'deployments:read', 'locations:read', 'registry:read'] }]);
+    // Works signed out; checking the token or the version needs the account.
+    assert.deepEqual(byName.edgegap_context, [{ type: 'noauth' }, { type: 'oauth2', scopes: ['apps:read', 'deployments:read', 'locations:read', 'registry:read'] }]);
+    assert.deepEqual(byName.edgegap_build_matchmaker_config, [{ type: 'noauth' }, { type: 'oauth2', scopes: ['apps:read', 'deployments:read', 'locations:read', 'registry:read'] }]);
+    for (const name of Object.keys(byName)) {
+      const oauth2 = byName[name].find((x) => x.type === 'oauth2');
+      if (!oauth2) continue;
+      const decision = await gate({ method: 'POST', authorization: null, origin: null, body: call(name, { check_token: true }) }, settings, freshJwks().cache);
+      assert.equal(decision.challenge.match(/scope="([^"]+)"/)[1], oauth2.scopes.join(' '), name);
+    }
+  } finally {
+    await s.close();
+  }
+});
+
+test('token mode declares no securitySchemes', async () => {
+  const server = new McpServer({ name: 'edgegap', version: 'test' });
+  const config = { envToken: undefined, baseUrlV1: 'http://127.0.0.1:1', baseUrlV2: 'http://127.0.0.1:1/v2', readOnly: false, appAllowlist: [], maxDurationCeiling: 60, maxAgentDeployments: 5, stopOwnOnly: false, requestTimeoutMs: 5000, transport: 'hosted', credential: 'api_token' };
+  const auth = new OAuthTokenSource(undefined);
+  registerTools(server, new EdgegapClient(config, auth), config, auth, { skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'test', version: '1' });
+  await Promise.all([server.connect(a), client.connect(b)]);
+  const { tools } = await client.listTools();
+  assert.ok(tools.every((t) => t._meta?.securitySchemes === undefined));
+  await client.close();
 });
 
 test('OAuth mode signed out: edgegap_context says how sign-in starts, without a token message', async () => {

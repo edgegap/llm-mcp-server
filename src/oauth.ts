@@ -107,7 +107,8 @@ export const MEMBER_DEFAULT_SCOPES = ['apps:read', 'deployments:read', 'location
 /** What a tool call needs: nothing (no account), or these scopes. */
 export type ToolNeed = { kind: 'none' } | { kind: 'scopes'; scopes: string[] };
 
-type ToolRule = string[] | null | ((args: Record<string, unknown>) => ToolNeed);
+/** No account (null), these scopes, or these scopes only for the calls `when` picks. */
+type ToolRule = string[] | null | { scopes: string[]; when: (args: Record<string, unknown>) => boolean };
 
 const NONE: ToolNeed = { kind: 'none' };
 const scopes = (...names: string[]): ToolNeed => ({ kind: 'scopes', scopes: names });
@@ -124,13 +125,13 @@ const scopes = (...names: string[]): ToolNeed => ({ kind: 'scopes', scopes: name
  * what makes it appear.
  */
 const TOOL_SCOPES: Record<string, ToolRule> = {
-  edgegap_context: (args) => (args.check_token === true ? scopes('apps:read') : NONE),
+  edgegap_context: { scopes: ['apps:read'], when: (args) => args.check_token === true },
   edgegap_list_skills: null,
   edgegap_get_skill: null,
   edgegap_update_skills: null,
   edgegap_generate_dockerfile: null,
   edgegap_validate_server_config: null,
-  edgegap_build_matchmaker_config: (args) => (args.verify_version === false ? NONE : scopes('apps:read')),
+  edgegap_build_matchmaker_config: { scopes: ['apps:read'], when: (args) => args.verify_version !== false },
 
   edgegap_list_apps: ['apps:read'],
   edgegap_list_app_versions: ['apps:read'],
@@ -185,7 +186,29 @@ export function toolNeed(tool: string, args: Record<string, unknown> = {}): Tool
   const rule = TOOL_SCOPES[tool];
   if (rule === null) return NONE;
   if (Array.isArray(rule)) return scopes(...rule);
-  return rule(args);
+  return rule.when(args) ? scopes(...rule.scopes) : NONE;
+}
+
+/** One entry of a tool's `securitySchemes`, as OpenAI's Apps SDK reads it. */
+export type SecurityScheme = { type: 'noauth' } | { type: 'oauth2'; scopes: string[] };
+
+/**
+ * The tool's `securitySchemes` for `_meta`, which ChatGPT reads to offer
+ * sign-in for that tool: `noauth` when some or all of its calls need no
+ * account, `oauth2` with the scopes its 401 asks for when some need one.
+ * Undefined for a tool OAuth mode hides.
+ */
+export function securitySchemes(tool: string): SecurityScheme[] | undefined {
+  if (!Object.hasOwn(TOOL_SCOPES, tool)) return undefined;
+  const rule = TOOL_SCOPES[tool];
+  if (rule === null) return [{ type: 'noauth' }];
+  const oauth2: SecurityScheme = { type: 'oauth2', scopes: signInScopes(Array.isArray(rule) ? rule : rule.scopes) };
+  return Array.isArray(rule) ? [oauth2] : [{ type: 'noauth' }, oauth2];
+}
+
+/** What a sign-in for a tool asks for: the member default plus the tool's scopes. */
+function signInScopes(needed: readonly string[]): string[] {
+  return [...new Set([...MEMBER_DEFAULT_SCOPES, ...needed])].sort();
 }
 
 /** True for a tool OAuth mode doesn't register: one of its routes has no scope yet. */
@@ -436,7 +459,7 @@ export async function gate(
   if (needed === undefined) return { action: 'serve', token, claims };
 
   if (!claims) {
-    const scope = sortedUnion(MEMBER_DEFAULT_SCOPES, needed);
+    const scope = signInScopes(needed).join(' ');
     return respond(401, 'missing_token', 'Sign in with Edgegap to use this tool.', challenge(settings, { scope }));
   }
 
