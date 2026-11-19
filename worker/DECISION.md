@@ -120,7 +120,8 @@ and the Edgegap API. One issuer, two named audiences.
 
 - The Worker accepts a token only when `aud` contains its own MCP URL, after
   checking the signature against the issuer's JWKS, `typ`, `iss`, `exp` and
-  `nbf`. It sends the token to one place, the Edgegap API named in `aud`, as
+  `nbf`. It sends the token to one place, the Edgegap API it is configured
+  with (`EDGEGAP_API_URL`, the API the issuer names in `aud`), as
   `Authorization: Bearer`, and nowhere else. It never stores or logs it.
 - The Edgegap API verifies the token itself on every call: its own audience,
   that the token and its connection are still live, the user's current role
@@ -147,7 +148,8 @@ could no longer tell who the request is for. None of that applies here:
 
 **What keeps it that way.** The reasoning holds while these do:
 
-- the Worker sends the token only to the API named in `aud`;
+- each environment's `EDGEGAP_API_URL` is the API its issuer names in `aud`,
+  and the Worker sends the token nowhere else;
 - the API checks its audience and the token's live state on every call, and
   never treats Worker traffic as trusted;
 - the Worker has no credential of its own;
