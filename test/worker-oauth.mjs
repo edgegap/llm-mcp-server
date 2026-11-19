@@ -175,6 +175,24 @@ try {
   const fleet = await w.post('tools/call', { name: 'edgegap_deploy', arguments: { application: 'a', version: 'v', users: { ip_addresses: ['203.0.113.7'] }, private_host_ids: ['h1'], dry_run: true } }, bearer(await accessToken(KEY, claims(ORG_A, USER_A, 'apps:read deployments:read deployments:write'))));
   check('deploy to private fleet hosts with deployments:write: served like a cloud deploy', fleet.status === 200 && !/through OAuth yet/.test(toolText(fleet)), toolText(fleet).slice(0, 200));
 
+  console.log('\nprotocol 2026-07-28 (stateless, standard headers)');
+  const MODERN = '2026-07-28';
+  const envelope = { 'io.modelcontextprotocol/protocolVersion': MODERN, 'io.modelcontextprotocol/clientCapabilities': {}, 'io.modelcontextprotocol/clientInfo': { name: 'claude-code', version: '3.0.0' } };
+  const modern = (method, params, name, headers = {}) =>
+    w.post(method, { ...params, _meta: envelope }, { 'MCP-Protocol-Version': MODERN, 'Mcp-Method': method, ...(name ? { 'Mcp-Name': name } : {}), ...headers });
+  const modernList = await modern('tools/list', {});
+  const modernNames = (modernList.json?.result?.tools ?? []).map((t) => t.name);
+  check('tools/list signed out: 200, the same 40 tools', modernList.status === 200 && modernNames.length === 40 && !modernNames.some((n) => n.includes('relay')), `${modernList.status} ${JSON.stringify(modernList.json).slice(0, 300)}`);
+  check('  tools/list results are cached privately, if at all', modernList.json?.result?.cacheScope === 'private', JSON.stringify(modernList.json?.result && Object.fromEntries(Object.entries(modernList.json.result).filter(([k]) => k !== 'tools'))));
+  const modernSignedOut = await modern('tools/call', { name: 'edgegap_list_apps', arguments: {} }, 'edgegap_list_apps');
+  check('an account tool signed out: 401 missing_token with the sign-in scopes', modernSignedOut.status === 401 && modernSignedOut.json?.error === 'missing_token' && modernSignedOut.headers.get('www-authenticate') === `Bearer scope="apps:read deployments:read locations:read registry:read", resource_metadata="${METADATA_URL}"`, modernSignedOut.headers.get('www-authenticate'));
+  const modernStepUp = await modern('tools/call', { name: 'edgegap_create_app', arguments: { name: 'x' } }, 'edgegap_create_app', bearer(tokenA));
+  check('a write tool with a member token: 403 insufficient_scope, granted + needed', modernStepUp.status === 403 && modernStepUp.json?.error === 'insufficient_scope' && /scope="apps:read apps:write deployments:read registry:read"/.test(modernStepUp.headers.get('www-authenticate') ?? ''), modernStepUp.headers.get('www-authenticate'));
+  const modernCall = await modern('tools/call', { name: 'edgegap_list_apps', arguments: {} }, 'edgegap_list_apps', bearer(tokenA));
+  check('a read tool with a member token: served as its organization', modernCall.status === 200 && toolText(modernCall).includes(`app-of-org-${ORG_A}`), `${modernCall.status} ${JSON.stringify(modernCall.json).slice(0, 300)}`);
+  const headerMismatch = await modern('tools/call', { name: 'edgegap_list_apps', arguments: {} }, 'edgegap_create_app', bearer(tokenA));
+  check('an Mcp-Name that does not match the body: 400 -32020', headerMismatch.status === 400 && headerMismatch.json?.error?.code === -32020, `${headerMismatch.status} ${JSON.stringify(headerMismatch.json)}`);
+
   console.log('\nno state across requests');
   apiCalls.length = 0;
   const jobs = Array.from({ length: 30 }, (_, i) => (i % 2 ? ['B', tokenB, ORG_B] : ['A', tokenA, ORG_A]));
