@@ -1108,7 +1108,7 @@ export function registerTools(
         },
         pricing: PRICING_NOTES,
         user_agent: `edgegap-mcp/${VERSION} (<MCP client name>)`,
-        works_without_token: TOKENLESS_TOOLS,
+        works_without_token: oauth ? OAUTH_TOKENLESS_TOOLS : TOKENLESS_TOOLS,
       }), { props: { token_state: String(tokenStatus.state) } });
     }
   );
@@ -4824,6 +4824,9 @@ const TOKENLESS_TOOLS = [
   'edgegap_build_matchmaker_config (without the version check)',
 ];
 
+/** OAuth mode adds the registry tool: sign-in hands out no registry credentials, so it answers the push steps. */
+const OAUTH_TOKENLESS_TOOLS = [...TOKENLESS_TOOLS, 'edgegap_get_registry_credentials (the registry push steps)'];
+
 /**
  * Whether this session can call the Edgegap API, and if not, why and how to
  * fix it. Never shows the token: only its last four characters, which is
@@ -4885,7 +4888,7 @@ async function describeOAuth(
     return {
       state: 'signed_out',
       note: 'Not signed in. The first tool that needs the Edgegap account makes the MCP client start the sign-in.',
-      works_without_token: TOKENLESS_TOOLS,
+      works_without_token: OAUTH_TOKENLESS_TOOLS,
     };
   }
   if (!check) return { state: 'signed in (not checked)', note: 'Pass check_token: true to confirm Edgegap accepts it.' };

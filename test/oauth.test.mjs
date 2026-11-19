@@ -627,6 +627,18 @@ test('OAuth mode: edgegap_list_registry_tags explains a refused scope by its cod
   }
 });
 
+test('OAuth mode signed out: edgegap_context lists the registry push steps among what works without an account', async () => {
+  const s = await oauthServer(undefined);
+  try {
+    const context = await s.client.callTool({ name: 'edgegap_context', arguments: {} });
+    const { works_without_token: top, token_status: status } = context.structuredContent;
+    assert.ok(top.some((t) => t.startsWith('edgegap_get_registry_credentials')), JSON.stringify(top));
+    assert.ok(status.works_without_token.some((t) => t.startsWith('edgegap_get_registry_credentials')));
+  } finally {
+    await s.close();
+  }
+});
+
 test('OAuth mode signed out: edgegap_context says how sign-in starts, without a token message', async () => {
   const s = await oauthServer(undefined);
   try {
