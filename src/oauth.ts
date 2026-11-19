@@ -348,8 +348,8 @@ export type VerifyResult = { valid: true; claims: AccessTokenClaims } | { valid:
  * Verifies an access token the way the dashboard's verify does, plus the
  * Worker's own audience: RS256 only, header `typ` exactly `at+jwt`, a `kid`
  * the issuer's JWKS publishes (`jku` and `x5u` are never read), the signature,
- * `iss`, `aud` containing this Worker's resource, and `exp` in the future with
- * no leeway.
+ * `iss`, `aud` containing this Worker's resource, `exp` in the future and any
+ * `nbf` in the past, with no leeway.
  *
  * @throws JwksUnavailableError when the keys can't be fetched.
  */
@@ -384,6 +384,9 @@ export async function verifyAccessToken(
   const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (!audience.includes(settings.resource)) return { valid: false, reason: 'audience' };
   if (typeof claims.exp !== 'number' || claims.exp * 1000 <= now()) return { valid: false, reason: 'expired' };
+  if (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf * 1000 > now())) {
+    return { valid: false, reason: 'not yet valid' };
+  }
   if ((typeof claims.org !== 'number' && typeof claims.org !== 'string') || claims.org === '') {
     return { valid: false, reason: 'organization' };
   }

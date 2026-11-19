@@ -134,6 +134,17 @@ test('verifyAccessToken is pinned: RS256, typ at+jwt, a published kid, iss, aud 
   }
 });
 
+test('verifyAccessToken refuses a token before its nbf, and an nbf that is not a number', async () => {
+  const { cache, time } = freshJwks();
+  const nowSeconds = Math.floor(time.t / 1000);
+  const future = await accessToken(KEY, claims({ exp: nowSeconds + 600, nbf: nowSeconds + 60 }));
+  assert.deepEqual(await verifyAccessToken(future, settings, cache, time.now), { valid: false, reason: 'not yet valid' });
+  const text = await accessToken(KEY, claims({ exp: nowSeconds + 600, nbf: 'soon' }));
+  assert.deepEqual(await verifyAccessToken(text, settings, cache, time.now), { valid: false, reason: 'not yet valid' });
+  const past = await accessToken(KEY, claims({ exp: nowSeconds + 600, nbf: nowSeconds - 1 }));
+  assert.equal((await verifyAccessToken(past, settings, cache, time.now)).valid, true);
+});
+
 test('verifyAccessToken never reads jku or x5u: a token pointing at its own key is still refused', async () => {
   const { cache, server } = freshJwks();
   const evil = await accessToken(OTHER_KEY, claims(), { kid: 'key-2', jku: 'https://evil.example.test/jwks.json', x5u: 'https://evil.example.test/cert.pem' });
