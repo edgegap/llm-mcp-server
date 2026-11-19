@@ -2,6 +2,16 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.0
+
+- Hosted Worker: OAuth mode, for Edgegap's OAuth sign-in. With `OAUTH_MODE` `"1"` the Worker is an OAuth resource server: it serves RFC 9728 metadata (`/.well-known/oauth-protected-resource/mcp`, scopes `apps:read deployments:read locations:read registry:read relays:read`, the member defaults), verifies access tokens against the issuer's JWKS (RS256 and `typ: at+jwt` only, a `kid` from the JWKS, `iss`, `aud` containing its own MCP URL, `exp`; the JWKS is cached 10 minutes and refetched on an unknown `kid` at most once a minute), and forwards the token unchanged to the API as `Authorization: Bearer`. Discovery and the no-account tools work signed out; an account tool signed out gets 401 with `resource_metadata` and the scopes to ask for, a token without the tool's scopes gets 403 `insufficient_scope` with the scopes held plus the ones needed, and an invalid token (including a pasted API token) gets 401 `invalid_token`. Browser requests must come from an origin in `ALLOWED_ORIGINS`. The per-connection limit headers (`X-Edgegap-Read-Only`, `X-Edgegap-App-Allowlist`) narrow OAuth connections too.
+- Scopes, one read and one write per resource (a `*:write` comes with its `*:read`): `apps:read` (list apps and versions, `edgegap_compare_versions` with `deployments:read`), `apps:write` (create, update and delete apps and versions; `edgegap_delete_app` also needs `deployments:read` for its checks), `deployments:read` (list, status, metrics, container logs: `edgegap_get_deployment_logs`, `edgegap_search_deployment_logs`, `edgegap_fleet_health`), `deployments:write` (deploy, including to private fleet hosts, stop, tag, report), `locations:read` (locations, ping beacons), `fleets:read` (fleet hosts), `registry:read` (list tags), `registry:write` (delete tags), `relays:read`, `relays:write`, `storage:read`, `storage:write` (endpoint storage and pull profiles).
+- Hidden in OAuth mode, because their API routes take no OAuth token: `edgegap_list_relay_sessions` and `edgegap_revoke_relay_user` (relay profile auth), and `edgegap_get_registry_credentials` (the quick-start wizard routes; it returns with a short-lived registry credentials endpoint). 43 tools are listed.
+- New wrangler environments `staging` (`mcp-staging.edgegap.dev`) and `beta` (`mcp-beta.edgegap.dev`), both in OAuth mode. `mcp.edgegap.dev` stays in token mode. The Edgegap API base URL is now a var, `EDGEGAP_API_URL`, defaulting to `https://api.edgegap.com`. Deploy runbook in the README.
+- Analytics in OAuth mode: the distinct_id is the salted hash of the organization id from the token, and a `user_id` property holds the salted hash of its user, so users can be counted per organization. The raw ids are never sent.
+- `npm run test:worker` now runs in CI.
+- Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`).
+
 ## 0.19.5
 
 Fixes for the errors real agents hit on the hosted server (PostHog, 2026-10-20 to 11-19):

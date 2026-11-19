@@ -1,8 +1,9 @@
 // Prints the analytics id (org_...) of one Edgegap API token, the value to add
 // to the Worker's TELEMETRY_INTERNAL_IDS so that token's traffic is marked
-// is_internal. Same HMAC as worker/telemetry.ts.
+// is_internal. Same HMAC as worker/telemetry.ts. For a Worker in OAuth mode
+// (staging, beta), give the organization id instead of a token.
 //
-//   npm run telemetry:id      then paste the TELEMETRY_SALT, Enter, the token, Enter
+//   npm run telemetry:id      then paste the TELEMETRY_SALT, Enter, the token (or organization id), Enter
 //
 // Both are read from stdin, never from arguments (process arguments are
 // visible to other processes and land in shell history). Nothing is sent.
@@ -17,7 +18,7 @@ for await (const line of rl) {
 }
 rl.close();
 if (lines.length < 2) {
-  console.error('Expected two lines on stdin: the TELEMETRY_SALT, then the API token.');
+  console.error('Expected two lines on stdin: the TELEMETRY_SALT, then the API token or organization id.');
   process.exit(1);
 }
 const [salt, raw] = lines;
