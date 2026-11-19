@@ -462,7 +462,7 @@ docker run --rm -p 8080:8080 ghcr.io/edgegap/llm-mcp-server:main
 
 ### Hosted Worker: OAuth environments
 
-Two more Workers run the same code in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one. They are the `staging` and `beta` environments in [worker/wrangler.jsonc](worker/wrangler.jsonc); `mcp.edgegap.dev` stays in token mode.
+Two more Workers run the same code in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one: a client entry that still sends an `Authorization` header with an API token gets a 401 saying to remove the header and connect again (a client with a header configured doesn't offer the sign-in), or to use the local server. They are the `staging` and `beta` environments in [worker/wrangler.jsonc](worker/wrangler.jsonc); `mcp.edgegap.dev` stays in token mode.
 
 | Environment | MCP URL | Authorization server | Edgegap API |
 | --- | --- | --- | --- |

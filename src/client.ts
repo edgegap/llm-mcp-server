@@ -84,7 +84,9 @@ export class EdgegapApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly apiMessage: string,
-    public readonly details?: unknown
+    public readonly details: unknown,
+    /** The body's `error` code, e.g. `insufficient_scope`, when the API sent one. */
+    public readonly errorCode: string | undefined
   ) {
     super(`Edgegap API ${status}: ${apiMessage}`);
     this.name = 'EdgegapApiError';
@@ -261,11 +263,12 @@ export class EdgegapClient {
       // re-prompts instead of failing repeatedly against a revoked credential.
       if (response.status === 401) this.auth.invalidate();
 
-      const body = (parsed ?? {}) as { message?: string; details?: unknown };
+      const body = (parsed ?? {}) as { message?: string; details?: unknown; error?: unknown };
       const apiError = new EdgegapApiError(
         response.status,
         redact(body.message ?? response.statusText, token),
-        body.details
+        body.details,
+        typeof body.error === 'string' ? body.error : undefined
       );
       apiError.retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
       throw apiError;

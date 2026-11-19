@@ -418,7 +418,7 @@ export async function gate(
   let claims: AccessTokenClaims | undefined;
   if (request.authorization !== null && request.authorization.trim() !== '') {
     const match = request.authorization.match(/^Bearer\s+(\S+)\s*$/i);
-    if (!match) return invalidToken(settings, 'This server accepts only Edgegap sign-in tokens. Reconnect to sign in again.');
+    if (!match) return invalidToken(settings, API_TOKEN_MESSAGE);
     let result: VerifyResult;
     try {
       result = await verifyAccessToken(match[1], settings, jwks, now);
@@ -428,7 +428,7 @@ export async function gate(
       }
       throw err;
     }
-    if (!result.valid) return invalidToken(settings, 'The access token is invalid or expired.');
+    if (!result.valid) return invalidToken(settings, result.reason === 'not a JWT' ? API_TOKEN_MESSAGE : 'The access token is invalid or expired.');
     token = match[1];
     claims = result.claims;
   }
@@ -472,6 +472,12 @@ export function neededScopes(body: unknown): string[] | undefined {
   }
   return needed ? [...needed].sort() : undefined;
 }
+
+/** The 401 for a credential that isn't a sign-in token at all: an API token left in the client's config. */
+const API_TOKEN_MESSAGE =
+  'This server no longer accepts API tokens. Remove the Authorization header from this server\'s entry in the ' +
+  'MCP client and connect again to sign in with Edgegap, or use the local server (npx -y @edgegap/mcp) with ' +
+  'EDGEGAP_API_TOKEN.';
 
 function sortedUnion(a: readonly string[], b: readonly string[]): string {
   return [...new Set([...a, ...b])].sort().join(' ');
@@ -518,6 +524,8 @@ export const OAUTH_SIGN_IN_MESSAGE =
  * Built per request and dropped with it.
  */
 export class OAuthTokenSource implements TokenSource {
+  readonly oauth = true;
+
   constructor(private readonly token: string | undefined) {}
 
   get current(): string | undefined {

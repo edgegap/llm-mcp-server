@@ -335,7 +335,7 @@ function guard(
       return fail(err.message, code);
     }
     if (err instanceof EdgegapApiError) {
-      const hint = errorHint(err, notFound, forbidden);
+      const hint = errorHint(err, notFound, forbidden, auth.oauth === true);
       const details = apiDetails(err.details, auth.current);
       return withMeta(fail(`${err.message}${details ? `\n${details}` : ''}${hint ? `\n\nLikely cause: ${hint}` : ''}`), {
         code: codeForStatus(err.status, notFoundCode(notFound), forbidden === FORBIDDEN.relay ? 'NO_RELAY_ACCESS' : undefined, err.apiMessage),
@@ -395,7 +395,40 @@ function apiDetails(details: unknown, token: string | undefined): string | undef
 /** Plan or quota wording in an API error, so the hint can say which limit. */
 const QUOTA = QUOTA_WORDING;
 
-function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string): string | undefined {
+/**
+ * What the API's refusal of an Edgegap sign-in means, by its `error` code. A
+ * sign-in is never fixed on the tokens page, and a refused scope is the
+ * developer's role or the connection, not the plan.
+ */
+function signInHint(err: EdgegapApiError): string | undefined {
+  if (err.status === 401) {
+    return (
+      'Edgegap no longer accepts this sign-in: the connection was revoked or expired, or your access to the ' +
+      'organization changed. Reconnect the Edgegap server in the MCP client to sign in again; do not retry before then.'
+    );
+  }
+  if (err.status === 403 && err.errorCode === 'insufficient_scope') {
+    return (
+      'your role in the organization or the access approved for this connection does not allow this operation. ' +
+      'An owner or admin of the organization can change the role, and the Authorized apps page ' +
+      `(${AUTHORIZED_APPS_URL}) shows what the connection may do. Do not retry.`
+    );
+  }
+  if (err.status === 403 && err.errorCode === 'scoped_token_not_accepted') {
+    return (
+      `this operation is not available through Edgegap sign-in yet. Do not retry: the developer can do it in the dashboard (${DASHBOARD_URL}), ` +
+      'or with the local server (npx -y @edgegap/mcp) and an API token.'
+    );
+  }
+  if (err.errorCode === 'temporarily_unavailable') {
+    return 'Edgegap could not check the sign-in just now. Retry in a few seconds; the developer does not need to reconnect.';
+  }
+  return undefined;
+}
+
+function errorHint(err: EdgegapApiError, notFound: string | undefined, forbidden: string | undefined, signIn: boolean): string | undefined {
+  const signInRefusal = signIn ? signInHint(err) : undefined;
+  if (signInRefusal) return signInRefusal;
   if (QUOTA.test(err.apiMessage) && [400, 402, 403, 429].includes(err.status)) {
     return (
       'a plan or quota limit was reached (the message above names it). Retrying will not help. ' +
@@ -2095,7 +2128,8 @@ export function registerTools(
               err.status,
               `${err.apiMessage}\nThe API still created ${left.length === 1 ? 'a deployment' : 'deployments'} for this ` +
                 `request: ${left.join(', ')}. Stop ${left.length === 1 ? 'it' : 'each'} with edgegap_stop_deployment.`,
-              err.details
+              err.details,
+              err.errorCode
             );
           }
           return withMeta(
@@ -4841,6 +4875,7 @@ async function describeOAuth(
 }
 
 const TOKENS_URL = 'https://app.edgegap.com/user-settings?tab=tokens';
+const AUTHORIZED_APPS_URL = 'https://app.edgegap.com/user-settings?tab=authorized-apps';
 const SIGNUP_URL = 'https://app.edgegap.com';
 
 /**

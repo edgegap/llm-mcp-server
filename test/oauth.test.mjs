@@ -252,6 +252,20 @@ test('gate: an invalid credential is a 401 invalid_token on any request, so the 
   }
 });
 
+test('gate: an API token, as a token header or a bearer that is not a JWT, is told to remove the header or use the local server', async () => {
+  const { cache } = freshJwks();
+  for (const authorization of ['token 0f8b3c1e-e458-4592-b607-c2c28afd8b62', 'Bearer 0f8b3c1e-e458-4592-b607-c2c28afd8b62']) {
+    const decision = await gate(request({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, authorization), settings, cache);
+    assert.equal(decision.body.error, 'invalid_token');
+    assert.match(decision.body.message, /no longer accepts API tokens/, authorization);
+    assert.match(decision.body.message, /Remove the Authorization header/);
+    assert.match(decision.body.message, /npx -y @edgegap\/mcp/);
+  }
+  const expired = await accessToken(KEY, claims({ exp: Math.floor(Date.now() / 1000) - 1 }));
+  const decision = await gate(request({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, `Bearer ${expired}`), settings, cache);
+  assert.equal(decision.body.message, 'The access token is invalid or expired.');
+});
+
 test('gate: a token with the scopes is served as its principal; without them, a 403 step-up listing granted plus needed', async () => {
   const { cache } = freshJwks();
   const member = await accessToken(KEY, claims());
@@ -351,13 +365,16 @@ test('tool table: per-tool scopes, write tools without their read, the no-accoun
 
 const text = (result) => result.content.map((c) => c.text).join('\n');
 
-/** The MCP server as the Worker builds it in OAuth mode, against a local API that records each call. */
-async function oauthServer(token) {
+/**
+ * The MCP server as the Worker builds it in OAuth mode, against a local API
+ * that records each call and answers `reply` (default: one application).
+ */
+async function oauthServer(token, reply = { status: 200, body: { applications: [{ name: 'game', is_active: true }], total_count: 1 } }) {
   const calls = [];
   const api = http.createServer((req, res) => {
     calls.push({ method: req.method, url: req.url, auth: req.headers.authorization });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ applications: [{ name: 'game', is_active: true }], total_count: 1 }));
+    res.writeHead(reply.status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(reply.body));
   });
   await new Promise((r) => api.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${api.address().port}`;
@@ -451,6 +468,39 @@ test('OAuth mode instructions: the golden path names a listed tool at every step
     for (const tool of named) assert.ok(listed.has(tool), tool);
   } finally {
     await s.close();
+  }
+});
+
+test('OAuth mode: the API refusing the sign-in says to reconnect the server, never to check an API token', async () => {
+  const token = await accessToken(KEY, claims());
+  const s = await oauthServer(token, { status: 401, body: { error: 'invalid_token', message: 'Invalid or expired credential.' } });
+  try {
+    const result = await s.client.callTool({ name: 'edgegap_list_apps', arguments: {} });
+    assert.ok(result.isError);
+    assert.match(text(result), /Reconnect the Edgegap server in the MCP client/);
+    assert.doesNotMatch(text(result), /user-settings\?tab=tokens|discarded/);
+  } finally {
+    await s.close();
+  }
+});
+
+test('OAuth mode: each API 403 and 503 code gets its own explanation', async () => {
+  const token = await accessToken(KEY, claims());
+  const cases = [
+    [403, 'insufficient_scope', /role in the organization or the access approved for this connection/, /Authorized apps/],
+    [403, 'scoped_token_not_accepted', /not available through Edgegap sign-in/, /npx -y @edgegap\/mcp/],
+    [503, 'temporarily_unavailable', /could not check the sign-in/, /Retry in a few seconds/],
+  ];
+  for (const [status, error, ...expected] of cases) {
+    const s = await oauthServer(token, { status, body: { error, message: 'Refused.' } });
+    try {
+      const result = await s.client.callTool({ name: 'edgegap_list_apps', arguments: {} });
+      assert.ok(result.isError, error);
+      for (const pattern of expected) assert.match(text(result), pattern, error);
+      assert.doesNotMatch(text(result), /may not use this feature|A new token will not help/, error);
+    } finally {
+      await s.close();
+    }
   }
 });
 
