@@ -1,0 +1,273 @@
+{
+  "scopes": {
+    "apps:read": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "app.list",
+          "app_version.get",
+          "app_version.list"
+        ]
+      }
+    },
+    "apps:write": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "app.create",
+          "app.delete",
+          "app.update",
+          "app_version.create",
+          "app_version.delete",
+          "app_version.update"
+        ]
+      }
+    },
+    "deployments:read": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "deployment.get",
+          "deployment.list",
+          "deployment.logs",
+          "deployment.metrics",
+          "deployment.tag.list"
+        ]
+      }
+    },
+    "deployments:write": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "deployment.create",
+          "deployment.report",
+          "deployment.stop",
+          "deployment.tag.create",
+          "deployment.tag.delete"
+        ]
+      }
+    },
+    "fleets:read": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "private_fleet.host.list"
+        ]
+      }
+    },
+    "locations:read": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "location.beacon.list",
+          "location.list"
+        ]
+      }
+    },
+    "registry:read": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "registry.tag.list"
+        ]
+      }
+    },
+    "registry:write": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "registry.tag.delete"
+        ]
+      }
+    },
+    "storage:read": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "storage.endpoint.list",
+          "storage.pull_profile.list"
+        ]
+      }
+    },
+    "storage:write": {
+      "current_version": 1,
+      "versions": {
+        "1": [
+          "storage.endpoint.create",
+          "storage.endpoint.delete",
+          "storage.pull_profile.create",
+          "storage.pull_profile.delete",
+          "storage.pull_profile.link",
+          "storage.pull_profile.unlink"
+        ]
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/v1/app",
+      "permission": "app.create"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/app/<app_name>",
+      "permission": "app.delete"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/app/<app_name>",
+      "permission": "app.update"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/app/<app_name>/version",
+      "permission": "app_version.create"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/app/<app_name>/version/<version_name>",
+      "permission": "app_version.delete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/app/<app_name>/version/<version_name>",
+      "permission": "app_version.get"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/app/<app_name>/version/<version_name>",
+      "permission": "app_version.update"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/app/<app_name>/versions",
+      "permission": "app_version.list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/apps",
+      "permission": "app.list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/container-registry/images/<image_name>/tags",
+      "permission": "registry.tag.list"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/container-registry/images/<image_name>/tags/<tag_name>",
+      "permission": "registry.tag.delete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/deployment/<request_id>/container-logs",
+      "permission": "deployment.logs"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/deployments",
+      "permission": "deployment.list"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/deployments/<request_id>:report",
+      "permission": "deployment.report"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/deployments/<request_id>/tags",
+      "permission": "deployment.tag.list"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/deployments/<request_id>/tags",
+      "permission": "deployment.tag.create"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/deployments/<request_id>/tags/<tag_name>",
+      "permission": "deployment.tag.delete"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/locations",
+      "permission": "location.list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/locations/beacons",
+      "permission": "location.beacon.list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/metrics/deployment/<request_id>",
+      "permission": "deployment.metrics"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/status/<request_id>",
+      "permission": "deployment.get"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/stop/<request_id>",
+      "permission": "deployment.stop"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/storage/endpoint",
+      "permission": "storage.endpoint.create"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/storage/endpoint/<endpoint_name>",
+      "permission": "storage.endpoint.delete"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/storage/endpoint/<endpoint_name>/pull-profile",
+      "permission": "storage.pull_profile.create"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/storage/endpoint/<endpoint_name>/pull-profile/<pull_profile_name>",
+      "permission": "storage.pull_profile.delete"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/storage/endpoint/<endpoint_name>/pull-profile/<pull_profile_name>/app/<app_name>/version/<version_name>",
+      "permission": "storage.pull_profile.unlink"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/storage/endpoint/<endpoint_name>/pull-profile/<pull_profile_name>/app/<app_name>/version/<version_name>",
+      "permission": "storage.pull_profile.link"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/storage/endpoint/<endpoint_name>/pull-profiles",
+      "permission": "storage.pull_profile.list"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/storage/endpoints",
+      "permission": "storage.endpoint.list"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/deployments",
+      "permission": "deployment.create"
+    },
+    {
+      "method": "GET",
+      "path": "/v2/private-fleets/<private_fleet_name>/hosts",
+      "permission": "private_fleet.host.list"
+    },
+    {
+      "method": "POST",
+      "path": "/v2/private-fleets/deployments",
+      "permission": "deployment.create"
+    }
+  ]
+}

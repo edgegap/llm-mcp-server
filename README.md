@@ -513,6 +513,12 @@ npm run sync-skills -- --ref main
 npm run check-skills      # exit 1 if src/skills.generated.ts differs from the pin
 ```
 
+When the API's OAuth scopes or route permissions change, refresh `spec/scope-catalogue.json` from the API's catalogue export and run `npm test`:
+
+```bash
+npm run sync-scope-catalogue -- <path to the catalogue export>
+```
+
 | Test | Covers |
 | --- | --- |
 | `test/unit.test.mjs` | Unit tests for the tag, image, secret-name, URL and redaction rules |
@@ -526,6 +532,7 @@ npm run check-skills      # exit 1 if src/skills.generated.ts differs from the p
 | `test/spec.mjs` | Every endpoint and request-body field the server sends is in `spec/` (write tools checked by dry run) |
 | `test/snapshot.mjs` | Tool names, descriptions, schemas and the instructions match `test/tools.snapshot.json`; `npm run snapshot:update` after a deliberate change |
 | `test/oauth.test.mjs` | OAuth mode: token verification, the JWKS cache, the 401/403 gate, the tool-to-scope table, hidden tools |
+| `test/scope-contract.test.mjs` | Every API route a tool calls requires a permission the tool's OAuth scopes grant, per `spec/scope-catalogue.json` |
 | `test/worker-telemetry.mjs`, `test/worker-oauth.mjs` | `npm run test:worker`: the Worker under `wrangler dev`, its analytics and OAuth mode over HTTP, including concurrent requests from two organizations |
 | `test/live-check.mjs` | Not in `npm test`. Runs against the real API with a token from a non-production organization |
 

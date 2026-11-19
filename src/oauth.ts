@@ -189,6 +189,18 @@ export function toolNeed(tool: string, args: Record<string, unknown> = {}): Tool
   return rule.when(args) ? scopes(...rule.scopes) : NONE;
 }
 
+/**
+ * Every scope some call to `tool` needs, whatever its arguments: empty for a
+ * no-account tool, undefined for a tool OAuth mode hides. The contract test
+ * (test/scope-contract.test.mjs) checks these against the API's catalogue.
+ */
+export function toolScopes(tool: string): string[] | undefined {
+  if (!Object.hasOwn(TOOL_SCOPES, tool)) return undefined;
+  const rule = TOOL_SCOPES[tool];
+  if (rule === null) return [];
+  return [...(Array.isArray(rule) ? rule : rule.scopes)];
+}
+
 /** One entry of a tool's `securitySchemes`, as OpenAI's Apps SDK reads it. */
 export type SecurityScheme = { type: 'noauth' } | { type: 'oauth2'; scopes: string[] };
 

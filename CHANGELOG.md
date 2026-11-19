@@ -13,6 +13,7 @@ Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `
 - Analytics in OAuth mode: the distinct_id is the salted hash of the organization id from the token, and a `user_id` property holds the salted hash of its user, so users can be counted per organization. The raw ids are never sent.
 - `npm run test:worker` now runs in CI.
 - `worker/DECISION.md` explains why forwarding the access token to the API is a co-audience design, not token passthrough.
+- `test/scope-contract.test.mjs` (in `npm test`) checks the tool-to-scope table against the API's scope catalogue (`spec/scope-catalogue.json`, refreshed with `npm run sync-scope-catalogue`): every route a tool's code calls requires a permission its scopes grant at their current versions, no-account tools call no route that needs a sign-in, each tool hidden in OAuth mode calls a route no OAuth token can call, and every scope the Worker names exists.
 - Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`, on protocols 2025-06-18 and 2026-07-28).
 
 ## 0.19.5
