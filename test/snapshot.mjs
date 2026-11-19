@@ -59,6 +59,14 @@ for (const n of Object.keys(b)) {
 if (saved.normal.instructions !== current.normal.instructions) diffs.push('server instructions changed');
 if (JSON.stringify(saved.read_only.tools) !== JSON.stringify(current.read_only.tools)) diffs.push('read-only tool list changed');
 
+// Directory reviews (OpenAI's among them) ask every tool to state both hints
+// explicitly; a read-only tool is never destructive.
+for (const t of current.normal.tools) {
+  const { readOnlyHint, destructiveHint } = t.annotations ?? {};
+  if (typeof readOnlyHint !== 'boolean' || typeof destructiveHint !== 'boolean') diffs.push(`${t.name}: readOnlyHint and destructiveHint must both be set`);
+  else if (readOnlyHint && destructiveHint) diffs.push(`${t.name}: a read-only tool cannot be destructive`);
+}
+
 if (diffs.length) {
   for (const d of diffs) console.log(`  FAIL ${d}`);
   console.log('\nIf these changes are intended, run: node test/snapshot.mjs --update, and commit test/tools.snapshot.json.');

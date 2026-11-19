@@ -29,6 +29,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
@@ -140,6 +141,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
         }
@@ -179,6 +181,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -239,6 +242,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": false
         }
@@ -271,6 +275,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -422,6 +427,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -489,6 +495,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -544,6 +551,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -591,6 +599,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -629,6 +638,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -666,6 +676,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -700,6 +711,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -734,6 +746,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -771,6 +784,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -798,6 +812,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -975,6 +990,7 @@
           "additionalProperties": {}
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -1010,6 +1026,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -1098,6 +1115,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": false
         }
@@ -1216,6 +1234,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -1308,6 +1327,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -1336,6 +1356,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -1611,13 +1632,14 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
       {
         "name": "edgegap_get_registry_credentials",
         "title": "Get Edgegap container registry push credentials",
-        "description": "Get the push login for this organization's private Edgegap container registry (registry.edgegap.com) and the exact docker login, build and push commands for your image. Use this when the server image is not in a registry yet. Edgegap only hands these credentials to the quick-start token the Unity/Unreal plugins use; with a regular API token this tool cannot fetch them and instead returns the steps to copy them from the dashboard's Container Registry page — ask the developer for them then, do not retry. When it does return a token, it is registry-scoped (push/pull images in this project), not the org API token: pass it to docker login via --password-stdin, never as a command-line argument, and do not write it into files. Call edgegap_validate_server_config before building. Any other registry Edgegap can pull from (Docker Hub, GHCR, ECR, GitLab) works too: then skip this tool and pass that registry and its pull login to edgegap_create_app_version.",
+        "description": "Get the push login for this organization's private Edgegap container registry (registry.edgegap.com) and the exact docker login, build and push commands for your image. Use this when the server image is not in a registry yet. Edgegap only hands these credentials to the quick-start token the Unity/Unreal plugins use; with a regular API token or Edgegap sign-in this tool cannot fetch them and instead returns the steps to copy them from the dashboard's Container Registry page — ask the developer for them then, do not retry. When it does return a token, it is registry-scoped (push/pull images in this project), not the org API token: pass it to docker login via --password-stdin, never as a command-line argument, and do not write it into files. Call edgegap_validate_server_config before building. Any other registry Edgegap can pull from (Docker Hub, GHCR, ECR, GitLab) works too: then skip this tool and pass that registry and its pull login to edgegap_create_app_version.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -1659,6 +1681,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -1682,6 +1705,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": false
         }
@@ -1729,6 +1753,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
@@ -1823,6 +1848,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -1886,6 +1912,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2037,6 +2064,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2051,6 +2079,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2074,6 +2103,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2162,6 +2192,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2225,6 +2256,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2305,6 +2337,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2368,6 +2401,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2382,6 +2416,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
         }
@@ -2425,6 +2460,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": false,
           "openWorldHint": true
@@ -2459,6 +2495,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -2508,6 +2545,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "openWorldHint": true
         }
       },
@@ -2537,6 +2575,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": true,
           "idempotentHint": true,
           "openWorldHint": true
@@ -2582,6 +2621,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
@@ -2614,6 +2654,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
@@ -2770,6 +2811,7 @@
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
+          "readOnlyHint": false,
           "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
@@ -2944,6 +2986,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": false
         }
@@ -3046,6 +3089,7 @@
         },
         "annotations": {
           "readOnlyHint": true,
+          "destructiveHint": false,
           "idempotentHint": true,
           "openWorldHint": true
         }

@@ -85,6 +85,13 @@ export const ARCHITECTURE_SUMMARY =
   'when the host quits. Use one only when the developer explicitly wants host/client; "it ' +
   'needs no server image" is not a reason. If unsure, ask before choosing a relay.';
 
+/** ARCHITECTURE_SUMMARY for OAuth mode, where the relay tools are not registered. */
+const ARCHITECTURE_SUMMARY_OAUTH =
+  'Recommend a dedicated server (edgegap_deploy): the server owns the game state, so no host ' +
+  'advantage, much harder cheating, and the match survives any player leaving. Relays for ' +
+  'host/client games are not available through Edgegap sign-in yet; a developer who needs one ' +
+  'can use the local server (npx -y @edgegap/mcp) with an API token.';
+
 /**
  * Egress terms, returned by edgegap_context so agents can weigh hosting costs
  * without crawling the website. Source: edgegap.com/pricing.md and the Private
@@ -108,11 +115,21 @@ export const INSTRUCTIONS_MAX_CHARS = 4096;
  * Server instructions, shared by the local server and the hosted Worker so
  * both give agents the same golden path. Only the credential paragraph differs.
  */
-export function serverInstructions(mode: 'local' | 'hosted'): string {
+export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
+  const tokenRules =
+    'The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked ' +
+    'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
+    'If the developer declines to provide a token, stop and report which operation needed it; ' +
+    'do not retry.\n\n';
   const credentials =
     mode === 'local'
-      ? 'Credentials: if no token was configured, the first tool call asks the developer for one. '
-      : 'Credentials: the token comes from the Authorization header on this connection. ';
+      ? 'Credentials: if no token was configured, the first tool call asks the developer for one. ' + tokenRules
+      : mode === 'hosted'
+        ? 'Credentials: the token comes from the Authorization header on this connection. ' + tokenRules
+        : 'Credentials: the developer signs in with Edgegap when a tool first needs the account, and ' +
+          'approves what this connection may do. A tool that needs more asks the developer to approve it; ' +
+          'if they decline, stop and report which operation needed it, and do not retry. Use the access ' +
+          'only for work the developer asked for.\n\n';
   // Order matters. Claude Code keeps only the first INSTRUCTIONS_MAX_CHARS
   // characters (0.15.1 lost its cost, guardrail and credential paragraphs
   // that way), and other clients skim. So: the skills line first (in 0.5.0 it
@@ -141,23 +158,24 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
     `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
-    `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
+    (mode === 'oauth'
+      ? 'host/client games on Edgegap relays: the local server (npx -y @edgegap/mcp) with an API token, '
+      : `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, `) +
     `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
-    'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
-    'relay sessions you created before ending the task; edgegap_list_deployments with ' +
+    (mode === 'oauth'
+      ? 'Deployments cost money while running. Stop deployments you created before ending the task; '
+      : 'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
+        'relay sessions you created before ending the task; ') +
+    'edgegap_list_deployments with ' +
     `only_agent_deployments: true lists every deployment tagged "${AGENT_TAG}". If a ` +
     'deployment errors, read the container logs before redeploying.\n\n' +
     'Guardrails: edgegap_context shows this session\'s API and limits. Every write tool takes ' +
     'dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the ' +
-    'API token in env vars, tags or URLs: such calls are refused.\n\n' +
+    `${mode === 'oauth' ? 'access' : 'API'} token in env vars, tags or URLs: such calls are refused.\n\n` +
     credentials +
-    'The token is org-wide (Edgegap cannot scope it): use it only for work the developer asked ' +
-    'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
-    'If the developer declines to provide a token, stop and report which operation needed it; ' +
-    'do not retry.\n\n' +
-    ARCHITECTURE_SUMMARY +
+    (mode === 'oauth' ? ARCHITECTURE_SUMMARY_OAUTH : ARCHITECTURE_SUMMARY) +
     '\n\n' +
     'Golden path for a first dedicated-server deployment:\n' +
     '1. edgegap_generate_dockerfile (no Dockerfile yet) or edgegap_validate_server_config (existing one)\n' +
@@ -319,7 +337,7 @@ function guard(
       return fail(err.message, code);
     }
     if (err instanceof EdgegapApiError) {
-      const hint = errorHint(err, notFound, forbidden);
+      const hint = errorHint(err, notFound, forbidden, auth.oauth === true);
       const details = apiDetails(err.details, auth.current);
       return withMeta(fail(`${err.message}${details ? `\n${details}` : ''}${hint ? `\n\nLikely cause: ${hint}` : ''}`), {
         code: codeForStatus(err.status, notFoundCode(notFound), forbidden === FORBIDDEN.relay ? 'NO_RELAY_ACCESS' : undefined, err.apiMessage),
@@ -379,7 +397,40 @@ function apiDetails(details: unknown, token: string | undefined): string | undef
 /** Plan or quota wording in an API error, so the hint can say which limit. */
 const QUOTA = QUOTA_WORDING;
 
-function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string): string | undefined {
+/**
+ * What the API's refusal of an Edgegap sign-in means, by its `error` code. A
+ * sign-in is never fixed on the tokens page, and a refused scope is the
+ * developer's role or the connection, not the plan.
+ */
+function signInHint(err: EdgegapApiError): string | undefined {
+  if (err.status === 401) {
+    return (
+      'Edgegap no longer accepts this sign-in: the connection was revoked or expired, or your access to the ' +
+      'organization changed. Reconnect the Edgegap server in the MCP client to sign in again; do not retry before then.'
+    );
+  }
+  if (err.status === 403 && err.errorCode === 'insufficient_scope') {
+    return (
+      'your role in the organization or the access approved for this connection does not allow this operation. ' +
+      'An owner or admin of the organization can change the role, and the Authorized apps page ' +
+      `(${AUTHORIZED_APPS_URL}) shows what the connection may do. Do not retry.`
+    );
+  }
+  if (err.status === 403 && err.errorCode === 'scoped_token_not_accepted') {
+    return (
+      `this operation is not available through Edgegap sign-in yet. Do not retry: the developer can do it in the dashboard (${DASHBOARD_URL}), ` +
+      'or with the local server (npx -y @edgegap/mcp) and an API token.'
+    );
+  }
+  if (err.errorCode === 'temporarily_unavailable') {
+    return 'Edgegap could not check the sign-in just now. Retry in a few seconds; the developer does not need to reconnect.';
+  }
+  return undefined;
+}
+
+function errorHint(err: EdgegapApiError, notFound: string | undefined, forbidden: string | undefined, signIn: boolean): string | undefined {
+  const signInRefusal = signIn ? signInHint(err) : undefined;
+  if (signInRefusal) return signInRefusal;
   if (QUOTA.test(err.apiMessage) && [400, 402, 403, 429].includes(err.status)) {
     return (
       'a plan or quota limit was reached (the message above names it). Retrying will not help. ' +
@@ -853,6 +904,12 @@ export interface RegisterOptions {
    * hosted Worker passes it, for analytics; nothing else is told.
    */
   onToolCall?: (report: ToolCallReport) => void | Promise<void>;
+  /** Tools not to register. The hosted Worker's OAuth mode hides tools its tokens can't call. */
+  hidden?: (tool: string) => boolean;
+  /** The hosted Worker's OAuth mode: each tool's `securitySchemes`, declared in its `_meta`. */
+  securitySchemes?: (tool: string) => unknown[] | undefined;
+  /** The hosted Worker's OAuth mode: the organization the access token is bound to, for edgegap_context. */
+  organization?: string;
 }
 
 export function registerTools(
@@ -878,8 +935,15 @@ export function registerTools(
   const onToolCall = options.onToolCall;
   let inFlight = 0;
   const tool = ((name: string, def: unknown, cb: (...a: unknown[]) => Promise<ToolResult>) => {
+    if (options.hidden?.(name)) return undefined;
     inputs.set(name, ((def as { inputSchema?: Record<string, z.ZodType> }).inputSchema) ?? {});
-    return server.registerTool(name, def as never, (async (...a: unknown[]) => {
+    // Both MCP SDKs list a tool's _meta but drop unknown top-level fields, so
+    // securitySchemes goes in _meta, which OpenAI's Apps SDK also reads.
+    const schemes = options.securitySchemes?.(name);
+    const definition = schemes
+      ? { ...(def as object), _meta: { ...(def as { _meta?: Record<string, unknown> })._meta, securitySchemes: schemes } }
+      : def;
+    return server.registerTool(name, definition as never, (async (...a: unknown[]) => {
       const startedAt = Date.now();
       const from = client.upstream.length;
       inFlight++;
@@ -970,17 +1034,24 @@ export function registerTools(
           .describe('Make one read-only API call (list one application) to confirm Edgegap accepts the token. Default false.'),
       },
       outputSchema: OUTPUT.context,
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ check_token }) => {
       const hosted = config.transport === 'hosted';
-      const tokenStatus = await describeToken(client, auth, hosted, check_token === true);
+      const oauth = config.credential === 'oauth';
+      const tokenStatus = oauth
+        ? await describeOAuth(client, auth, check_token === true)
+        : await describeToken(client, auth, hosted, check_token === true);
       return withMeta(ok({
         server: `@edgegap/mcp ${VERSION}`,
         transport: hosted ? 'hosted (Streamable HTTP)' : 'local (stdio)',
         api_host: label,
         api_base_url: config.baseUrlV1,
-        token: hosted
+        token: oauth
+          ? auth.current
+            ? 'signed in with Edgegap: an OAuth access token on this request'
+            : 'not signed in: the first tool that needs the account starts the Edgegap sign-in'
+          : hosted
           ? auth.current
             ? 'received on this request\'s Authorization header'
             : 'none on this request: send it as an Authorization header'
@@ -989,7 +1060,22 @@ export function registerTools(
             : auth.current
               ? 'provided by the developer this session (memory only)'
               : 'not yet provided: the developer is asked on first use',
-        token_scope: 'organization-wide (Edgegap cannot scope tokens)',
+        token_scope: oauth
+          ? 'one organization, limited to the access the developer approved for this connection'
+          : 'organization-wide (Edgegap cannot scope tokens)',
+        ...(oauth
+          ? {
+              organization: options.organization
+                ? {
+                    id: options.organization,
+                    note:
+                      'The organization chosen when the developer signed in; every tool acts in it. To work in ' +
+                      'another organization, reconnect the server in the MCP client and pick that organization on ' +
+                      'the Edgegap consent page.',
+                  }
+                : 'not signed in: chosen when the developer signs in',
+            }
+          : {}),
         token_status: tokenStatus,
         read_only: config.readOnly,
         app_allowlist: config.appAllowlist.length ? config.appAllowlist : 'none (all applications)',
@@ -1002,9 +1088,9 @@ export function registerTools(
         forced_deploy_tag: AGENT_TAG,
         guardrails: {
           dry_run: mutating
-            ? 'every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles, relays'
+            ? `every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles${oauth ? '' : ', relays'}`
             : 'n/a: read-only, no write tools are registered',
-          token_in_container: 'deploys and versions are refused if the API token appears in an env var, tag or webhook URL',
+          token_in_container: `deploys and versions are refused if the ${oauth ? 'access' : 'API'} token appears in an env var, tag or webhook URL`,
           image_tags: 'versions on "latest", an empty or malformed tag, or a docker_image holding a registry or tag are refused; so is deploying a version on "latest"',
           deployment_cap: config.maxAgentDeployments > 0
             ? `deploy is refused while ${config.maxAgentDeployments} or more agent-tagged deployments are running`
@@ -1024,7 +1110,7 @@ export function registerTools(
         },
         pricing: PRICING_NOTES,
         user_agent: `edgegap-mcp/${VERSION} (<MCP client name>)`,
-        works_without_token: TOKENLESS_TOOLS,
+        works_without_token: oauth ? OAUTH_TOKENLESS_TOOLS : TOKENLESS_TOOLS,
       }), { props: { token_state: String(tokenStatus.state) } });
     }
   );
@@ -1043,7 +1129,7 @@ export function registerTools(
         page: z.number().int().optional(),
       },
       outputSchema: OUTPUT.listApps,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ limit, page }) =>
       guard(auth, async () => {
@@ -1099,7 +1185,7 @@ export function registerTools(
           is_active: z.boolean().optional().describe('Whether deployments are allowed. Default true.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async ({ name, is_active, dry_run }) =>
         guard(auth, async () => {
@@ -1138,7 +1224,7 @@ export function registerTools(
           is_active: z.boolean().describe('false blocks new deployments; true allows them again.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, is_active, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1187,7 +1273,7 @@ export function registerTools(
         application: z.string().optional().describe('Application name, as returned by edgegap_list_apps. Required; without it the applications are listed.'),
       },
       outputSchema: OUTPUT.listAppVersions,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application }) =>
       // Read-only, so not subject to EDGEGAP_APP_ALLOWLIST: the allowlist
@@ -1233,7 +1319,7 @@ export function registerTools(
         version: z.string().optional().describe('Version name, as listed by edgegap_list_app_versions. Required; without it the versions are listed.'),
       },
       outputSchema: OUTPUT.getAppVersion,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -1368,7 +1454,7 @@ export function registerTools(
             .describe('Environment variables injected into the container. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1599,7 +1685,7 @@ export function registerTools(
             .describe('REPLACES every env var on the version; [] removes them all. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1747,7 +1833,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('Results per page, 1-200. Default 100.'),
       },
       outputSchema: OUTPUT.listLocations,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version, page, limit }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -1785,7 +1871,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('Results per page, 1-200. Default 100.'),
       },
       outputSchema: OUTPUT.listPingBeacons,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ page, limit }) =>
       guard(auth, async () => {
@@ -1876,7 +1962,7 @@ export function registerTools(
           dry_run: dryRunParam,
         },
         outputSchema: OUTPUT.deploy,
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -2067,7 +2153,8 @@ export function registerTools(
               err.status,
               `${err.apiMessage}\nThe API still created ${left.length === 1 ? 'a deployment' : 'deployments'} for this ` +
                 `request: ${left.join(', ')}. Stop ${left.length === 1 ? 'it' : 'each'} with edgegap_stop_deployment.`,
-              err.details
+              err.details,
+              err.errorCode
             );
           }
           return withMeta(
@@ -2107,7 +2194,7 @@ export function registerTools(
         request_id: z.string().describe('The request_id returned by edgegap_deploy.'),
       },
       outputSchema: OUTPUT.deployment,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ request_id }) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2141,7 +2228,7 @@ export function registerTools(
           .describe('How long to wait before giving up, 5-600. Default 180.'),
       },
       outputSchema: OUTPUT.waitForDeployment,
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ request_id, timeout_seconds }, extra) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2292,7 +2379,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('1-100. Default 50.'),
       },
       outputSchema: OUTPUT.listDeployments,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ only_agent_deployments, filters: given, order_by, limit }) =>
       guard(auth, async () => {
@@ -2366,7 +2453,7 @@ export function registerTools(
           confirm: confirmParam,
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ request_id, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2451,7 +2538,7 @@ export function registerTools(
           .optional()
           .describe('Truncate logs to this length (500-50000), keeping the tail. Default 8000.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ request_id, max_characters }) =>
       guarded(auth, NOT_FOUND.logs, async () => {
@@ -2513,7 +2600,7 @@ export function registerTools(
         step: z.string().optional().describe('Averaging step, e.g. "30s" or "5m". Default: the API\'s.'),
       },
       outputSchema: OUTPUT.metrics,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ request_id, start_time, end_time, step }) =>
       guarded(auth, NOT_FOUND.deployment, async () => {
@@ -2650,7 +2737,7 @@ export function registerTools(
         max_deployments: z.number().int().optional().describe(`How many to inspect, 1-${OPS_CAP}. Default ${Math.min(50, OPS_CAP)}.`),
         check_crashes: z.boolean().optional().describe('Also read crash data (restart count, exit code) per deployment. Default false.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version, max_deployments, check_crashes }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -2758,7 +2845,7 @@ export function registerTools(
         max_deployments: z.number().int().optional().describe(`How many to search, 1-${OPS_CAP}. Default ${Math.min(30, OPS_CAP)}.`),
         max_groups: z.number().int().optional().describe('Most error groups to return, 1-50. Default 15.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version, pattern, regex, started_after, max_deployments, max_groups }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -2835,7 +2922,7 @@ export function registerTools(
         version_b: z.string().describe('The version to compare against it, e.g. the new build.'),
         max_deployments_per_version: z.number().int().optional().describe(`1-${COMPARE_CAP}. Default ${Math.min(5, COMPARE_CAP)}.`),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ application, version_a, version_b, max_deployments_per_version }) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -2962,7 +3049,7 @@ export function registerTools(
           .describe('Extra server arguments, one per entry, e.g. ["-log", "-port=7777"].'),
         base_image: z.string().optional().describe('Default "ubuntu:22.04".'),
       },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       let generated;
@@ -3058,7 +3145,7 @@ export function registerTools(
         docker_tag: z.string().optional(),
       },
       outputSchema: OUTPUT.validateServerConfig,
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async (args) => {
       const { engine, errors, warnings } = validateServerConfig(args);
@@ -3115,7 +3202,7 @@ export function registerTools(
           '(registry.edgegap.com) and the exact docker login, build and push commands for your ' +
           'image. Use this when the server image is not in a registry yet. Edgegap only hands ' +
           'these credentials to the quick-start token the Unity/Unreal plugins use; with a ' +
-          'regular API token this tool cannot fetch them and instead returns the steps to copy ' +
+          'regular API token or Edgegap sign-in this tool cannot fetch them and instead returns the steps to copy ' +
           'them from the dashboard\'s Container Registry page — ask the developer for them then, ' +
           'do not retry. When it does return a token, it is registry-scoped (push/pull images in ' +
           'this project), not the org API token: pass it to docker login via --password-stdin, ' +
@@ -3141,12 +3228,16 @@ export function registerTools(
           const tagProblem = tag === undefined ? undefined : badTag(tag);
           if (tagProblem) return fail(`Refused: ${tagProblem}. ${TAG_FIX}`);
 
+          // Push credentials outlive a sign-in's grant, so the API hands none to
+          // an OAuth token: the dashboard steps are the answer, with no call.
+          if (config.credential === 'oauth') return manualStepsResult(registryCredentialsUnavailable(image_name, tag, 'oauth'));
+
           // Both wizard endpoints answer 403 to a regular API token: they belong
           // to the plugins' quick-start flow. 403 is the token type, not a
           // missing registry, so it must not trigger provisioning (which only
           // fails with a second, more confusing 403). Only a 404 — a
           // quick-start token whose project is not provisioned yet — does.
-          const unavailable = () => manualStepsResult(registryCredentialsUnavailable(image_name, tag));
+          const unavailable = () => manualStepsResult(registryCredentialsUnavailable(image_name, tag, 'api_token'));
           let creds;
           try {
             creds = await client.getRegistryCredentials();
@@ -3220,7 +3311,7 @@ export function registerTools(
         limit: z.number().int().optional().describe('1-100. Default 20.'),
       },
       outputSchema: OUTPUT.listRegistryTags,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ image_name, page, limit }) =>
       guard(auth, async () => {
@@ -3254,7 +3345,10 @@ export function registerTools(
                 'or another registry, skip this check and pass that registry to edgegap_create_app_version.'
             );
           }
-          if (err instanceof EdgegapApiError && err.status === 403) {
+          // The API's bare 403 (no error code) means no Edgegap registry for this
+          // organization. A 403 with a code is about the credential's access, and
+          // guard() explains it by the code.
+          if (err instanceof EdgegapApiError && err.status === 403 && err.errorCode === undefined) {
             return emptyState(
               'not_configured',
               { image_name: name, total: 0, tags: [] },
@@ -3321,7 +3415,7 @@ export function registerTools(
           confirm: confirmParam,
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ image_name, tag, confirm, dry_run }) =>
         guard(auth, async () => {
@@ -3394,7 +3488,7 @@ export function registerTools(
           remove: z.array(z.string().min(1).max(40)).optional().describe('Tags to remove.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async ({ request_id, add, remove, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -3450,7 +3544,7 @@ export function registerTools(
           metadata: z.record(z.string(), z.string()).optional().describe('Extra key/value details, e.g. {"match_id": "m-42"}.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async ({ request_id, reason, metadata, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -3493,7 +3587,7 @@ export function registerTools(
           confirm: confirmParam,
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, version, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -3541,7 +3635,7 @@ export function registerTools(
             .describe('Delete only if it has at most this many versions. Default 0.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, max_versions, confirm, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -3625,7 +3719,7 @@ export function registerTools(
       inputSchema: {
         fleet_name: z.string().min(1).describe('The private fleet name, as shown in the dashboard.'),
       },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ fleet_name }) =>
       guard(auth, async () => {
@@ -3656,7 +3750,7 @@ export function registerTools(
         'for logs through edgegap_create_app_version / edgegap_update_app_version endpoint_storage, and a pull ' +
         'profile through edgegap_link_pull_profile.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async () =>
       guard(auth, async () => {
@@ -3711,7 +3805,7 @@ export function registerTools(
             .describe('v1 (default) writes one file per deployment; v2 streams chunks while it runs.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -3770,7 +3864,7 @@ export function registerTools(
           destination: z.string().min(1).describe('Absolute path in the container, e.g. "/data/maps".'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -3815,7 +3909,7 @@ export function registerTools(
           unlink: z.boolean().optional().describe('true removes the link instead.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -3851,7 +3945,7 @@ export function registerTools(
           pull_profile: z.string().min(1).describe('The exact pull profile name to delete.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ endpoint_storage, pull_profile, dry_run }) =>
         guard(auth, async () => {
@@ -3887,7 +3981,7 @@ export function registerTools(
             .describe('Delete only if it has at most this many pull profiles, which go with it. Default 0.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ endpoint_storage, max_pull_profiles, dry_run }) =>
         guard(auth, async () => {
@@ -3949,7 +4043,7 @@ export function registerTools(
           timeout_seconds: z.number().int().min(5).max(120).optional().describe('Default 30.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
       },
       async ({ user_ips, webhook_url, wait_until_ready, timeout_seconds, dry_run }) =>
         guard(auth, async () => {
@@ -4008,7 +4102,7 @@ export function registerTools(
         'authorized player with their authorization token. edgegap_create_relay_session already ' +
         'waits for readiness; use this to re-read a session or one created with wait_until_ready false.',
       inputSchema: { session_id: z.string().describe('Returned by edgegap_create_relay_session.') },
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ session_id }) =>
       guarded(auth, NOT_FOUND.relay, async () => ok(compactRelay(await client.getRelaySession(session_id))))
@@ -4026,7 +4120,7 @@ export function registerTools(
         'read one session with edgegap_get_relay_session.',
       inputSchema: {},
       outputSchema: OUTPUT.listRelaySessions,
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async () =>
       guard(auth, async () => {
@@ -4075,7 +4169,7 @@ export function registerTools(
           user_ip: z.string().min(3).describe('Public IP of the joining player.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       },
       async ({ session_id, user_ip, dry_run }) =>
         guarded(auth, NOT_FOUND.relay, async () => {
@@ -4108,7 +4202,7 @@ export function registerTools(
           user_authorization_token: z.number().int().describe('The player\'s authorization token, not the session\'s.'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ session_id, user_authorization_token, dry_run }) =>
         guarded(auth, NOT_FOUND.relay, async () => {
@@ -4139,7 +4233,7 @@ export function registerTools(
           session_id: z.string().describe('The exact session_id of the one session to delete, e.g. "0724828881e2-S".'),
           dry_run: dryRunParam,
         },
-        annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ session_id, dry_run }) =>
         guarded(auth, NOT_FOUND.relay, async () => {
@@ -4211,7 +4305,7 @@ export function registerTools(
               'block matchmaker calls from any origin not listed. Scheme and host only, no path.'
           ),
       },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async (args) =>
       guarded(auth, NOT_FOUND.app, async () => {
@@ -4335,7 +4429,7 @@ function registerSkills(
         'and routes to the rest. Also says whether a newer skills pack is on GitHub (reads one ' +
         'version number, no Edgegap API call).',
       inputSchema: {},
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async () => {
       const status = servedPackStatus(await latestPack(check), hosted);
@@ -4379,7 +4473,7 @@ function registerSkills(
           .optional()
           .describe('A file inside the skill, e.g. "references/deploy.md" or "assets/docker/Dockerfile". Default SKILL.md.'),
       },
-      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ skill: name, file }) => {
       if (!name?.trim()) {
@@ -4732,6 +4826,9 @@ const TOKENLESS_TOOLS = [
   'edgegap_build_matchmaker_config (without the version check)',
 ];
 
+/** OAuth mode adds the registry tool: sign-in hands out no registry credentials, so it answers the push steps. */
+const OAUTH_TOKENLESS_TOOLS = [...TOKENLESS_TOOLS, 'edgegap_get_registry_credentials (the registry push steps)'];
+
 /**
  * Whether this session can call the Edgegap API, and if not, why and how to
  * fix it. Never shows the token: only its last four characters, which is
@@ -4783,7 +4880,33 @@ async function describeToken(
   }
 }
 
+/** describeToken for the hosted Worker's OAuth mode: signed in or not, never the token. */
+async function describeOAuth(
+  client: EdgegapClient,
+  auth: TokenSource,
+  check: boolean
+): Promise<Record<string, unknown> & { state: string }> {
+  if (!auth.current) {
+    return {
+      state: 'signed_out',
+      note: 'Not signed in. The first tool that needs the Edgegap account makes the MCP client start the sign-in.',
+      works_without_token: OAUTH_TOKENLESS_TOOLS,
+    };
+  }
+  if (!check) return { state: 'signed in (not checked)', note: 'Pass check_token: true to confirm Edgegap accepts it.' };
+  try {
+    await client.listApps({ limit: 1 });
+    return { state: 'accepted' };
+  } catch (err) {
+    if (err instanceof EdgegapApiError && err.status === 401) {
+      return { state: 'rejected', note: 'Edgegap no longer accepts this sign-in: it was revoked or expired. Reconnect the server in the MCP client.' };
+    }
+    return { state: 'unknown', note: `The check call failed: ${(err as Error).message.slice(0, 200)}` };
+  }
+}
+
 const TOKENS_URL = 'https://app.edgegap.com/user-settings?tab=tokens';
+const AUTHORIZED_APPS_URL = 'https://app.edgegap.com/user-settings?tab=authorized-apps';
 const SIGNUP_URL = 'https://app.edgegap.com';
 
 /**
@@ -4874,15 +4997,18 @@ function isEdgegapRegistry(repository: string): boolean {
   return /^(https?:\/\/)?([a-z0-9-]+-)?registry\.edgegap\.(com|dev)\/?$/i.test(repository.trim());
 }
 
-function registryCredentialsUnavailable(imageName?: string, tag?: string): string {
+function registryCredentialsUnavailable(imageName: string | undefined, tag: string | undefined, credential: 'api_token' | 'oauth'): string {
   const image = imageName ?? '<image-name>';
   const buildTag = tag ?? '<unique-build-tag>';
   const ref = `registry.edgegap.com/<project>/${image}:${buildTag}`;
   return (
-    'Edgegap does not give container registry credentials to a regular API token: the ' +
-    'endpoint only accepts the quick-start token the Unity/Unreal plugins use (it answered ' +
-    '403). This is the token type, not a problem with the registry. Do not retry. Ask the ' +
-    'developer for the registry login instead:\n\n' +
+    (credential === 'oauth'
+      ? 'Edgegap sign-in does not hand out container registry credentials: they would outlive ' +
+        'the access this connection was given. This is expected, not a problem with the registry. '
+      : 'Edgegap does not give container registry credentials to a regular API token: the ' +
+        'endpoint only accepts the quick-start token the Unity/Unreal plugins use (it answered ' +
+        '403). This is the token type, not a problem with the registry. ') +
+    'Do not retry. Ask the developer for the registry login instead:\n\n' +
     `1. In the dashboard (${DASHBOARD_URL}), open the Container Registry page and copy the ` +
     'Project, Username and Token.\n' +
     '2. Log in with the token read from an environment variable, never as an argument:\n' +

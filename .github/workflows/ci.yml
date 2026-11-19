@@ -22,6 +22,8 @@ jobs:
       - run: npm run typecheck:worker
       - run: npm run build
       - run: npm test
+      # The hosted Worker under wrangler dev: telemetry and OAuth mode.
+      - run: npm run test:worker
       - run: npm run scan
 
   # The local server is started by Windows MCP clients through npx; check the

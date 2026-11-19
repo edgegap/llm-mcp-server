@@ -58,6 +58,8 @@ export class TokenUnavailableError extends Error {
  */
 export interface TokenSource {
   readonly current: string | undefined;
+  /** True for an Edgegap sign-in (OAuth) access token: errors then speak of the connection, not an API token. */
+  readonly oauth?: boolean;
   get(): Promise<string>;
   invalidate(): void;
   consumeFirstUseNotice(): string | undefined;
