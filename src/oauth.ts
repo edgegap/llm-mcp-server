@@ -225,37 +225,51 @@ export class JwksUnavailableError extends Error {}
 export const JWKS_TTL_MS = 10 * 60 * 1000;
 /** An unknown kid refetches the JWKS at most this often, so garbage kids can't hammer the issuer. */
 export const JWKS_REFETCH_INTERVAL_MS = 60 * 1000;
+/** After a failed fetch, the next one waits this long; requests meanwhile answer unavailable without fetching. */
+export const JWKS_RETRY_AFTER_FAILURE_MS = 10 * 1000;
+/** A JWKS fetch slower than this is abandoned as a failure, so a hung issuer can't hold every request. */
+export const JWKS_FETCH_TIMEOUT_MS = 5 * 1000;
 
 export interface JwksCacheOptions {
   fetch?: typeof fetch;
   now?: () => number;
+  fetchTimeoutMs?: number;
 }
 
 /**
  * The issuer's signing keys, by kid. The one piece of state the Worker keeps
  * across requests: public keys only. Refetched once the set is older than
  * JWKS_TTL_MS, and on an unknown kid when the last fetch is older than
- * JWKS_REFETCH_INTERVAL_MS. Fetched with cache "no-store": the issuer sends a
- * one-hour Cache-Control, and an edge cache in between would hold a removed key
- * past the TTL.
+ * JWKS_REFETCH_INTERVAL_MS. A fetch gives up after JWKS_FETCH_TIMEOUT_MS, and
+ * after a failure the next fetch waits JWKS_RETRY_AFTER_FAILURE_MS. Fetched
+ * with cache "no-store": the issuer sends a one-hour Cache-Control, and an
+ * edge cache in between would hold a removed key past the TTL.
  */
 export class JwksCache {
   private keys = new Map<string, CryptoKey>();
   private fetchedAt = -Infinity;
+  private failedAt = -Infinity;
   private inFlight?: Promise<void>;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
+  private readonly fetchTimeoutMs: number;
 
   constructor(private readonly url: string, options: JwksCacheOptions = {}) {
     this.fetchFn = options.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
     this.now = options.now ?? Date.now;
+    this.fetchTimeoutMs = options.fetchTimeoutMs ?? JWKS_FETCH_TIMEOUT_MS;
   }
 
   /** The key for `kid`, or undefined when the issuer doesn't publish it. */
   async key(kid: string): Promise<CryptoKey | undefined> {
     const age = this.now() - this.fetchedAt;
     if (age >= JWKS_TTL_MS || (!this.keys.has(kid) && age >= JWKS_REFETCH_INTERVAL_MS)) {
-      await this.refresh();
+      if (this.now() - this.failedAt < JWKS_RETRY_AFTER_FAILURE_MS) {
+        // A set past its TTL was dropped when the fetch failed; a fresh one still answers.
+        if (age >= JWKS_TTL_MS) throw new JwksUnavailableError('The issuer\'s JWKS could not be fetched recently.');
+      } else {
+        await this.refresh();
+      }
     }
     return this.keys.get(kid);
   }
@@ -271,16 +285,24 @@ export class JwksCache {
   private async load(): Promise<void> {
     let body: unknown;
     try {
-      const response = await this.fetchFn(this.url, { cache: 'no-store', headers: { Accept: 'application/json' } });
+      const response = await this.fetchFn(this.url, {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(this.fetchTimeoutMs),
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       body = await response.json();
     } catch (err) {
+      this.failedAt = this.now();
       // A failed fetch must not keep serving a set past its TTL; an expired set is dropped.
       if (this.now() - this.fetchedAt >= JWKS_TTL_MS) this.keys.clear();
       throw new JwksUnavailableError(`The issuer's JWKS could not be fetched: ${(err as Error).message}`);
     }
     const entries = (body as { keys?: unknown })?.keys;
-    if (!Array.isArray(entries)) throw new JwksUnavailableError('The issuer\'s JWKS has no keys array.');
+    if (!Array.isArray(entries)) {
+      this.failedAt = this.now();
+      throw new JwksUnavailableError('The issuer\'s JWKS has no keys array.');
+    }
 
     const keys = new Map<string, CryptoKey>();
     for (const entry of entries as Array<Record<string, unknown>>) {

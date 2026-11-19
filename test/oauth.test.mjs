@@ -15,6 +15,7 @@ import {
   JwksUnavailableError,
   JWKS_TTL_MS,
   JWKS_REFETCH_INTERVAL_MS,
+  JWKS_RETRY_AFTER_FAILURE_MS,
   MEMBER_DEFAULT_SCOPES,
   OAuthTokenSource,
   gate,
@@ -191,6 +192,28 @@ test('JWKS cache: concurrent misses share one fetch; failures raise JwksUnavaila
   server.keys = [];
   time.t += JWKS_REFETCH_INTERVAL_MS;
   assert.equal(await cache.key('key-1'), undefined, 'the expired key did not survive the failed refresh');
+});
+
+test('JWKS cache: a fetch that hangs is abandoned after the timeout as unavailable', async () => {
+  const hanging = (url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason)));
+  const cache = new JwksCache(ENV.OAUTH_JWKS_URL, { fetch: hanging, fetchTimeoutMs: 20 });
+  const started = Date.now();
+  await assert.rejects(cache.key('key-1'), JwksUnavailableError);
+  assert.ok(Date.now() - started < 2000, 'gave up at the timeout');
+});
+
+test('JWKS cache: after a failed fetch, requests wait before the next fetch and answer unavailable meanwhile', async () => {
+  const server = jwksServer([KEY.jwk]);
+  server.fail = true;
+  const time = clock();
+  const cache = new JwksCache(ENV.OAUTH_JWKS_URL, { fetch: server.fetch, now: time.now });
+  await assert.rejects(cache.key('key-1'), JwksUnavailableError);
+  for (let i = 0; i < 5; i++) await assert.rejects(cache.key('key-1'), JwksUnavailableError);
+  assert.equal(server.fetches, 1, 'no refetch during the wait');
+  server.fail = false;
+  time.t += JWKS_RETRY_AFTER_FAILURE_MS;
+  assert.ok(await cache.key('key-1'));
+  assert.equal(server.fetches, 2);
 });
 
 test('JWKS cache: keys that are not RS256 signing keys are skipped', async () => {
