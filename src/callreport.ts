@@ -54,6 +54,8 @@ export interface CallMeta {
   hash?: Record<string, string | undefined>;
   /** Funnel milestones this call reached, e.g. "deployment_ready". */
   milestones?: Milestone[];
+  /** Overrides the reported upstream_status, when the failing status is not an API response's. */
+  upstreamStatus?: number | null;
 }
 
 export type Milestone =
@@ -136,9 +138,18 @@ function argumentStrings(args: Record<string, unknown> | undefined): Array<[stri
   return out.sort((a, b) => b[1].length - a[1].length);
 }
 
+/** Plan or quota wording in an API error. "Your plan allows you to create only 1 active
+ *  deployments, and it appears you've reached this limit" (403, live 2026-10-29) included. */
+export const QUOTA_WORDING =
+  /quota|limit reached|reached this limit|exceed|upgrade your plan|plan limit|plan allows|maximum number/i;
+
+/** A 422 about the request itself (metrics on an ended deployment, a time window
+ *  in the future), not about capacity. */
+export const REQUEST_422 = /start_time|end_time|terminated|cannot fetch metrics/i;
+
 /** The error code for an Edgegap API status, given what the tool was looking for. */
 export function codeForStatus(status: number, notFound?: ErrorCode, forbidden?: ErrorCode, message = ''): ErrorCode {
-  if (/quota|limit reached|exceed|upgrade your plan|plan limit/i.test(message) && [400, 402, 403, 429].includes(status)) {
+  if (QUOTA_WORDING.test(message) && [400, 402, 403, 429].includes(status)) {
     return 'QUOTA_REACHED';
   }
   switch (status) {
@@ -153,7 +164,7 @@ export function codeForStatus(status: number, notFound?: ErrorCode, forbidden?: 
     case 409:
       return 'CONFLICT';
     case 422:
-      return 'NO_CAPACITY';
+      return REQUEST_422.test(message) ? 'UPSTREAM_REJECTED' : 'NO_CAPACITY';
     case 424:
       return 'IMAGE_PULL_FAILED';
     case 429:
@@ -218,7 +229,14 @@ export function finishReport(input: {
     requestId: input.requestId,
     success: !input.isError,
     ...(input.isError ? { error_code: code, error_message: sanitizeErrorMessage(input.text, input.token, input.args), failed_stage: stage } : {}),
-    upstream_status: statuses.length ? statuses[statuses.length - 1] : null,
+    // A failed call reports the status that failed it, not a later lookup's
+    // (a deploy 403 followed by a 200 leftover check used to read 200).
+    upstream_status:
+      meta.upstreamStatus !== undefined
+        ? meta.upstreamStatus
+        : input.isError && typeof failedUpstream === 'number'
+          ? failedUpstream
+          : statuses.length ? statuses[statuses.length - 1] : null,
     upstream_calls: upstream.length,
     latency_ms: input.latencyMs,
     ...(input.dryRun ? { dry_run: true } : {}),

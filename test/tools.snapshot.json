@@ -1110,18 +1110,14 @@
           "type": "object",
           "properties": {
             "application": {
-              "type": "string",
-              "description": "Application name."
+              "description": "Application name. Required; without it the applications are listed.",
+              "type": "string"
             },
             "version": {
-              "type": "string",
-              "description": "Version name, as listed by edgegap_list_app_versions."
+              "description": "Version name, as listed by edgegap_list_app_versions. Required; without it the versions are listed.",
+              "type": "string"
             }
           },
-          "required": [
-            "application",
-            "version"
-          ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": {
@@ -1674,17 +1670,14 @@
           "type": "object",
           "properties": {
             "skill": {
-              "type": "string",
-              "description": "Skill name, from edgegap_list_skills: edgegap, edgegap-browser-wasm, edgegap-cocos, edgegap-colyseus, edgegap-containerize, edgegap-deployments-api, edgegap-eos-voice, edgegap-fal, edgegap-fishnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-godot, edgegap-launch, edgegap-local-testing, edgegap-manus, edgegap-matchmaking, edgegap-nakama, edgegap-ngo, edgegap-playfab, edgegap-purrnet, edgegap-relays, edgegap-samples, edgegap-server-design, edgegap-supabase, edgegap-threejs, edgegap-troubleshoot, edgegap-ugs-matchmaker, edgegap-unity, edgegap-unreal, edgegap-vibe-coded."
+              "description": "Skill name, from edgegap_list_skills: edgegap, edgegap-browser-wasm, edgegap-cocos, edgegap-colyseus, edgegap-containerize, edgegap-deployments-api, edgegap-eos-voice, edgegap-fal, edgegap-fishnet, edgegap-fusion, edgegap-fusion-simplefps, edgegap-godot, edgegap-launch, edgegap-local-testing, edgegap-manus, edgegap-matchmaking, edgegap-nakama, edgegap-ngo, edgegap-playfab, edgegap-purrnet, edgegap-relays, edgegap-samples, edgegap-server-design, edgegap-supabase, edgegap-threejs, edgegap-troubleshoot, edgegap-ugs-matchmaker, edgegap-unity, edgegap-unreal, edgegap-vibe-coded. Required; without it the skills are listed.",
+              "type": "string"
             },
             "file": {
               "description": "A file inside the skill, e.g. \"references/deploy.md\" or \"assets/docker/Dockerfile\". Default SKILL.md.",
               "type": "string"
             }
           },
-          "required": [
-            "skill"
-          ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "annotations": {
@@ -1749,13 +1742,10 @@
           "type": "object",
           "properties": {
             "application": {
-              "type": "string",
-              "description": "Application name, as returned by edgegap_list_apps."
+              "description": "Application name, as returned by edgegap_list_apps. Required; without it the applications are listed.",
+              "type": "string"
             }
           },
-          "required": [
-            "application"
-          ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "outputSchema": {
@@ -2107,10 +2097,10 @@
               "maximum": 9007199254740991
             },
             "limit": {
-              "description": "Default 100.",
+              "description": "Results per page, 1-200. Default 100.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 200
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -2188,10 +2178,10 @@
               "maximum": 9007199254740991
             },
             "limit": {
-              "description": "Default 100.",
+              "description": "Results per page, 1-200. Default 100.",
               "type": "integer",
-              "minimum": 1,
-              "maximum": 200
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"

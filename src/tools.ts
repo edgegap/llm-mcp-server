@@ -24,7 +24,7 @@ import { buildMatchmakerConfig, DASHBOARD_URL } from './matchmaker.js';
 import { badImage, badTag, ENCRYPTED_PLACEHOLDER, isEncryptedPlaceholder, looksSecret, TAG_FIX } from './image.js';
 import { OUTPUT } from './outputs.js';
 import { analyzeSeries, finiteValues, percentile, mapLimit, groupLogMatches, lineMatcher, ERROR_PATTERN } from './ops.js';
-import { finishReport, codeForStatus, type CallMeta, type ErrorCode, type ToolCallReport } from './callreport.js';
+import { finishReport, codeForStatus, QUOTA_WORDING, REQUEST_422, type CallMeta, type ErrorCode, type ToolCallReport } from './callreport.js';
 import { SKILLS_PACK, findSkill, findSkillFile, fileIndex, mimeType, skillUri } from './skills.js';
 import {
   SKILLS_CLI,
@@ -257,7 +257,7 @@ function fail(message: string, code?: ErrorCode): ToolResult {
  * than from an error, and stop retrying a call that already did its job.
  */
 function emptyState(
-  status: 'empty' | 'not_configured' | 'not_found' | 'not_ready' | 'expired',
+  status: 'empty' | 'not_configured' | 'not_found' | 'not_ready' | 'expired' | 'needs_input',
   payload: Record<string, unknown>,
   nextStep: string
 ): ToolResult {
@@ -377,7 +377,7 @@ function apiDetails(details: unknown, token: string | undefined): string | undef
 }
 
 /** Plan or quota wording in an API error, so the hint can say which limit. */
-const QUOTA = /quota|limit reached|exceed|upgrade your plan|plan limit|maximum number/i;
+const QUOTA = QUOTA_WORDING;
 
 function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string): string | undefined {
   if (QUOTA.test(err.apiMessage) && [400, 402, 403, 429].includes(err.status)) {
@@ -408,8 +408,12 @@ function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string):
     case 404:
       // Only the tool knows what was not found; no hint beats a wrong one.
       return notFound;
-    case 429:
-      return 'Edgegap rate-limited this token. Wait a few seconds before the next call, and do not retry in a loop.';
+    case 429: {
+      // This server already retried a read once; say how long to wait so the
+      // agent does not hammer the API in its own loop.
+      const seconds = Math.min(Math.max(Math.ceil((err.retryAfterMs ?? 10_000) / 1000), 5), 120);
+      return `Edgegap rate-limited this token. Wait ${seconds} seconds before the next call, make one call at a time, and do not retry in a loop.`;
+    }
     case 409:
       return 'a resource with that name already exists. Pick a different name or reuse the existing one.';
     case 422:
@@ -420,6 +424,12 @@ function errorHint(err: EdgegapApiError, notFound?: string, forbidden?: string):
           'force_cache: true and wait for caching_percent (edgegap_get_app_version) to rise, or deploy without ' +
           'require_cached_locations.'
         );
+      }
+      if (/terminated|cannot fetch metrics/i.test(err.apiMessage)) {
+        return 'the deployment has ended, so Edgegap no longer serves its metrics. Metrics are only readable while it runs.';
+      }
+      if (REQUEST_422.test(err.apiMessage)) {
+        return 'start_time and end_time must be ISO 8601 times in the past, with start_time before end_time. Leave them out for the whole life of the deployment.';
       }
       return 'Edgegap could not allocate a server for the requested location or resources. Try different user coordinates, or lower cpu_units/memory_mb.';
     case 424:
@@ -1145,6 +1155,19 @@ export function registerTools(
     );
   }
 
+  /** For a tool called without its application: the applications to pick from, as a normal result. */
+  async function pickApplication(tool: string): Promise<ToolResult> {
+    const res = await client.listApps({ limit: 100 });
+    const applications = (res.applications ?? []).map((a) => a.name);
+    return emptyState(
+      'needs_input',
+      { applications },
+      applications.length
+        ? `Pass application: call ${tool} again with one of these application names.`
+        : 'This organization has no applications yet. Create one with edgegap_create_app.'
+    );
+  }
+
   // ---------------------------------------------------------------- 3 ----
   tool(
     'edgegap_list_app_versions',
@@ -1159,7 +1182,9 @@ export function registerTools(
         'registry login and secret env values are never readable: the API returns "' + ENCRYPTED_PLACEHOLDER + '" ' +
         'for them, so get them from the dashboard\'s Container Registry page or the developer.',
       inputSchema: {
-        application: z.string().describe('Application name, as returned by edgegap_list_apps.'),
+        // Optional so a call without it lists the applications to pick from
+        // instead of failing validation (seen live from several organizations).
+        application: z.string().optional().describe('Application name, as returned by edgegap_list_apps. Required; without it the applications are listed.'),
       },
       outputSchema: OUTPUT.listAppVersions,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -1168,6 +1193,7 @@ export function registerTools(
       // Read-only, so not subject to EDGEGAP_APP_ALLOWLIST: the allowlist
       // limits what the agent can create and deploy into, as documented.
       guarded(auth, NOT_FOUND.app, async () => {
+        if (!application?.trim()) return pickApplication('edgegap_list_app_versions');
         const res = await client.listAppVersions(application);
         const versions = (res.versions ?? []).map(compactVersion);
         if (versions.length === 0) {
@@ -1202,14 +1228,27 @@ export function registerTools(
         'of its env vars (values are never shown). Use it before edgegap_update_app_version or edgegap_deploy ' +
         'to check what a version will do.',
       inputSchema: {
-        application: z.string().describe('Application name.'),
-        version: z.string().describe('Version name, as listed by edgegap_list_app_versions.'),
+        // Optional so a call without them lists what to pick from instead of failing validation.
+        application: z.string().optional().describe('Application name. Required; without it the applications are listed.'),
+        version: z.string().optional().describe('Version name, as listed by edgegap_list_app_versions. Required; without it the versions are listed.'),
       },
       outputSchema: OUTPUT.getAppVersion,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ application, version }) =>
       guarded(auth, NOT_FOUND.app, async () => {
+        if (!application?.trim()) return pickApplication('edgegap_get_app_version');
+        if (!version?.trim()) {
+          const res = await client.listAppVersions(application);
+          const versions = (res.versions ?? []).map((v) => v.name);
+          return emptyState(
+            'needs_input',
+            { application, versions },
+            versions.length
+              ? `Pass version too: call edgegap_get_app_version again with application "${application}" and one of these versions.`
+              : `Application "${application}" has no versions yet. Register one with edgegap_create_app_version.`
+          );
+        }
         const v = await client.getAppVersion(application, version);
         return ok({
           application,
@@ -1659,7 +1698,27 @@ export function registerTools(
             await dry.client.updateAppVersion(args.application, args.version, body);
             return dryRunResult(dry.requests, notes);
           }
-          await client.updateAppVersion(args.application, args.version, body);
+          try {
+            await client.updateAppVersion(args.application, args.version, body);
+          } catch (err) {
+            // "Image validation unsuccessful ... Unable to login with the given
+            // credentials" (live, 2026-10-29 to 11-01, three organizations).
+            if (err instanceof EdgegapApiError && err.status === 400 && /login|credential/i.test(err.apiMessage)) {
+              return withMeta(
+                fail(
+                  `${err.message}\n\nEdgegap could not log in to the registry to verify the image, so nothing was changed. ` +
+                    'It pulls with the registry login saved on the version (registry.edgegap.com included), not your API ' +
+                    'token, and that login is missing or wrong.\n\nOptions:\n' +
+                    '1. Update again with verify_image false. Deployments still fail to pull until the developer sets ' +
+                    `the registry username and token on the version in the dashboard (${DASHBOARD_URL}).\n` +
+                    '2. If the developer chooses to give them to you, pass registry_username and registry_token in the ' +
+                    'same update. They are registry-scoped, not the org API token. Do not write them into files.'
+                ),
+                { code: 'UPSTREAM_REJECTED', stage: 'upstream' }
+              );
+            }
+            throw err;
+          }
           return ok({
             updated: `${args.application}/${args.version}`,
             changed: Object.keys(body).map((k) => (k === 'private_token' ? 'registry_token' : k === 'private_username' ? 'registry_username' : k)),
@@ -1685,7 +1744,7 @@ export function registerTools(
         application: z.string().optional().describe('With version: only locations with capacity for it now.'),
         version: z.string().optional(),
         page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(200).optional().describe('Default 100.'),
+        limit: z.number().int().optional().describe('Results per page, 1-200. Default 100.'),
       },
       outputSchema: OUTPUT.listLocations,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -1695,7 +1754,7 @@ export function registerTools(
         if ((application === undefined) !== (version === undefined)) {
           return fail('Pass both application and version to filter by capacity, or neither for every location.');
         }
-        const res = await client.listLocations({ app: application, version, page, limit: limit ?? 100 });
+        const res = await client.listLocations({ app: application, version, page, limit: clamp(limit, 1, 200, 100) });
         const locations = (res.locations ?? []).map((l) => ({
           city: l.city,
           region: l.administrative_division || undefined,
@@ -1723,14 +1782,14 @@ export function registerTools(
         'measurements. Read-only; the game client does the pinging, not this tool.',
       inputSchema: {
         page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(200).optional().describe('Default 100.'),
+        limit: z.number().int().optional().describe('Results per page, 1-200. Default 100.'),
       },
       outputSchema: OUTPUT.listPingBeacons,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ page, limit }) =>
       guard(auth, async () => {
-        const res = await client.listBeacons({ page, limit: limit ?? 100 });
+        const res = await client.listBeacons({ page, limit: clamp(limit, 1, 200, 100) });
         const beacons = (res.locations ?? []).map((b) => ({
           host: b.fqdn ?? b.host,
           udp_port: b.udp_port,
@@ -2107,6 +2166,26 @@ export function registerTools(
             // Fetched now, not left to the agent: a failed deployment is
             // cleaned up quickly and its logs go with it, so a separate
             // edgegap_get_deployment_logs call often finds nothing.
+            const detail = last.error_detail ?? '';
+            // "Unable to pull image from registry" (live, 2026-10-29 and 11-02):
+            // the container never started, so there are no logs to read. The
+            // cause is the version's image reference or registry login.
+            if (/pull image|unable to pull|image pull|unable to login/i.test(detail)) {
+              return withMeta(
+                fail(
+                  `Deployment ${request_id} failed with status ${last.current_status}.\n${detail}\n\n` +
+                    'Edgegap could not pull the server image, so the container never started and has no logs. ' +
+                    'Check with edgegap_get_app_version that docker_repository, docker_image and docker_tag name ' +
+                    'an image that exists (edgegap_list_registry_tags for registry.edgegap.com), and that the version ' +
+                    `has a working registry login: a version saved with the "${ENCRYPTED_PLACEHOLDER}" placeholder, ` +
+                    'or without a login for a private registry, cannot pull. The developer can set the registry ' +
+                    `username and token on the version in the dashboard (${DASHBOARD_URL}). Do not redeploy the ` +
+                    'same version unchanged: it will fail the same way.',
+                  'IMAGE_PULL_FAILED'
+                ),
+                { ...facts('error'), stage: 'upstream', upstreamStatus: 200 }
+              );
+            }
             const logs = await logTail(client, request_id, 3000);
             return withMeta(
               fail(
@@ -2120,7 +2199,8 @@ export function registerTools(
                       'if it has nothing either, check the image, tag and ports before redeploying.'),
                 'DEPLOYMENT_FAILED'
               ),
-              { ...facts('error'), stage: 'upstream' }
+              // The status read (200) failed the call, not the log lookup's 404.
+              { ...facts('error'), stage: 'upstream', upstreamStatus: 200 }
             );
           }
 
@@ -2379,6 +2459,18 @@ export function registerTools(
         try {
           res = await client.getDeploymentLogs(request_id);
         } catch (err) {
+          // The logs endpoint can take longer than the request timeout (live,
+          // 2026-11-19, twice on one deployment). The read was already retried
+          // once; say what to do rather than fail.
+          if (!(err instanceof EdgegapApiError) && /timed out after/.test((err as Error)?.message ?? '')) {
+            return emptyState(
+              'not_ready',
+              { request_id, logs: '' },
+              'Edgegap took too long to return this deployment\'s logs. Try edgegap_get_deployment_logs once more in ' +
+                'about 30 seconds. If it times out again, check the deployment with edgegap_get_deployment, or read ' +
+                'the logs in the dashboard (' + DASHBOARD_URL + ').'
+            );
+          }
           // The logs endpoint answers 400 for every "no logs" case alike. Ask
           // the status endpoint which one this is.
           if (!(err instanceof EdgegapApiError) || ![400, 404].includes(err.status)) throw err;
@@ -2427,7 +2519,43 @@ export function registerTools(
       guarded(auth, NOT_FOUND.deployment, async () => {
         const bad = checkRequestId(request_id);
         if (bad) return bad;
-        const m = await client.getDeploymentMetrics(request_id, { start_time, end_time, steps: step });
+        // A window ending in the future is a 422 ("start_time cannot be in the
+        // future"); clamp what was passed to now rather than fail on it.
+        const future = (t: string | undefined) => t !== undefined && Date.parse(t) > Date.now();
+        if (future(start_time)) {
+          return fail(
+            `start_time ${start_time} is in the future. Pass an ISO 8601 time in the past, or leave it out ` +
+              'for the whole life of the deployment.',
+            'VALIDATION_FAILED'
+          );
+        }
+        const endTime = future(end_time) ? undefined : end_time;
+        let m;
+        try {
+          m = await client.getDeploymentMetrics(request_id, { start_time, end_time: endTime, steps: step });
+        } catch (err) {
+          if (!(err instanceof EdgegapApiError) || err.status !== 422) throw err;
+          // Not failures to correct: the deployment ended (no metrics are kept),
+          // or it started too recently for the API's default window (live,
+          // 2026-11-06: "start_time cannot be in the future" with no start_time).
+          if (/terminated|cannot fetch metrics/i.test(err.apiMessage)) {
+            return emptyState(
+              'expired',
+              { request_id },
+              'This deployment has ended, and Edgegap only serves metrics while one runs. For a stopped ' +
+                'deployment use what it left: edgegap_get_deployment for its error detail. To size a version, ' +
+                'read metrics from a running deployment of it (edgegap_compare_versions reads several).'
+            );
+          }
+          if (/start_time|end_time/i.test(err.apiMessage) && start_time === undefined) {
+            return emptyState(
+              'not_ready',
+              { request_id },
+              `No metrics yet: the deployment started too recently. Call edgegap_get_deployment_metrics {request_id: "${request_id}"} again in a minute.`
+            );
+          }
+          throw err;
+        }
         const series = {
           cpu: analyzeSeries(m.cpu),
           cpu_throttle_rate: analyzeSeries(m.cpu_throttle_rate, { nonzero: true }),
@@ -4241,9 +4369,11 @@ function registerSkills(
       inputSchema: {
         // A string, not an enum: clients cache tool schemas, and a cached enum from an older
         // release would refuse a skill the router already points to. The handler checks the name.
+        // Optional so a call without it lists the skills instead of failing validation.
         skill: z
           .string()
-          .describe(`Skill name, from edgegap_list_skills: ${names.join(', ')}.`),
+          .optional()
+          .describe(`Skill name, from edgegap_list_skills: ${names.join(', ')}. Required; without it the skills are listed.`),
         file: z
           .string()
           .optional()
@@ -4252,6 +4382,13 @@ function registerSkills(
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
     async ({ skill: name, file }) => {
+      if (!name?.trim()) {
+        return emptyState(
+          'needs_input',
+          { pack, skills: SKILLS_PACK.skills.map((s) => ({ name: s.name, description: s.description })) },
+          'Pass skill: call edgegap_get_skill again with the name of the skill that matches the project ("edgegap" when unsure).'
+        );
+      }
       const skill = findSkill(name);
       if (!skill) {
         const guess = closestSkill(name, names);
