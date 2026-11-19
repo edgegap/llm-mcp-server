@@ -473,8 +473,9 @@ In OAuth mode the Worker:
 
 - answers `initialize`, `tools/list` and the tools that need no account without a sign-in, and a call to an account tool with 401 and `WWW-Authenticate: Bearer scope="...", resource_metadata="..."`, which makes the client start the sign-in;
 - serves its RFC 9728 metadata at `/.well-known/oauth-protected-resource/mcp` (and without the path);
-- verifies each access token against the issuer's JWKS (RS256, `typ: at+jwt`, a published `kid`, `iss`, `aud` containing its own `MCP_RESOURCE_URL`, `exp`) and forwards it unchanged to the API as `Authorization: Bearer`;
-- answers a tool the token's scopes don't cover with 403 `insufficient_scope` and the scopes to ask for (step-up), and lists only the tools whose API routes accept OAuth tokens.
+- verifies each access token against the issuer's JWKS (RS256, `typ: at+jwt`, a published `kid`, `iss`, `aud` containing its own `MCP_RESOURCE_URL`, `exp`, `nbf`) and forwards it unchanged to the API as `Authorization: Bearer` (why that isn't token passthrough: [worker/DECISION.md](worker/DECISION.md));
+- answers a tool the token's scopes don't cover with 403 `insufficient_scope` and the scopes to ask for (step-up), and lists only the tools whose API routes accept OAuth tokens, each with `_meta.securitySchemes`. The relay tools are not listed yet, and `edgegap_get_registry_credentials` answers the dashboard steps instead of credentials;
+- explains the API's refusals by their error code: reconnect the server, ask an owner or admin for more access, not available through sign-in, or retry shortly.
 
 Deploys are manual: nothing deploys a Worker from CI. From a checkout of the commit to release, logged in with `npx wrangler login`:
 
