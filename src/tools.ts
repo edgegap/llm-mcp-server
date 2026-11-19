@@ -906,6 +906,8 @@ export interface RegisterOptions {
   hidden?: (tool: string) => boolean;
   /** The hosted Worker's OAuth mode: each tool's `securitySchemes`, declared in its `_meta`. */
   securitySchemes?: (tool: string) => unknown[] | undefined;
+  /** The hosted Worker's OAuth mode: the organization the access token is bound to, for edgegap_context. */
+  organization?: string;
 }
 
 export function registerTools(
@@ -1059,6 +1061,19 @@ export function registerTools(
         token_scope: oauth
           ? 'one organization, limited to the access the developer approved for this connection'
           : 'organization-wide (Edgegap cannot scope tokens)',
+        ...(oauth
+          ? {
+              organization: options.organization
+                ? {
+                    id: options.organization,
+                    note:
+                      'The organization chosen when the developer signed in; every tool acts in it. To work in ' +
+                      'another organization, reconnect the server in the MCP client and pick that organization on ' +
+                      'the Edgegap consent page.',
+                  }
+                : 'not signed in: chosen when the developer signs in',
+            }
+          : {}),
         token_status: tokenStatus,
         read_only: config.readOnly,
         app_allowlist: config.appAllowlist.length ? config.appAllowlist : 'none (all applications)',

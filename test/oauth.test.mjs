@@ -370,7 +370,7 @@ const text = (result) => result.content.map((c) => c.text).join('\n');
  * The MCP server as the Worker builds it in OAuth mode, against a local API
  * that records each call and answers `reply` (default: one application).
  */
-async function oauthServer(token, reply = { status: 200, body: { applications: [{ name: 'game', is_active: true }], total_count: 1 } }) {
+async function oauthServer(token, reply = { status: 200, body: { applications: [{ name: 'game', is_active: true }], total_count: 1 } }, organization = token ? '42' : undefined) {
   const calls = [];
   const api = http.createServer((req, res) => {
     calls.push({ method: req.method, url: req.url, auth: req.headers.authorization });
@@ -385,7 +385,7 @@ async function oauthServer(token, reply = { status: 200, body: { applications: [
   };
   const auth = new OAuthTokenSource(token);
   const server = new McpServer({ name: 'edgegap', version: 'test' }, { instructions: serverInstructions('oauth') });
-  registerTools(server, new EdgegapClient(config, auth), config, auth, { hidden: oauthHiddenTool, securitySchemes, skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
+  registerTools(server, new EdgegapClient(config, auth), config, auth, { hidden: oauthHiddenTool, securitySchemes, organization, skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '1' });
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -540,6 +540,26 @@ test('token mode declares no securitySchemes', async () => {
   const { tools } = await client.listTools();
   assert.ok(tools.every((t) => t._meta?.securitySchemes === undefined));
   await client.close();
+});
+
+test('OAuth mode: edgegap_context names the connection\'s organization and how to work in another one', async () => {
+  const token = await accessToken(KEY, claims());
+  const s = await oauthServer(token);
+  try {
+    const context = await s.client.callTool({ name: 'edgegap_context', arguments: {} });
+    assert.equal(context.structuredContent.organization.id, '42');
+    assert.match(context.structuredContent.organization.note, /chosen when the developer signed in/);
+    assert.match(context.structuredContent.organization.note, /reconnect the server in the MCP client and pick that organization/);
+  } finally {
+    await s.close();
+  }
+  const signedOut = await oauthServer(undefined);
+  try {
+    const context = await signedOut.client.callTool({ name: 'edgegap_context', arguments: {} });
+    assert.match(context.structuredContent.organization, /chosen when the developer signs in/);
+  } finally {
+    await signedOut.close();
+  }
 });
 
 test('OAuth mode signed out: edgegap_context says how sign-in starts, without a token message', async () => {

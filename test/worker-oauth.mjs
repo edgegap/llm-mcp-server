@@ -170,6 +170,8 @@ try {
   check('an unlisted Origin: 403 invalid_origin', origin.status === 403 && origin.json?.error === 'invalid_origin');
   const allowed = await w.post('tools/list', {}, { Origin: 'https://allowed.example.test' });
   check('a listed Origin passes', allowed.status === 200);
+  const contextA = await w.post('tools/call', { name: 'edgegap_context', arguments: {} }, bearer(tokenA));
+  check('edgegap_context names the token\'s organization', contextA.json?.result?.structuredContent?.organization?.id === String(ORG_A), JSON.stringify(contextA.json?.result?.structuredContent?.organization));
   const fleet = await w.post('tools/call', { name: 'edgegap_deploy', arguments: { application: 'a', version: 'v', users: { ip_addresses: ['203.0.113.7'] }, private_host_ids: ['h1'], dry_run: true } }, bearer(await accessToken(KEY, claims(ORG_A, USER_A, 'apps:read deployments:read deployments:write'))));
   check('deploy to private fleet hosts with deployments:write: served like a cloud deploy', fleet.status === 200 && !/through OAuth yet/.test(toolText(fleet)), toolText(fleet).slice(0, 200));
 

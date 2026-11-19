@@ -130,7 +130,7 @@ interface Session {
   authProblem?: 'absent' | 'foreign';
   /** OAuth mode: the verified token's claims. */
   claims?: AccessTokenClaims;
-  options: Pick<RegisterOptions, 'hidden' | 'securitySchemes'>;
+  options: Pick<RegisterOptions, 'hidden' | 'securitySchemes' | 'organization'>;
   /**
    * Browser origins the MCP handler accepts by hostname: its default (localhost
    * only) in token mode, every one in OAuth mode, where the gate has already
@@ -232,7 +232,7 @@ async function oauthMode(request: Request, env: Env, ctx: ExecutionContext, sett
     instructions: serverInstructions('oauth'),
     token: decision.token,
     claims: decision.claims,
-    options: { hidden: oauthHiddenTool, securitySchemes },
+    options: { hidden: oauthHiddenTool, securitySchemes, organization: decision.claims?.org },
     allowedOriginHostnames: '*',
   });
 }
