@@ -104,11 +104,8 @@ export function resourceMetadataPaths(settings: OAuthSettings): string[] {
  */
 export const MEMBER_DEFAULT_SCOPES = ['apps:read', 'deployments:read', 'locations:read', 'registry:read'] as const;
 
-/** What a tool call needs: nothing (no account), these scopes, or something OAuth can't do. */
-export type ToolNeed =
-  | { kind: 'none' }
-  | { kind: 'scopes'; scopes: string[] }
-  | { kind: 'unavailable'; message: string };
+/** What a tool call needs: nothing (no account), or these scopes. */
+export type ToolNeed = { kind: 'none' } | { kind: 'scopes'; scopes: string[] };
 
 type ToolRule = string[] | null | ((args: Record<string, unknown>) => ToolNeed);
 
@@ -164,9 +161,10 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   // Reads both versions' settings and their running deployments.
   edgegap_compare_versions: ['apps:read', 'deployments:read'],
 
-  // edgegap_get_registry_credentials stays hidden: its wizard routes hand out
-  // push credentials that outlive the grant and take no OAuth token. It returns
-  // with the short-lived registry credentials endpoint, under its own scope.
+  // Registry push credentials outlive the grant, so the API hands none to an
+  // OAuth token: in OAuth mode the tool answers the dashboard steps itself,
+  // with no API call.
+  edgegap_get_registry_credentials: null,
   edgegap_list_registry_tags: ['registry:read'],
   edgegap_delete_registry_tag: ['registry:write'],
 
@@ -193,12 +191,6 @@ export function toolNeed(tool: string, args: Record<string, unknown> = {}): Tool
 /** True for a tool OAuth mode doesn't register: one of its routes has no scope yet. */
 export function oauthHiddenTool(tool: string): boolean {
   return !Object.hasOwn(TOOL_SCOPES, tool);
-}
-
-/** The tool error for a call OAuth can't make (RegisterOptions.refuse). */
-export function oauthRefusal(tool: string, args: Record<string, unknown>): string | undefined {
-  const need = toolNeed(tool, args);
-  return need?.kind === 'unavailable' ? need.message : undefined;
 }
 
 // ----------------------------------------------------------------- JWKS ----
@@ -463,8 +455,8 @@ export async function gate(
 
 /**
  * The scopes the body's tool calls need together, or undefined when they need
- * no account. Hidden or unknown tools and calls OAuth can't make need nothing
- * here: the MCP server answers them (unknown tool, or the refusal text).
+ * no account. Hidden or unknown tools need nothing here: the MCP server
+ * answers them as unknown tools.
  */
 export function neededScopes(body: unknown): string[] | undefined {
   const messages = Array.isArray(body) ? body : [body];

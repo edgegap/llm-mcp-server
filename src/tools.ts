@@ -171,7 +171,7 @@ export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
     'deployment errors, read the container logs before redeploying.\n\n' +
     'Guardrails: edgegap_context shows this session\'s API and limits. Every write tool takes ' +
     'dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the ' +
-    'API token in env vars, tags or URLs: such calls are refused.\n\n' +
+    `${mode === 'oauth' ? 'access' : 'API'} token in env vars, tags or URLs: such calls are refused.\n\n` +
     credentials +
     (mode === 'oauth' ? ARCHITECTURE_SUMMARY_OAUTH : ARCHITECTURE_SUMMARY) +
     '\n\n' +
@@ -871,8 +871,6 @@ export interface RegisterOptions {
   onToolCall?: (report: ToolCallReport) => void | Promise<void>;
   /** Tools not to register. The hosted Worker's OAuth mode hides tools its tokens can't call. */
   hidden?: (tool: string) => boolean;
-  /** A refusal for a call this credential can't make, returned as the tool's error before it runs. */
-  refuse?: (tool: string, args: Record<string, unknown>) => string | undefined;
 }
 
 export function registerTools(
@@ -906,8 +904,7 @@ export function registerTools(
       inFlight++;
       let result: ToolResult;
       try {
-        const refusal = options.refuse?.(name, a[0] && typeof a[0] === 'object' ? (a[0] as Record<string, unknown>) : {});
-        result = withHost(scrubToken(refusal ? fail(refusal) : await cb(...a), auth.current), label);
+        result = withHost(scrubToken(await cb(...a), auth.current), label);
       } finally {
         inFlight--;
       }
@@ -1035,7 +1032,7 @@ export function registerTools(
           dry_run: mutating
             ? `every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles${oauth ? '' : ', relays'}`
             : 'n/a: read-only, no write tools are registered',
-          token_in_container: 'deploys and versions are refused if the API token appears in an env var, tag or webhook URL',
+          token_in_container: `deploys and versions are refused if the ${oauth ? 'access' : 'API'} token appears in an env var, tag or webhook URL`,
           image_tags: 'versions on "latest", an empty or malformed tag, or a docker_image holding a registry or tag are refused; so is deploying a version on "latest"',
           deployment_cap: config.maxAgentDeployments > 0
             ? `deploy is refused while ${config.maxAgentDeployments} or more agent-tagged deployments are running`
@@ -3146,7 +3143,7 @@ export function registerTools(
           '(registry.edgegap.com) and the exact docker login, build and push commands for your ' +
           'image. Use this when the server image is not in a registry yet. Edgegap only hands ' +
           'these credentials to the quick-start token the Unity/Unreal plugins use; with a ' +
-          'regular API token this tool cannot fetch them and instead returns the steps to copy ' +
+          'regular API token or Edgegap sign-in this tool cannot fetch them and instead returns the steps to copy ' +
           'them from the dashboard\'s Container Registry page — ask the developer for them then, ' +
           'do not retry. When it does return a token, it is registry-scoped (push/pull images in ' +
           'this project), not the org API token: pass it to docker login via --password-stdin, ' +
@@ -3172,12 +3169,16 @@ export function registerTools(
           const tagProblem = tag === undefined ? undefined : badTag(tag);
           if (tagProblem) return fail(`Refused: ${tagProblem}. ${TAG_FIX}`);
 
+          // Push credentials outlive a sign-in's grant, so the API hands none to
+          // an OAuth token: the dashboard steps are the answer, with no call.
+          if (config.credential === 'oauth') return manualStepsResult(registryCredentialsUnavailable(image_name, tag, 'oauth'));
+
           // Both wizard endpoints answer 403 to a regular API token: they belong
           // to the plugins' quick-start flow. 403 is the token type, not a
           // missing registry, so it must not trigger provisioning (which only
           // fails with a second, more confusing 403). Only a 404 — a
           // quick-start token whose project is not provisioned yet — does.
-          const unavailable = () => manualStepsResult(registryCredentialsUnavailable(image_name, tag));
+          const unavailable = () => manualStepsResult(registryCredentialsUnavailable(image_name, tag, 'api_token'));
           let creds;
           try {
             creds = await client.getRegistryCredentials();
@@ -4930,15 +4931,18 @@ function isEdgegapRegistry(repository: string): boolean {
   return /^(https?:\/\/)?([a-z0-9-]+-)?registry\.edgegap\.(com|dev)\/?$/i.test(repository.trim());
 }
 
-function registryCredentialsUnavailable(imageName?: string, tag?: string): string {
+function registryCredentialsUnavailable(imageName: string | undefined, tag: string | undefined, credential: 'api_token' | 'oauth'): string {
   const image = imageName ?? '<image-name>';
   const buildTag = tag ?? '<unique-build-tag>';
   const ref = `registry.edgegap.com/<project>/${image}:${buildTag}`;
   return (
-    'Edgegap does not give container registry credentials to a regular API token: the ' +
-    'endpoint only accepts the quick-start token the Unity/Unreal plugins use (it answered ' +
-    '403). This is the token type, not a problem with the registry. Do not retry. Ask the ' +
-    'developer for the registry login instead:\n\n' +
+    (credential === 'oauth'
+      ? 'Edgegap sign-in does not hand out container registry credentials: they would outlive ' +
+        'the access this connection was given. This is expected, not a problem with the registry. '
+      : 'Edgegap does not give container registry credentials to a regular API token: the ' +
+        'endpoint only accepts the quick-start token the Unity/Unreal plugins use (it answered ' +
+        '403). This is the token type, not a problem with the registry. ') +
+    'Do not retry. Ask the developer for the registry login instead:\n\n' +
     `1. In the dashboard (${DASHBOARD_URL}), open the Container Registry page and copy the ` +
     'Project, Username and Token.\n' +
     '2. Log in with the token read from an environment variable, never as an argument:\n' +

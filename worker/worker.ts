@@ -56,7 +56,6 @@ import {
   loadOAuthSettings,
   oauthEnabled,
   oauthHiddenTool,
-  oauthRefusal,
   protectedResourceMetadata,
   resourceMetadataPaths,
   type AccessTokenClaims,
@@ -130,7 +129,7 @@ interface Session {
   authProblem?: 'absent' | 'foreign';
   /** OAuth mode: the verified token's claims. */
   claims?: AccessTokenClaims;
-  options: Pick<RegisterOptions, 'hidden' | 'refuse'>;
+  options: Pick<RegisterOptions, 'hidden'>;
   /**
    * Browser origins the MCP handler accepts by hostname: its default (localhost
    * only) in token mode, every one in OAuth mode, where the gate has already
@@ -232,7 +231,7 @@ async function oauthMode(request: Request, env: Env, ctx: ExecutionContext, sett
     instructions: serverInstructions('oauth'),
     token: decision.token,
     claims: decision.claims,
-    options: { hidden: oauthHiddenTool, refuse: oauthRefusal },
+    options: { hidden: oauthHiddenTool },
     allowedOriginHostnames: '*',
   });
 }

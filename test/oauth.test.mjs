@@ -21,7 +21,6 @@ import {
   loadOAuthSettings,
   neededScopes,
   oauthHiddenTool,
-  oauthRefusal,
   protectedResourceMetadata,
   resourceMetadataPaths,
   toolNeed,
@@ -305,14 +304,14 @@ test('gate: an unreachable JWKS is a 503, never a 401', async () => {
 
 const SNAPSHOT_TOOLS = JSON.parse(readFileSync(new URL('./tools.snapshot.json', import.meta.url))).normal.tools.map((t) => t.name);
 // The tools whose API routes take no OAuth token yet: the relay routes
-// authorize through the relay profile, and the registry credentials routes
-// are kept off OAuth. Each leaves this list when its routes take one and it is
-// added to TOOL_SCOPES; the change is deliberate, so this test names them.
+// authorize through the relay profile. Each leaves this list when its routes
+// take one and it is added to TOOL_SCOPES; the change is deliberate, so this
+// test names them.
 const RELAY_TOOLS = [
   'edgegap_authorize_relay_user', 'edgegap_create_relay_session', 'edgegap_delete_relay_session',
   'edgegap_get_relay_session', 'edgegap_list_relay_sessions', 'edgegap_revoke_relay_user',
 ];
-const HIDDEN = ['edgegap_get_registry_credentials', ...RELAY_TOOLS].sort((a, b) => SNAPSHOT_TOOLS.indexOf(a) - SNAPSHOT_TOOLS.indexOf(b));
+const HIDDEN = [...RELAY_TOOLS].sort((a, b) => SNAPSHOT_TOOLS.indexOf(a) - SNAPSHOT_TOOLS.indexOf(b));
 
 test('tool table: every tool is mapped or hidden, the hidden set is exactly the unscoped ones, and no mapping is stale', () => {
   assert.deepEqual(SNAPSHOT_TOOLS.filter(oauthHiddenTool), HIDDEN);
@@ -341,12 +340,11 @@ test('tool table: per-tool scopes, write tools without their read, the no-accoun
     edgegap_compare_versions: ['apps:read', 'deployments:read'],
   };
   for (const [tool, scopes] of Object.entries(expect)) assert.deepEqual(toolNeed(tool), { kind: 'scopes', scopes }, tool);
-  for (const tool of ['edgegap_context', 'edgegap_list_skills', 'edgegap_get_skill', 'edgegap_update_skills', 'edgegap_generate_dockerfile', 'edgegap_validate_server_config']) {
+  for (const tool of ['edgegap_context', 'edgegap_list_skills', 'edgegap_get_skill', 'edgegap_update_skills', 'edgegap_generate_dockerfile', 'edgegap_validate_server_config', 'edgegap_get_registry_credentials']) {
     assert.deepEqual(toolNeed(tool), { kind: 'none' }, tool);
   }
   // A private fleet deployment needs the same scopes as a cloud one: the route takes deployment.create.
   assert.deepEqual(toolNeed('edgegap_deploy', { private_host_ids: ['h1'] }), { kind: 'scopes', scopes: ['deployments:write', 'apps:read'] });
-  assert.equal(oauthRefusal('edgegap_deploy', { private_host_ids: ['h1'] }), undefined);
 });
 
 // ---------------------------------------------- the MCP server in OAuth mode ----
@@ -369,7 +367,7 @@ async function oauthServer(token) {
   };
   const auth = new OAuthTokenSource(token);
   const server = new McpServer({ name: 'edgegap', version: 'test' }, { instructions: serverInstructions('oauth') });
-  registerTools(server, new EdgegapClient(config, auth), config, auth, { hidden: oauthHiddenTool, refuse: oauthRefusal, skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
+  registerTools(server, new EdgegapClient(config, auth), config, auth, { hidden: oauthHiddenTool, skillsCheck: { enabled: false, rawBase: 'http://127.0.0.1:1' } });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '1' });
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -422,6 +420,35 @@ test('OAuth mode instructions and edgegap_context say relays are not available t
   try {
     const context = await s.client.callTool({ name: 'edgegap_context', arguments: {} });
     assert.doesNotMatch(context.structuredContent.guardrails.dry_run, /relay/);
+  } finally {
+    await s.close();
+  }
+});
+
+test('OAuth mode: edgegap_get_registry_credentials answers the dashboard push steps itself, signed out, with no API call', async () => {
+  const s = await oauthServer(undefined);
+  try {
+    const result = await s.client.callTool({ name: 'edgegap_get_registry_credentials', arguments: { image_name: 'my-server', tag: 'build-7' } });
+    assert.ok(!result.isError, text(result));
+    assert.equal(result.structuredContent.status, 'manual_steps_required');
+    assert.match(text(result), /Edgegap sign-in does not hand out container registry credentials/);
+    assert.match(text(result), /Container Registry page/);
+    assert.match(text(result), /docker push registry\.edgegap\.com\/<project>\/my-server:build-7/);
+    assert.deepEqual(s.calls, []);
+  } finally {
+    await s.close();
+  }
+});
+
+test('OAuth mode instructions: the golden path names a listed tool at every step, and the guardrail names the access token', async () => {
+  const instructions = serverInstructions('oauth');
+  assert.match(instructions, /Never put the access token in env vars/);
+  assert.doesNotMatch(instructions, /API token in env vars/);
+  const s = await oauthServer(undefined);
+  try {
+    const listed = new Set((await s.client.listTools()).tools.map((t) => t.name));
+    const named = instructions.slice(instructions.indexOf('Golden path')).match(/edgegap_[a-z_]+/g);
+    for (const tool of named) assert.ok(listed.has(tool), tool);
   } finally {
     await s.close();
   }
