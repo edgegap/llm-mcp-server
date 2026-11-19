@@ -227,6 +227,18 @@ test('JWKS cache: after a failed fetch, requests wait before the next fetch and 
   assert.equal(server.fetches, 2);
 });
 
+test('JWKS cache: an unknown kid during the wait after a failed fetch is unavailable, never an unknown key', async () => {
+  const { cache, server, time } = freshJwks();
+  assert.ok(await cache.key('key-1'));
+  server.fail = true;
+  time.t += JWKS_REFETCH_INTERVAL_MS;
+  await assert.rejects(cache.key('key-2'), JwksUnavailableError);
+  time.t += 1000;
+  await assert.rejects(cache.key('key-2'), JwksUnavailableError, 'a rotated key inside the wait is a 503, so clients keep their tokens');
+  assert.ok(await cache.key('key-1'), 'a known key in a fresh set still verifies');
+  assert.equal(server.fetches, 2);
+});
+
 test('JWKS cache: keys that are not RS256 signing keys are skipped', async () => {
   const { cache } = freshJwks([
     { ...KEY.jwk, kid: 'enc', use: 'enc' },

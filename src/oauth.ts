@@ -264,12 +264,12 @@ export class JwksCache {
   async key(kid: string): Promise<CryptoKey | undefined> {
     const age = this.now() - this.fetchedAt;
     if (age >= JWKS_TTL_MS || (!this.keys.has(kid) && age >= JWKS_REFETCH_INTERVAL_MS)) {
+      // While waiting after a failed fetch, a lookup that needs a fetch is
+      // unavailable (503), never an unknown key (401), so clients keep their tokens.
       if (this.now() - this.failedAt < JWKS_RETRY_AFTER_FAILURE_MS) {
-        // A set past its TTL was dropped when the fetch failed; a fresh one still answers.
-        if (age >= JWKS_TTL_MS) throw new JwksUnavailableError('The issuer\'s JWKS could not be fetched recently.');
-      } else {
-        await this.refresh();
+        throw new JwksUnavailableError('The issuer\'s JWKS could not be fetched recently.');
       }
+      await this.refresh();
     }
     return this.keys.get(kid);
   }
