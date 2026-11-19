@@ -3343,7 +3343,10 @@ export function registerTools(
                 'or another registry, skip this check and pass that registry to edgegap_create_app_version.'
             );
           }
-          if (err instanceof EdgegapApiError && err.status === 403) {
+          // The API's bare 403 (no error code) means no Edgegap registry for this
+          // organization. A 403 with a code is about the credential's access, and
+          // guard() explains it by the code.
+          if (err instanceof EdgegapApiError && err.status === 403 && err.errorCode === undefined) {
             return emptyState(
               'not_configured',
               { image_name: name, total: 0, tags: [] },

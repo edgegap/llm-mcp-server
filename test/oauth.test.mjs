@@ -608,6 +608,25 @@ test('OAuth mode: edgegap_context names the connection\'s organization and how t
   }
 });
 
+test('OAuth mode: edgegap_list_registry_tags explains a refused scope by its code, not as a registry that is not set up', async () => {
+  const token = await accessToken(KEY, claims());
+  const cases = [
+    ['insufficient_scope', /role in the organization or the access approved for this connection/],
+    ['scoped_token_not_accepted', /not available through Edgegap sign-in/],
+  ];
+  for (const [error, expected] of cases) {
+    const s = await oauthServer(token, { status: 403, body: { error, message: 'Refused.' } });
+    try {
+      const result = await s.client.callTool({ name: 'edgegap_list_registry_tags', arguments: { image_name: 'my-server' } });
+      assert.ok(result.isError, error);
+      assert.match(text(result), expected, error);
+      assert.doesNotMatch(text(result), /not_configured|cannot read an Edgegap container registry/, error);
+    } finally {
+      await s.close();
+    }
+  }
+});
+
 test('OAuth mode signed out: edgegap_context says how sign-in starts, without a token message', async () => {
   const s = await oauthServer(undefined);
   try {
