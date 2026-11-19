@@ -129,7 +129,7 @@ const oauthVars = (base) => [
 let w = await startWorker(oauthVars);
 const RESOURCE = `${w.base}/mcp`;
 const METADATA_URL = `${w.base}/.well-known/oauth-protected-resource/mcp`;
-const claims = (org, sub, scope = 'apps:read deployments:read registry:read relays:read') => ({ iss: ISSUER, aud: [RESOURCE, API_AUDIENCE], org: Number(org), sub, scope, client_id: 'https://claude.ai/oauth/claude-code-client-metadata' });
+const claims = (org, sub, scope = 'apps:read deployments:read registry:read') => ({ iss: ISSUER, aud: [RESOURCE, API_AUDIENCE], org: Number(org), sub, scope, client_id: 'https://claude.ai/oauth/claude-code-client-metadata' });
 const tokenA = await accessToken(KEY, claims(ORG_A, USER_A));
 const tokenB = await accessToken(KEY, claims(ORG_B, USER_B));
 const bearer = (t) => ({ Authorization: `Bearer ${t}` });
@@ -139,7 +139,7 @@ try {
   for (const path of ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-protected-resource']) {
     const res = await fetch(`${w.base}${path}`);
     const doc = await res.json();
-    check(`${path}: resource, issuer first, the member-default read scopes`, res.status === 200 && doc.resource === RESOURCE && doc.authorization_servers?.[0] === ISSUER && JSON.stringify(doc.scopes_supported) === '["apps:read","deployments:read","locations:read","registry:read","relays:read"]', JSON.stringify(doc));
+    check(`${path}: resource, issuer first, the member-default read scopes`, res.status === 200 && doc.resource === RESOURCE && doc.authorization_servers?.[0] === ISSUER && JSON.stringify(doc.scopes_supported) === '["apps:read","deployments:read","locations:read","registry:read"]', JSON.stringify(doc));
   }
 
   console.log('\nlazy authentication');
@@ -147,22 +147,22 @@ try {
   check('initialize: 200 signed out, OAuth instructions', init.status === 200 && /signs in with Edgegap/.test(init.json?.result?.instructions ?? ''), `${init.status}`);
   const list = await w.post('tools/list', {});
   const names = (list.json?.result?.tools ?? []).map((t) => t.name);
-  check('tools/list: 200 signed out, 43 tools, the two unscoped relay tools and registry credentials hidden', list.status === 200 && names.length === 43 && names.includes('edgegap_deploy') && names.includes('edgegap_list_locations') && !names.includes('edgegap_list_relay_sessions') && !names.includes('edgegap_revoke_relay_user') && !names.includes('edgegap_get_registry_credentials'), `${list.status} ${names.length}`);
+  check('tools/list: 200 signed out, 39 tools, every relay tool and registry credentials hidden', list.status === 200 && names.length === 39 && names.includes('edgegap_deploy') && names.includes('edgegap_list_locations') && !names.some((n) => n.includes('relay')) && !names.includes('edgegap_get_registry_credentials'), `${list.status} ${names.length}`);
   const dockerfile = await w.post('tools/call', { name: 'edgegap_generate_dockerfile', arguments: { engine: 'godot', server_binary: 'server.x86_64' } });
   check('a no-account tool works signed out', dockerfile.status === 200 && dockerfile.json?.result && !dockerfile.json.result.isError, toolText(dockerfile).slice(0, 200));
 
   console.log('\n401 and 403 shapes');
   const signedOut = await w.post('tools/call', { name: 'edgegap_list_apps', arguments: {} });
   check('account tool signed out: 401 missing_token', signedOut.status === 401 && signedOut.json?.error === 'missing_token' && typeof signedOut.json?.message === 'string');
-  check('  WWW-Authenticate: member default scope and resource_metadata', signedOut.headers.get('www-authenticate') === `Bearer scope="apps:read deployments:read locations:read registry:read relays:read", resource_metadata="${METADATA_URL}"`, signedOut.headers.get('www-authenticate'));
+  check('  WWW-Authenticate: member default scope and resource_metadata', signedOut.headers.get('www-authenticate') === `Bearer scope="apps:read deployments:read locations:read registry:read", resource_metadata="${METADATA_URL}"`, signedOut.headers.get('www-authenticate'));
   const writeSignedOut = await w.post('tools/call', { name: 'edgegap_create_app', arguments: { name: 'x' } });
-  check('write tool signed out: the 401 asks for apps:write too', /scope="apps:read apps:write deployments:read locations:read registry:read relays:read"/.test(writeSignedOut.headers.get('www-authenticate') ?? ''));
+  check('write tool signed out: the 401 asks for apps:write too', /scope="apps:read apps:write deployments:read locations:read registry:read"/.test(writeSignedOut.headers.get('www-authenticate') ?? ''));
   const pasted = await w.post('tools/list', {}, { Authorization: 'token 0f8b3c1e-e458-4592-b607-c2c28afd8b62' });
   check('a pasted API token: 401 invalid_token, never relayed', pasted.status === 401 && pasted.json?.error === 'invalid_token' && /^Bearer error="invalid_token"/.test(pasted.headers.get('www-authenticate') ?? ''));
   const expired = await w.post('tools/list', {}, bearer(await accessToken(KEY, { ...claims(ORG_A, USER_A), exp: Math.floor(Date.now() / 1000) - 5 })));
   check('an expired token: 401 invalid_token', expired.status === 401 && expired.json?.error === 'invalid_token');
   const stepUp = await w.post('tools/call', { name: 'edgegap_create_app', arguments: { name: 'x' } }, bearer(tokenA));
-  check('a member token on a write tool: 403 insufficient_scope with granted + needed', stepUp.status === 403 && stepUp.json?.error === 'insufficient_scope' && stepUp.headers.get('www-authenticate') === `Bearer error="insufficient_scope", scope="apps:read apps:write deployments:read registry:read relays:read", resource_metadata="${METADATA_URL}"`, stepUp.headers.get('www-authenticate'));
+  check('a member token on a write tool: 403 insufficient_scope with granted + needed', stepUp.status === 403 && stepUp.json?.error === 'insufficient_scope' && stepUp.headers.get('www-authenticate') === `Bearer error="insufficient_scope", scope="apps:read apps:write deployments:read registry:read", resource_metadata="${METADATA_URL}"`, stepUp.headers.get('www-authenticate'));
   check('  bodies never name a permission', ![signedOut, stepUp, pasted].some((r) => /app\.create|app\.list/.test(JSON.stringify(r.json))));
   const origin = await w.post('tools/list', {}, { Origin: 'https://evil.example.test' });
   check('an unlisted Origin: 403 invalid_origin', origin.status === 403 && origin.json?.error === 'invalid_origin');

@@ -85,6 +85,13 @@ export const ARCHITECTURE_SUMMARY =
   'when the host quits. Use one only when the developer explicitly wants host/client; "it ' +
   'needs no server image" is not a reason. If unsure, ask before choosing a relay.';
 
+/** ARCHITECTURE_SUMMARY for OAuth mode, where the relay tools are not registered. */
+const ARCHITECTURE_SUMMARY_OAUTH =
+  'Recommend a dedicated server (edgegap_deploy): the server owns the game state, so no host ' +
+  'advantage, much harder cheating, and the match survives any player leaving. Relays for ' +
+  'host/client games are not available through Edgegap sign-in yet; a developer who needs one ' +
+  'can use the local server (npx -y @edgegap/mcp) with an API token.';
+
 /**
  * Egress terms, returned by edgegap_context so agents can weigh hosting costs
  * without crawling the website. Source: edgegap.com/pricing.md and the Private
@@ -155,15 +162,18 @@ export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
     `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
-    'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
-    'relay sessions you created before ending the task; edgegap_list_deployments with ' +
+    (mode === 'oauth'
+      ? 'Deployments cost money while running. Stop deployments you created before ending the task; '
+      : 'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
+        'relay sessions you created before ending the task; ') +
+    'edgegap_list_deployments with ' +
     `only_agent_deployments: true lists every deployment tagged "${AGENT_TAG}". If a ` +
     'deployment errors, read the container logs before redeploying.\n\n' +
     'Guardrails: edgegap_context shows this session\'s API and limits. Every write tool takes ' +
     'dry_run: true (shows the exact request, sends nothing); use it when unsure. Never put the ' +
     'API token in env vars, tags or URLs: such calls are refused.\n\n' +
     credentials +
-    ARCHITECTURE_SUMMARY +
+    (mode === 'oauth' ? ARCHITECTURE_SUMMARY_OAUTH : ARCHITECTURE_SUMMARY) +
     '\n\n' +
     'Golden path for a first dedicated-server deployment:\n' +
     '1. edgegap_generate_dockerfile (no Dockerfile yet) or edgegap_validate_server_config (existing one)\n' +
@@ -1023,7 +1033,7 @@ export function registerTools(
         forced_deploy_tag: AGENT_TAG,
         guardrails: {
           dry_run: mutating
-            ? 'every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles, relays'
+            ? `every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles${oauth ? '' : ', relays'}`
             : 'n/a: read-only, no write tools are registered',
           token_in_container: 'deploys and versions are refused if the API token appears in an env var, tag or webhook URL',
           image_tags: 'versions on "latest", an empty or malformed tag, or a docker_image holding a registry or tag are refused; so is deploying a version on "latest"',

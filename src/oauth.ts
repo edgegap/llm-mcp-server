@@ -102,7 +102,7 @@ export function resourceMetadataPaths(settings: OAuthSettings): string[] {
  * advertises: a first sign-in asks for these, and anything more is asked for
  * when a tool needs it (step-up).
  */
-export const MEMBER_DEFAULT_SCOPES = ['apps:read', 'deployments:read', 'locations:read', 'registry:read', 'relays:read'] as const;
+export const MEMBER_DEFAULT_SCOPES = ['apps:read', 'deployments:read', 'locations:read', 'registry:read'] as const;
 
 /** What a tool call needs: nothing (no account), these scopes, or something OAuth can't do. */
 export type ToolNeed =
@@ -177,10 +177,8 @@ const TOOL_SCOPES: Record<string, ToolRule> = {
   edgegap_link_pull_profile: ['storage:write'],
   edgegap_delete_pull_profile: ['storage:write'],
 
-  edgegap_get_relay_session: ['relays:read'],
-  edgegap_create_relay_session: ['relays:write'],
-  edgegap_authorize_relay_user: ['relays:write'],
-  edgegap_delete_relay_session: ['relays:write'],
+  // The relay tools stay hidden: the relay routes authorize through the
+  // relay profile and take no OAuth token yet.
 };
 
 /** What a call to `tool` with `args` needs. Undefined for a tool OAuth mode hides. */
