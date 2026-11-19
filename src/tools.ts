@@ -158,7 +158,9 @@ export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
     `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
-    `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
+    (mode === 'oauth'
+      ? 'host/client games on Edgegap relays: the local server (npx -y @edgegap/mcp) with an API token, '
+      : `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, `) +
     `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
