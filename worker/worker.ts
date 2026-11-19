@@ -1,21 +1,22 @@
 /**
  * Cloudflare Worker — remote Streamable HTTP transport for the Edgegap MCP server.
  *
- * Read worker/DECISION.md before deploying. Summary of the trade: the
- * developer's Edgegap API token passes through Edgegap infrastructure on every
- * call. Nothing is stored — no KV, no D1, no Durable Object, no logs, no cache
- * — but "not stored" is a weaker claim than "never seen", and the local server
+ * Read worker/DECISION.md before deploying. Summary of the trade in token
+ * mode: the developer's Edgegap API token passes through Edgegap
+ * infrastructure on every call. Nothing is stored — no KV, no D1, no Durable
+ * Object, no logs, no cache — but "not stored" is a weaker claim than "never
+ * seen", and the local server
  * (npx @edgegap/mcp) makes the stronger one.
  *
  * Run this when you need what local cannot do: web and mobile MCP clients with
  * no local process, shared demo environments, or a URL you can put in a deck.
  *
- * AUTH SHAPE — read this before adding a gate back.
+ * AUTH SHAPE IN TOKEN MODE — read this before adding a gate back.
  *
- * There is deliberately no HTTP 401 gate on /mcp. A transport-level 401 is the
- * spec's way of saying "go authenticate over there", and it is only useful when
- * there is an OAuth authorization server to point at. There is not one yet (see
- * DECISION.md), so a blanket 401 produced three bad outcomes:
+ * Token mode has deliberately no HTTP 401 gate on /mcp. A transport-level 401
+ * is the spec's way of saying "go authenticate over there", and it is only
+ * useful when it points at an OAuth authorization server. Token mode points at
+ * none (see DECISION.md), so a blanket 401 produced three bad outcomes:
  *
  *   1. initialize and tools/list failed, so no client could even see what this
  *      server does without a credential. Tool listings are not secret — the
@@ -32,10 +33,10 @@
  * that need a credential fail per-call through TokenUnavailableError, which
  * surfaces as readable text in the agent's transcript instead of a dead socket.
  *
- * OAUTH MODE (OAUTH_MODE "1", the staging and beta environments). There IS an
- * authorization server now, so the 401 comes back, but only where it means
- * something: a tool call that needs the account, or a token that no longer
- * verifies. Discovery and the no-account tools still work signed out (lazy
+ * OAUTH MODE (OAUTH_MODE "1", the staging and beta environments). Here the
+ * 401 points at Edgegap's authorization server, so it comes back, but only
+ * where it means something: a tool call that needs the account, or a token
+ * that no longer verifies. Discovery and the no-account tools still work signed out (lazy
  * authentication). Pasted API tokens are refused: the only credential is an
  * Edgegap access token, verified here (src/oauth.ts) and forwarded unchanged.
  */
