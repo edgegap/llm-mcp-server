@@ -205,20 +205,20 @@ test('JWKS cache: concurrent misses share one fetch; failures raise JwksUnavaila
   assert.equal(await cache.key('key-1'), undefined, 'the expired key did not survive the failed refresh');
 });
 
-test('JWKS cache: a fetch that hangs is abandoned after the timeout as unavailable', async () => {
-  // A real request keeps the process alive while it waits; AbortSignal.timeout's
-  // own timer doesn't, so this stand-in holds one until the abort.
+test('JWKS cache: a fetch that hangs is abandoned after the timeout as unavailable', { timeout: 2000 }, async () => {
+  // A request that never answers: it ends only when its signal aborts, so without
+  // a timeout signal this test runs into its own 2 s limit. A real request keeps
+  // the process alive while it waits; AbortSignal.timeout's own timer doesn't, so
+  // this stand-in holds one until the abort.
   const hanging = (url, init) => new Promise((_, reject) => {
     const pending = setTimeout(() => {}, 10_000);
-    init.signal.addEventListener('abort', () => {
+    init?.signal?.addEventListener('abort', () => {
       clearTimeout(pending);
       reject(init.signal.reason);
     });
   });
   const cache = new JwksCache(ENV.OAUTH_JWKS_URL, { fetch: hanging, fetchTimeoutMs: 20 });
-  const started = Date.now();
   await assert.rejects(cache.key('key-1'), JwksUnavailableError);
-  assert.ok(Date.now() - started < 2000, 'gave up at the timeout');
 });
 
 test('JWKS cache: after a failed fetch, requests wait before the next fetch and answer unavailable meanwhile', async () => {
