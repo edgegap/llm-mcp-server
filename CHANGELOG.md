@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.12
+
+Skills pack 0.43.0 (llm-agent-skills #67): `edgegap-chat-canvas` 0.3.0 covers Gemini Canvas games, verified on Edgegap with https://github.com/edgegap/netcode-sample-gemini-bomb-tag, and recommends the prompt that worked first time there. The server instructions route "Claude/ChatGPT/Gemini chat game" to it. No tool changes.
+
 ## 0.19.11
 
 Skills pack 0.42.0 (llm-agent-skills #66): `edgegap-chat-canvas` 0.2.0 covers ChatGPT games (one HTML file written on chatgpt.com), verified on Edgegap with https://github.com/edgegap/netcode-sample-chatgpt-turf-painters: the check and fix prompt for what the chat gets wrong, getting the exact file out, a server adapter for rules whose `step()` doesn't drive bots. The server instructions route "Claude artifact or ChatGPT game" to it ("Unity Matchmaker (UGS)" became "UGS Matchmaker" to stay under 4096 characters). No tool changes.
