@@ -139,7 +139,7 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `browser/WebAssembly game, WASM physics (Rapier), wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
     `vibe-coded single-player web game going online:${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
-    `Manus game: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
+    `Manus game, or Manus asking for a Cloud Computer: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
     `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
     `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +

@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.6
+
+Skills pack 0.38.0 (llm-agent-skills #61): `edgegap-manus` 0.2.0 adds path A for Manus Game Dev, which asks the user for a Manus Cloud Computer before it writes a multiplayer game. Manus can build a self-hostable Node.js server instead, and that server runs on Edgegap (verified 2026-11-20: Manus-built server and client, two browser tabs in one match, self-stop). The server instructions now route "Manus asking for a Cloud Computer" to `edgegap-manus`. The skills sync accepts `.cjs` files.
+
 ## 0.19.5
 
 Fixes for the errors real agents hit on the hosted server (PostHog, 2026-10-20 to 11-19):

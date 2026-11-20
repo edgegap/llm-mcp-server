@@ -134,6 +134,11 @@ const instructions = c.getInstructions() ?? '';
 check('instructions open with the skills line', instructions.startsWith('Before acting, read edgegap-skill://edgegap/SKILL.md'), instructions.slice(0, 80));
 const linked = [...new Set(instructions.match(/edgegap-skill:\/\/[^\s),]+/g) ?? [])];
 check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Supabase, Three.js, Manus and relays skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs', 'edgegap-vibe-coded', 'edgegap-fal'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
+// Manus Game Dev asks for a Cloud Computer before it builds a multiplayer game; agents
+// should load edgegap-manus (path A: self-hosted server on Edgegap) when they see that.
+check('instructions route the Manus Cloud Computer request to edgegap-manus', /Cloud Computer: edgegap-skill:\/\/edgegap-manus\/SKILL\.md/.test(instructions));
+const selfHost = await c.readResource({ uri: 'edgegap-skill://edgegap-manus/references/self-host.md' }).catch(() => undefined);
+check('edgegap-manus ships the self-host reference', /Cloud Computer/.test(selfHost?.contents?.[0]?.text ?? ''));
 check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
 // Claude Code cuts instructions at INSTRUCTIONS_MAX_CHARS; 0.15.1 lost its
 // safety paragraphs that way. Shorten something before adding a skill line.
