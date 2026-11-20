@@ -18,8 +18,8 @@ Use our MCP server when:
 * **Troubleshooting a game server issue** - inspect app versions and deployment status, read container logs and CPU/memory utilization, or reproduce a failed deployment.
 * **Running client-host and peer-to-peer games** - create relay sessions providing NAT punchthrough and avoid connection blocking. Review [Orchestration Models](https://docs.edgegap.com/learn/orchestration/deployments#orchestration) and [Dedicated Servers or Relays?](#dedicated-servers-or-relays) before deciding.
 
-> [!WARNING]
-> Out of scope / not supported by MCP: building Linux server executable; creating, starting or stopping a matchmaker (upload the generated configuration in the dashboard); server browser; lobbies; managed clusters; private fleets; or billing.
+> [!NOTE]
+> Build the Linux server executable in your engine. Matchmakers (upload the configuration the MCP generates), server browser, lobbies, managed clusters, private fleets and billing are managed in the [Edgegap dashboard](https://app.edgegap.com).
 
 > [!NOTE]
 > If you need help, [please reach out to us over Discord](https://discord.gg/MmJf8fWjnt). For live games support see our [ticketing system](https://edgegap.atlassian.net/servicedesk/customer/portal/3).
