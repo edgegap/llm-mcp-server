@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.9
+
+Skills pack 0.40.0 (llm-agent-skills #64): wording across 23 skills, which state what was verified on Edgegap and give each check as a step to take. No tool changes.
+
 ## 0.19.8
 
 Skills pack 0.39.1 (llm-agent-skills #63): wording only in `edgegap-manus` 0.2.2.
