@@ -139,6 +139,7 @@ check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple 
 check('instructions route the Manus Cloud Computer request to edgegap-manus', /Cloud Computer: edgegap-skill:\/\/edgegap-manus\/SKILL\.md/.test(instructions));
 const selfHost = await c.readResource({ uri: 'edgegap-skill://edgegap-manus/references/self-host.md' }).catch(() => undefined);
 check('edgegap-manus ships the self-host reference', /Cloud Computer/.test(selfHost?.contents?.[0]?.text ?? ''));
+check('the Manus skill pages state what was verified, with no not-verified lists', !/Not verified|not yet run/i.test(selfHost?.contents?.[0]?.text ?? ''));
 check('the Manus self-host reference has the optional matchmaker and the public sample', /Optional: Find Match/.test(selfHost?.contents?.[0]?.text ?? '') && /netcode-sample-manus-orb-arena/.test(selfHost?.contents?.[0]?.text ?? ''));
 check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
 // Claude Code cuts instructions at INSTRUCTIONS_MAX_CHARS; 0.15.1 lost its

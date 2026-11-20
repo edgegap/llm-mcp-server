@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.8
+
+Skills pack 0.39.1 (llm-agent-skills #63): wording only in `edgegap-manus` 0.2.2.
+
 ## 0.19.7
 
 Skills pack 0.39.0 (llm-agent-skills #62): `edgegap-manus` 0.2.1 adds the optional Edgegap matchmaker (Find Match) to the Manus self-hosted path, verified end to end on Edgegap, with the public sample https://github.com/edgegap/netcode-sample-manus-orb-arena; `edgegap-samples` lists it.
