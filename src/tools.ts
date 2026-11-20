@@ -131,14 +131,14 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Godot 4: ${skillUri('edgegap-godot', 'SKILL.md')}, ` +
     `Colyseus: ${skillUri('edgegap-colyseus', 'SKILL.md')}, ` +
     `Cocos Creator: ${skillUri('edgegap-cocos', 'SKILL.md')}, ` +
-    `Unity Matchmaker (UGS): ${skillUri('edgegap-ugs-matchmaker', 'SKILL.md')}, ` +
+    `UGS Matchmaker: ${skillUri('edgegap-ugs-matchmaker', 'SKILL.md')}, ` +
     `Nakama: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
     `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Supabase backend: ${skillUri('edgegap-supabase', 'SKILL.md')}, ` +
     `Three.js/web game + Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
     `WebAssembly game, Rapier physics, wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
     `vibe-coded solo web game going online: ${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
-    `Claude artifact game: ${skillUri('edgegap-chat-canvas', 'SKILL.md')}, ` +
+    `Claude artifact or ChatGPT game: ${skillUri('edgegap-chat-canvas', 'SKILL.md')}, ` +
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
     `Manus game, Manus Cloud Computer: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions, backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
