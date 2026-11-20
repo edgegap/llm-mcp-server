@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.10
+
+Skills pack 0.41.0 (llm-agent-skills #65): new skill `edgegap-chat-canvas` for games written in a chat as one HTML file, starting with Claude artifacts on claude.ai: the prompt that keeps the rules between `/* RULES:BEGIN */` and `/* RULES:END */`, the split script that copies them into the server's module, the online page, a direct `?server=` path and the optional matchmaker, verified on Edgegap with https://github.com/edgegap/netcode-sample-claude-star-snatch. The server instructions route "Claude artifact game" to it (a few routing labels got shorter to keep the instructions under 4096 characters); `edgegap`, `edgegap-vibe-coded` and `edgegap-samples` route there too. No tool changes.
+
 ## 0.19.9
 
 Skills pack 0.40.0 (llm-agent-skills #64): wording across 23 skills, which state what was verified on Edgegap and give each check as a step to take. No tool changes.
