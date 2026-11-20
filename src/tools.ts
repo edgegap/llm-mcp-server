@@ -135,13 +135,14 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Nakama: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
     `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
     `Supabase backend: ${skillUri('edgegap-supabase', 'SKILL.md')}, ` +
-    `Three.js or web game with a Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
-    `browser/WebAssembly game, WASM physics (Rapier), wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
-    `vibe-coded single-player web game going online:${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
+    `Three.js/web game + Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
+    `WebAssembly game, Rapier physics, wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
+    `vibe-coded solo web game going online: ${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
+    `Claude artifact game: ${skillUri('edgegap-chat-canvas', 'SKILL.md')}, ` +
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
-    `Manus game, or Manus asking for a Cloud Computer: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
-    `matchmaking, parties, regions or backfill design: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
-    `host/client games on Edgegap relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
+    `Manus game, Manus Cloud Computer: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
+    `matchmaking, parties, regions, backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
+    `host/client games via relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
     `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +
     'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
