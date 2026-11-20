@@ -138,7 +138,7 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     `Three.js/web game + Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
     `WebAssembly game, Rapier physics, wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
     `vibe-coded solo web game going online: ${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
-    `Claude artifact or ChatGPT game: ${skillUri('edgegap-chat-canvas', 'SKILL.md')}, ` +
+    `Claude/ChatGPT/Gemini chat game: ${skillUri('edgegap-chat-canvas', 'SKILL.md')}, ` +
     `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
     `Manus game, Manus Cloud Computer: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
     `matchmaking, parties, regions, backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +

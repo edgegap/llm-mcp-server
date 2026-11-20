@@ -136,7 +136,7 @@ const linked = [...new Set(instructions.match(/edgegap-skill:\/\/[^\s),]+/g) ?? 
 check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Supabase, Three.js, Manus and relays skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs', 'edgegap-vibe-coded', 'edgegap-fal'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
 // Manus Game Dev asks for a Cloud Computer before it builds a multiplayer game; agents
 // should load edgegap-manus (path A: self-hosted server on Edgegap) when they see that.
-check('instructions route Claude artifact games to edgegap-chat-canvas', /Claude artifact or ChatGPT game: edgegap-skill:\/\/edgegap-chat-canvas\/SKILL\.md/.test(instructions));
+check('instructions route chat canvas games to edgegap-chat-canvas', /Claude\/ChatGPT\/Gemini chat game: edgegap-skill:\/\/edgegap-chat-canvas\/SKILL\.md/.test(instructions));
 const split = await c.readResource({ uri: 'edgegap-skill://edgegap-chat-canvas/assets/split-artifact.mjs' }).catch(() => undefined);
 check('edgegap-chat-canvas ships the split script', /RULES:BEGIN/.test(split?.contents?.[0]?.text ?? ''));
 check('instructions route the Manus Cloud Computer request to edgegap-manus', /Cloud Computer: edgegap-skill:\/\/edgegap-manus\/SKILL\.md/.test(instructions));
