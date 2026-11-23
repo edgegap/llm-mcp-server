@@ -24,6 +24,18 @@ Use our MCP server when:
 > [!NOTE]
 > If you need help, [please reach out to us over Discord](https://discord.gg/MmJf8fWjnt). For live games support see our [ticketing system](https://edgegap.atlassian.net/servicedesk/customer/portal/3).
 
+## 🎮 What Your Agent Can Build
+
+The server ships with 31 [agent skills](#-skills), each a step-by-step workflow for one engine, backend or tool. Your agent loads the one that matches your project:
+
+| | Covered |
+| --- | --- |
+| **Engines and netcode** | [Unity](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-unity) (Mirror), [Netcode for GameObjects](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-ngo), [FishNet](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fishnet), [PurrNet](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-purrnet), [Photon Fusion 2](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fusion) ([Simple FPS](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fusion-simplefps)), [Unreal Engine](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-unreal) ([EOS Voice](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-eos-voice)), [Godot 4](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-godot), [Cocos Creator](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-cocos), [Three.js and web games](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-threejs), [WebAssembly physics](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-browser-wasm) (Rapier, Box2D, Jolt), any other engine through [`edgegap`](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap) |
+| **Game backends** | [Nakama](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-nakama), [Colyseus](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-colyseus), [PlayFab](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-playfab), [Supabase](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-supabase), [Unity Gaming Services Matchmaker](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-ugs-matchmaker) |
+| **AI game makers** | [Claude, ChatGPT and Gemini chat games](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-chat-canvas), [Manus](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-manus), [fal.ai](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fal), [vibe-coded games](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-vibe-coded) (Cursor, Codex, Lovable, Bolt and others) |
+| **Hosting services** | [Matchmaking](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-matchmaking) (parties, regions, backfill), [Relays](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-relays) for host/client games, [Deploy API backends](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-deployments-api), CI with [edgegap/deploy-action](https://github.com/edgegap/deploy-action) ([launch checklist](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-launch)), [public sample projects](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-samples) |
+| **Every project** | [Server design](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-server-design), [Dockerfiles and registry](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-containerize), [local parity tests](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-local-testing), [troubleshooting](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-troubleshoot) |
+
 <a id="dedicated-servers-or-relays"></a>
 
 ## ⚖️ Dedicated Servers or Relays?
@@ -276,6 +288,15 @@ The server includes the [Edgegap agent skills](https://github.com/edgegap/llm-ag
 | `edgegap-troubleshoot` | Pull errors, crash loops, out-of-memory, clients that can't connect. |
 | `edgegap-deployments-api` | Backend code that deploys servers: webhooks, cleanup, Nakama, PlayFab, UGS, EOS. |
 | `edgegap-launch` | Launch checklist, rollouts, caching, cost control. |
+| `edgegap-cocos` | Cocos Creator 3.8 games with their own authoritative server (Node.js or any language). |
+| `edgegap-browser-wasm` | Browser games with WebAssembly physics (Rapier, Box2D, Jolt, ammo.js) on an authoritative server. |
+| `edgegap-ugs-matchmaker` | Unity Gaming Services Matchmaker starting an Edgegap server for each match. |
+| `edgegap-supabase` | Supabase as the game backend (sign-in, profiles, leaderboards) with Edgegap running each match. |
+| `edgegap-vibe-coded` | Single-player browser games made with an AI tool, taken online multiplayer. |
+| `edgegap-chat-canvas` | One-file games written in Claude, ChatGPT or Gemini, played online. |
+| `edgegap-fal` | Browser games built with fal.ai, made online multiplayer. |
+| `edgegap-relays` | Host/client games through Edgegap Relays: join codes, NAT traversal. |
+| `edgegap-samples` | Finds the public Edgegap sample, SDK or build tool closest to your project. |
 
 They're served three ways, so every MCP client can reach them:
 
