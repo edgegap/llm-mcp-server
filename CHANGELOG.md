@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## Unreleased
+
+README: new "What Your Agent Can Build" section (engines, netcodes, game backends, AI game makers and hosting services covered by the bundled skills, each linked to its skill), and the Skills table now lists all 31 bundled skills. No code changes.
+
 ## 0.19.12
 
 Skills pack 0.43.0 (llm-agent-skills #67): `edgegap-chat-canvas` 0.3.0 covers Gemini Canvas games, verified on Edgegap with https://github.com/edgegap/netcode-sample-gemini-bomb-tag, and recommends the prompt that worked first time there. The server instructions route "Claude/ChatGPT/Gemini chat game" to it. No tool changes.
