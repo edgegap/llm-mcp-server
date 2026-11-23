@@ -74,8 +74,8 @@
       "routes": [{ "pattern": "mcp-staging.edgegap.dev", "custom_domain": true }],
       "vars": {
         "OAUTH_MODE": "1",
-        "OAUTH_ISSUER": "https://auth.staging.edgegap.dev",
-        "OAUTH_JWKS_URL": "https://auth.staging.edgegap.dev/oauth2/.well-known/jwks.json",
+        "OAUTH_ISSUER": "https://staging-auth.edgegap.dev",
+        "OAUTH_JWKS_URL": "https://staging-auth.edgegap.dev/oauth2/.well-known/jwks.json",
         "MCP_RESOURCE_URL": "https://mcp-staging.edgegap.dev/mcp",
         "EDGEGAP_API_URL": "https://staging-api.edgegap.dev",
         "ALLOWED_ORIGINS": "",

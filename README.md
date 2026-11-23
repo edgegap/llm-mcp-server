@@ -466,7 +466,7 @@ Two more Workers run the same code in OAuth mode (`OAUTH_MODE` `"1"`): the devel
 
 | Environment | MCP URL | Authorization server | Edgegap API |
 | --- | --- | --- | --- |
-| `staging` | `https://mcp-staging.edgegap.dev/mcp` | `https://auth.staging.edgegap.dev` | `https://staging-api.edgegap.dev` |
+| `staging` | `https://mcp-staging.edgegap.dev/mcp` | `https://staging-auth.edgegap.dev` | `https://staging-api.edgegap.dev` |
 | `beta` | `https://mcp-beta.edgegap.dev/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
 
 In OAuth mode the Worker:
