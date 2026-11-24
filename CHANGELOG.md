@@ -2,7 +2,9 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
-## Unreleased
+## 0.19.13
+
+`edgegap_create_app_version` and `edgegap_update_app_version` send secret-looking env vars with `is_hidden` only, the API's field for an encrypted value. The extra `is_secret` field added in 0.15.9 is no longer sent. `edgegap_get_app_version` still reports an env var as hidden when the API returns `is_hidden`, `is_secret` or the encrypted placeholder. Covered in `test/newtools.mjs`.
 
 README: new "What Your Agent Can Build" section (engines, netcodes, game backends, AI game makers and hosting services covered by the bundled skills, each linked to its skill), and the Skills table now lists all 31 bundled skills. No code changes.
 
