@@ -39,15 +39,12 @@ import {
 import type { SkillsEnv, SkillsInstall, InstalledSkill } from './skillsversion.js';
 
 /**
- * An app version env var as the API stores it. The dashboard's Secret toggle writes is_secret, which
- * encrypts the value; the API accepts the spec's is_hidden but does not store it (live API,
- * 2026-11-03: a version created and patched with is_hidden: true read back is_secret: false with
- * the value in clear, and the same variable toggled Secret read back is_secret: true, encrypted).
- * Both are sent for secret-looking names.
+ * An app version env var as the API takes it. is_hidden is the API's field for a secret value
+ * (encrypted at rest, not readable through the API); it is set for secret-looking names.
  */
 function versionEnv(e: { key: string; value: string }) {
   const secret = looksSecret(e.key);
-  return { key: e.key, value: e.value, is_hidden: secret, is_secret: secret };
+  return { key: e.key, value: e.value, is_hidden: secret };
 }
 
 /**
