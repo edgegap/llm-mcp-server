@@ -1,6 +1,6 @@
 # Changelog
 
-Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
+Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
 ## 0.20.0
 
@@ -15,6 +15,70 @@ Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `
 - `worker/DECISION.md` explains why forwarding the access token to the API is a co-audience design, not token passthrough.
 - `test/scope-contract.test.mjs` (in `npm test`) checks the tool-to-scope table against the API's scope catalogue (`spec/scope-catalogue.json`, refreshed with `npm run sync-scope-catalogue`): every route a tool's code calls requires a permission its scopes grant at their current versions, no-account tools call no route that needs a sign-in, each tool hidden in OAuth mode calls a route no OAuth token can call, and every scope the Worker names exists.
 - Covered by `test/oauth.test.mjs` (in `npm test`) and `test/worker-oauth.mjs` (in `npm run test:worker`, on protocols 2025-06-18 and 2026-07-28).
+
+## 0.19.17
+
+Skills pack 0.45.1 (llm-agent-skills #75): `edgegap` no longer tells agents that a `token ` prefix in Codex's `EDGEGAP_API_TOKEN` is rejected. The hosted server accepts `Bearer token <uuid>` as well as `Bearer <uuid>` (checked 2026-11-25).
+
+## 0.19.16
+
+The hosted endpoint moves to `https://mcp.edgegap.com/mcp`. `https://mcp.edgegap.dev/mcp` keeps serving the same Worker with no redirect (MCP clients drop the POST or the `Authorization` header on a cross-host redirect), so existing configurations keep working.
+
+- `worker/wrangler.jsonc` lists both custom domains, so a deploy attaches `mcp.edgegap.com` and never detaches `mcp.edgegap.dev`.
+- README (install commands, Cursor and VS Code buttons), `server.json` (MCP registry remote; the registry name stays `dev.edgegap/mcp`), DESIGN, SECURITY, `worker/INSTALL.md` and `docs/analytics.md` use the `.com` URL.
+- Hosted analytics: new `endpoint_host` property (the hostname the client connected to), to follow the move off the `.dev` URL. Covered in `test/worker-telemetry.mjs`.
+
+## 0.19.15
+
+Skills pack 0.45.0: Codex.
+
+- llm-agent-skills #71 (0.44.0): the skills repo is a Codex plugin marketplace (`codex plugin marketplace add edgegap/llm-agent-skills`, `codex plugin add edgegap@edgegap`), with the hosted MCP server reading the token from `EDGEGAP_API_TOKEN`; `agents/openai.yaml` in every skill; `edgegap/assets/AGENTS.md`; `edgegap-chat-canvas` 0.3.1 loads in Codex again (a lone apostrophe in its description broke strict YAML parsers).
+- llm-agent-skills #73 (0.45.0): the Codex worked example [netcode-sample-codex-slime-sumo](https://github.com/edgegap/netcode-sample-codex-slime-sumo) in `edgegap-vibe-coded` and the samples catalog; `EDGEGAP_API_TOKEN` holds the UUID only.
+
+## 0.19.14
+
+Backend guidance reaches every agent, not only those that load a skill. Tool descriptions were written for an agent operating Edgegap; an agent asked to write backend code (an allocator polling `/v1/status` for thousands of deployments) could skip `edgegap-deployments-api` and ship code that gets constant 429s.
+
+- Server instructions: a backend paragraph (track deployments with webhooks, not status polling; Status and Context share 20 req/s for the whole organization, deploy 40/s, list 10/s; webhooks are not retried or signed, so polling stays a fallback and the URL carries a per-match secret; Ready is not "players can connect"; the token stays in the backend), and a route to `edgegap-deployments-api`. To stay under 4096 characters, the skill list gives the URI pattern once (`edgegap-skill://<name>/SKILL.md`) and routes by skill name.
+- `edgegap_deploy` (and its `webhook_on_*` parameters), `edgegap_get_deployment`, `edgegap_wait_for_deployment` and `edgegap_list_deployments` state the limits and webhook rules; ready results say clients retry for up to a minute while the engine loads.
+- `edgegap_context` returns `api_limits` (rate limits per organization and the webhook rules).
+- Skills pack 0.44.1 (llm-agent-skills #72): the `edgegap` router and `edgegap-deployments-api` description route backend status polling to that skill.
+
+Covered in `test/skills.mjs` (instructions carry the limits and the route, every routed name is bundled) and `test/newtools.mjs` (descriptions, `api_limits`).
+
+## 0.19.13
+
+`edgegap_create_app_version` and `edgegap_update_app_version` send secret-looking env vars with `is_hidden` only, the API's field for an encrypted value. The extra `is_secret` field added in 0.15.9 is no longer sent. `edgegap_get_app_version` still reports an env var as hidden when the API returns `is_hidden`, `is_secret` or the encrypted placeholder. Covered in `test/newtools.mjs`.
+
+README: new "What Your Agent Can Build" section (engines, netcodes, game backends, AI game makers and hosting services covered by the bundled skills, each linked to its skill), and the Skills table now lists all 31 bundled skills. No code changes.
+
+## 0.19.12
+
+Skills pack 0.43.0 (llm-agent-skills #67): `edgegap-chat-canvas` 0.3.0 covers Gemini Canvas games, verified on Edgegap with https://github.com/edgegap/netcode-sample-gemini-bomb-tag, and recommends the prompt that worked first time there. The server instructions route "Claude/ChatGPT/Gemini chat game" to it. No tool changes.
+
+## 0.19.11
+
+Skills pack 0.42.0 (llm-agent-skills #66): `edgegap-chat-canvas` 0.2.0 covers ChatGPT games (one HTML file written on chatgpt.com), verified on Edgegap with https://github.com/edgegap/netcode-sample-chatgpt-turf-painters: the check and fix prompt for what the chat gets wrong, getting the exact file out, a server adapter for rules whose `step()` doesn't drive bots. The server instructions route "Claude artifact or ChatGPT game" to it ("Unity Matchmaker (UGS)" became "UGS Matchmaker" to stay under 4096 characters). No tool changes.
+
+## 0.19.10
+
+Skills pack 0.41.0 (llm-agent-skills #65): new skill `edgegap-chat-canvas` for games written in a chat as one HTML file, starting with Claude artifacts on claude.ai: the prompt that keeps the rules between `/* RULES:BEGIN */` and `/* RULES:END */`, the split script that copies them into the server's module, the online page, a direct `?server=` path and the optional matchmaker, verified on Edgegap with https://github.com/edgegap/netcode-sample-claude-star-snatch. The server instructions route "Claude artifact game" to it (a few routing labels got shorter to keep the instructions under 4096 characters); `edgegap`, `edgegap-vibe-coded` and `edgegap-samples` route there too. No tool changes.
+
+## 0.19.9
+
+Skills pack 0.40.0 (llm-agent-skills #64): wording across 23 skills, which state what was verified on Edgegap and give each check as a step to take. No tool changes.
+
+## 0.19.8
+
+Skills pack 0.39.1 (llm-agent-skills #63): wording only in `edgegap-manus` 0.2.2.
+
+## 0.19.7
+
+Skills pack 0.39.0 (llm-agent-skills #62): `edgegap-manus` 0.2.1 adds the optional Edgegap matchmaker (Find Match) to the Manus self-hosted path, verified end to end on Edgegap, with the public sample https://github.com/edgegap/netcode-sample-manus-orb-arena; `edgegap-samples` lists it.
+
+## 0.19.6
+
+Skills pack 0.38.0 (llm-agent-skills #61): `edgegap-manus` 0.2.0 adds path A for Manus Game Dev, which asks the user for a Manus Cloud Computer before it writes a multiplayer game. Manus can build a self-hostable Node.js server instead, and that server runs on Edgegap (verified 2026-11-20: Manus-built server and client, two browser tabs in one match, self-stop). The server instructions now route "Manus asking for a Cloud Computer" to `edgegap-manus`. The skills sync accepts `.cjs` files.
 
 ## 0.19.5
 

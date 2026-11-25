@@ -649,9 +649,9 @@ test('OAuth mode signed out: edgegap_context lists the registry push steps among
 
 test('OAuth instructions point host/client games at the local server for relays, not at the relays skill', () => {
   const instructions = serverInstructions('oauth');
-  assert.doesNotMatch(instructions, /edgegap-skill:\/\/edgegap-relays/);
-  assert.match(instructions, /host\/client games on Edgegap relays: the local server \(npx -y @edgegap\/mcp\) with an API token/);
-  assert.match(serverInstructions('hosted'), /edgegap-skill:\/\/edgegap-relays\/SKILL\.md/, 'token mode keeps the relays skill');
+  assert.doesNotMatch(instructions, /edgegap-relays/);
+  assert.match(instructions, /host\/client games via relays: the local server \(npx -y @edgegap\/mcp\) with an API token/);
+  assert.match(serverInstructions('hosted'), /host\/client games via relays: edgegap-relays/, 'token mode keeps the relays skill');
 });
 
 test('OAuth mode signed out: edgegap_context says how sign-in starts, without a token message', async () => {

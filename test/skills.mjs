@@ -132,8 +132,23 @@ check('server instructions point at the skills', /edgegap_get_skill/.test(c.getI
 // skills must be the first thing they read, and every link must resolve.
 const instructions = c.getInstructions() ?? '';
 check('instructions open with the skills line', instructions.startsWith('Before acting, read edgegap-skill://edgegap/SKILL.md'), instructions.slice(0, 80));
-const linked = [...new Set(instructions.match(/edgegap-skill:\/\/[^\s),]+/g) ?? [])];
+// The instructions give the URI pattern once and route by skill name; every routed name must be bundled.
+const routedNames = [...new Set(instructions.match(/\bedgegap(?:-[a-z0-9]+)+\b(?=[;.])/g) ?? [])];
+const linked = ['edgegap', ...routedNames].filter((s) => SKILLS_PACK.skills.some((sk) => sk.name === s)).map((s) => `edgegap-skill://${s}/SKILL.md`);
+check('every skill name the instructions route to is in the bundled pack', routedNames.every((s) => SKILLS_PACK.skills.some((sk) => sk.name === s)), routedNames.join(' '));
+check('instructions give the skill URI pattern', instructions.includes('edgegap-skill://<name>/SKILL.md'));
 check('instructions link the core, Unity, NGO, FishNet, PurrNet, Fusion, Simple FPS, Unreal, EOS voice, Godot, Colyseus, Nakama, PlayFab, Supabase, Three.js, Manus and relays skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs', 'edgegap-vibe-coded', 'edgegap-fal'].every((s) => linked.includes(`edgegap-skill://${s}/SKILL.md`)), linked.join(' '));
+// Manus Game Dev asks for a Cloud Computer before it builds a multiplayer game; agents
+// should load edgegap-manus (path A: self-hosted server on Edgegap) when they see that.
+check('instructions route chat canvas games to edgegap-chat-canvas', /Claude\/ChatGPT\/Gemini chat game: edgegap-chat-canvas\b/.test(instructions));
+const split = await c.readResource({ uri: 'edgegap-skill://edgegap-chat-canvas/assets/split-artifact.mjs' }).catch(() => undefined);
+check('edgegap-chat-canvas ships the split script', /RULES:BEGIN/.test(split?.contents?.[0]?.text ?? ''));
+check('instructions route the Manus Cloud Computer request to edgegap-manus', /Cloud Computer: edgegap-manus\b/.test(instructions));
+const selfHost = await c.readResource({ uri: 'edgegap-skill://edgegap-manus/references/self-host.md' }).catch(() => undefined);
+check('edgegap-manus ships the self-host reference', /Cloud Computer/.test(selfHost?.contents?.[0]?.text ?? ''));
+check('no bundled skill file lists what was not run or verified', SKILLS_PACK.skills.every((sk) => sk.files.every((f) => !/not verified|unverified|not yet (run|verified|tested)|untested|not been (run|tested|verified)/i.test(f.content))));
+check('the Manus skill pages state what was verified, with no not-verified lists', !/Not verified|not yet run/i.test(selfHost?.contents?.[0]?.text ?? ''));
+check('the Manus self-host reference has the optional matchmaker and the public sample', /Optional: Find Match/.test(selfHost?.contents?.[0]?.text ?? '') && /netcode-sample-manus-orb-arena/.test(selfHost?.contents?.[0]?.text ?? ''));
 check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
 // Claude Code cuts instructions at INSTRUCTIONS_MAX_CHARS; 0.15.1 lost its
 // safety paragraphs that way. Shorten something before adding a skill line.
@@ -148,6 +163,9 @@ for (const [mode, phrases] of Object.entries(REQUIRED)) {
   const head = text.slice(0, INSTRUCTIONS_MAX_CHARS);
   const missing = phrases.filter((s) => !head.includes(s));
   check(`${mode} instructions keep the cost, guardrail and credential rules`, missing.length === 0, missing.join(', '));
+  // Backend code is written without loading a skill as often as not: the rate limit and
+  // webhook rules must reach every agent through the instructions themselves.
+  check(`${mode} instructions carry the backend rate limit and webhook rules`, ['20 req/s for the whole organization', 'webhooks, not status polling', 'not retried or signed', 'edgegap-deployments-api'].every((s) => head.includes(s)));
 }
 for (const uri of linked) {
   const got = await c.readResource({ uri }).catch(() => undefined);

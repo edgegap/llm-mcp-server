@@ -2,8 +2,9 @@
 
 Connect AI coding agents to Edgegap through our MCP server. Your agent can take a headless server build all the way to players connecting: write or check the Dockerfile, push the image to your private Edgegap registry, deploy an authoritative dedicated server close to players, and read logs when something breaks.
 
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=Edgegap&config=eyJ1cmwiOiJodHRwczovL21jcC5lZGdlZ2FwLmRldi9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiIifX0%3D)
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Edgegap_MCP-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=Edgegap&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.edgegap.dev%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22%22%7D%7D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=Edgegap&config=eyJ1cmwiOiJodHRwczovL21jcC5lZGdlZ2FwLmNvbS9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiIifX0%3D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Edgegap_MCP-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=Edgegap&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.edgegap.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22%22%7D%7D)
+[![Edgegap MCP connector](https://glama.ai/mcp/connectors/dev.edgegap/mcp/badges/score.svg)](https://glama.ai/mcp/connectors/dev.edgegap/mcp)
 
 ## 👉 Supported Features
 
@@ -18,11 +19,23 @@ Use our MCP server when:
 * **Troubleshooting a game server issue** - inspect app versions and deployment status, read container logs and CPU/memory utilization, or reproduce a failed deployment.
 * **Running client-host and peer-to-peer games** - create relay sessions providing NAT punchthrough and avoid connection blocking. Review [Orchestration Models](https://docs.edgegap.com/learn/orchestration/deployments#orchestration) and [Dedicated Servers or Relays?](#dedicated-servers-or-relays) before deciding.
 
-> [!WARNING]
-> Out of scope / not supported by MCP: building Linux server executable; creating, starting or stopping a matchmaker (upload the generated configuration in the dashboard); server browser; lobbies; managed clusters; private fleets; or billing.
+> [!NOTE]
+> Build the Linux server executable in your engine. Matchmakers (upload the configuration the MCP generates), server browser, lobbies, managed clusters, private fleets and billing are managed in the [Edgegap dashboard](https://app.edgegap.com).
 
 > [!NOTE]
 > If you need help, [please reach out to us over Discord](https://discord.gg/MmJf8fWjnt). For live games support see our [ticketing system](https://edgegap.atlassian.net/servicedesk/customer/portal/3).
+
+## 🎮 What Your Agent Can Build
+
+The server ships with 31 [agent skills](#-skills), each a step-by-step workflow for one engine, backend or tool. Your agent loads the one that matches your project:
+
+| | Covered |
+| --- | --- |
+| **Engines and netcode** | [Unity](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-unity) (Mirror), [Netcode for GameObjects](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-ngo), [FishNet](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fishnet), [PurrNet](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-purrnet), [Photon Fusion 2](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fusion) ([Simple FPS](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fusion-simplefps)), [Unreal Engine](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-unreal) ([EOS Voice](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-eos-voice)), [Godot 4](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-godot), [Cocos Creator](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-cocos), [Three.js and web games](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-threejs), [WebAssembly physics](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-browser-wasm) (Rapier, Box2D, Jolt), any other engine through [`edgegap`](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap) |
+| **Game backends** | [Nakama](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-nakama), [Colyseus](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-colyseus), [PlayFab](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-playfab), [Supabase](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-supabase), [Unity Gaming Services Matchmaker](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-ugs-matchmaker) |
+| **AI game makers** | [Claude, ChatGPT and Gemini chat games](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-chat-canvas), [Manus](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-manus), [fal.ai](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-fal), [vibe-coded games](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-vibe-coded) (Cursor, Codex, Lovable, Bolt and others) |
+| **Hosting services** | [Matchmaking](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-matchmaking) (parties, regions, backfill), [Relays](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-relays) for host/client games, [Deploy API backends](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-deployments-api), CI with [edgegap/deploy-action](https://github.com/edgegap/deploy-action) ([launch checklist](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-launch)), [public sample projects](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-samples) |
+| **Every project** | [Server design](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-server-design), [Dockerfiles and registry](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-containerize), [local parity tests](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-local-testing), [troubleshooting](https://github.com/edgegap/llm-agent-skills/tree/main/skills/edgegap-troubleshoot) |
 
 <a id="dedicated-servers-or-relays"></a>
 
@@ -66,12 +79,14 @@ The token is organization-wide and cannot be scoped to one application. Read [DE
 
 ### Popular Agents
 
+The hosted endpoint is `https://mcp.edgegap.com/mcp`. Configurations that use the earlier `https://mcp.edgegap.dev/mcp` keep working: both serve the same server.
+
 Install Edgegap MCP server in your preferred agentic IDE with the **Cursor** or **VS Code** buttons at the top of this page, then add your token to the `Authorization` header.
 
 #### Claude Code
 
 ```bash
-claude mcp add --transport http edgegap https://mcp.edgegap.dev/mcp \
+claude mcp add --transport http edgegap https://mcp.edgegap.com/mcp \
   -H "Authorization: token xxxxxxxx-e458-4592-b607-c2c28afd8b62" --scope user
 ```
 
@@ -81,7 +96,7 @@ Codex reads the token from an environment variable and sends it as `Authorizatio
 
 ```toml
 [mcp_servers.edgegap]
-url = "https://mcp.edgegap.dev/mcp"
+url = "https://mcp.edgegap.com/mcp"
 bearer_token_env_var = "EDGEGAP_API_TOKEN"
 ```
 
@@ -114,7 +129,7 @@ The **Cursor** button at the top of this page installs it; to do it by hand, add
 {
   "mcpServers": {
     "edgegap": {
-      "url": "https://mcp.edgegap.dev/mcp",
+      "url": "https://mcp.edgegap.com/mcp",
       "headers": { "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
     }
   }
@@ -130,7 +145,7 @@ The **VS Code** button at the top of this page installs it; to do it by hand, ad
   "servers": {
     "edgegap": {
       "type": "http",
-      "url": "https://mcp.edgegap.dev/mcp",
+      "url": "https://mcp.edgegap.com/mcp",
       "headers": { "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
     }
   }
@@ -162,7 +177,7 @@ Most agentic IDEs also support integration by pasting JSON configuration:
     "mcpServers": {
         "Edgegap": {
             "type": "http",
-            "url": "https://mcp.edgegap.dev/mcp",
+            "url": "https://mcp.edgegap.com/mcp",
             "headers": {
                 "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62"
             }
@@ -180,7 +195,7 @@ Install remote Edgegap MCP server in your agent's virtualized environment (never
 ```json
 {
   "command": "npx",
-  "args": ["-y", "mcp-remote", "https://mcp.edgegap.dev/mcp", "--transport", "http-only"]
+  "args": ["-y", "mcp-remote", "https://mcp.edgegap.com/mcp", "--transport", "http-only"]
 }
 ```
 
@@ -189,7 +204,7 @@ Install remote Edgegap MCP server in your agent's virtualized environment (never
 ```json
 {
   "command": "uvx",
-  "args": ["mcp-proxy", "--transport", "streamablehttp", "https://mcp.edgegap.dev/mcp"]
+  "args": ["mcp-proxy", "--transport", "streamablehttp", "https://mcp.edgegap.com/mcp"]
 }
 ```
 
@@ -215,7 +230,7 @@ To keep your API token on your own machine, run the server locally instead. Leav
 
 Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
-The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.dev`, which takes the two main ones as connection headers instead (see below):
+The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.com`, which takes the two main ones as connection headers instead (see below):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -276,6 +291,15 @@ The server includes the [Edgegap agent skills](https://github.com/edgegap/llm-ag
 | `edgegap-troubleshoot` | Pull errors, crash loops, out-of-memory, clients that can't connect. |
 | `edgegap-deployments-api` | Backend code that deploys servers: webhooks, cleanup, Nakama, PlayFab, UGS, EOS. |
 | `edgegap-launch` | Launch checklist, rollouts, caching, cost control. |
+| `edgegap-cocos` | Cocos Creator 3.8 games with their own authoritative server (Node.js or any language). |
+| `edgegap-browser-wasm` | Browser games with WebAssembly physics (Rapier, Box2D, Jolt, ammo.js) on an authoritative server. |
+| `edgegap-ugs-matchmaker` | Unity Gaming Services Matchmaker starting an Edgegap server for each match. |
+| `edgegap-supabase` | Supabase as the game backend (sign-in, profiles, leaderboards) with Edgegap running each match. |
+| `edgegap-vibe-coded` | Single-player browser games made with an AI tool, taken online multiplayer. |
+| `edgegap-chat-canvas` | One-file games written in Claude, ChatGPT or Gemini, played online. |
+| `edgegap-fal` | Browser games built with fal.ai, made online multiplayer. |
+| `edgegap-relays` | Host/client games through Edgegap Relays: join codes, NAT traversal. |
+| `edgegap-samples` | Finds the public Edgegap sample, SDK or build tool closest to your project. |
 
 They're served three ways, so every MCP client can reach them:
 
@@ -395,7 +419,7 @@ Your API token can do anything in your organization, so the server adds its own 
 
 The server identifies itself with `User-Agent: edgegap-mcp/<version> (<MCP client name>)` on every API call.
 
-**Usage analytics.** The local server and the self-hosted Docker image send nothing beyond the API calls themselves. The hosted endpoint at `mcp.edgegap.dev` uses [PostHog MCP Analytics](https://posthog.com/docs/mcp-analytics) (`@posthog/mcp`) and sends usage events to Edgegap's PostHog: which MCP client connected, which tool, prompt or skill resource was used, the names (not values) of the arguments passed, whether a call succeeded, its error code, the stage it failed at and the Edgegap API status, how long it took, whether it was a dry run, a few facts about the call (how a wait for a deployment ended, a validation result, which skill was loaded), which golden-path step was reached, plus the server version and Cloudflare's country code. On a failed call it also sends the error message, after removing your token, the values of the arguments you passed, and anything shaped like a credential, an IP address or an ID, cut to 300 characters. Deployment IDs are only sent as a keyed hash. Only named metadata properties are let through. It never sends your token, tool argument values (IP addresses, env vars, app or image names) or results, and GeoIP is off. It adds no parameters to the tools. Events from one token are grouped under a keyed, non-reversible hash of it. The full list is in [docs/analytics.md](docs/analytics.md). To opt out, send the header `X-Edgegap-Telemetry: off` (or `DNT: 1`), or use the local server.
+**Usage analytics.** The local server and the self-hosted Docker image send nothing beyond the API calls themselves. The hosted endpoint at `mcp.edgegap.com` uses [PostHog MCP Analytics](https://posthog.com/docs/mcp-analytics) (`@posthog/mcp`) and sends usage events to Edgegap's PostHog: which MCP client connected, which tool, prompt or skill resource was used, the names (not values) of the arguments passed, whether a call succeeded, its error code, the stage it failed at and the Edgegap API status, how long it took, whether it was a dry run, a few facts about the call (how a wait for a deployment ended, a validation result, which skill was loaded), which golden-path step was reached, plus the server version and Cloudflare's country code. On a failed call it also sends the error message, after removing your token, the values of the arguments you passed, and anything shaped like a credential, an IP address or an ID, cut to 300 characters. Deployment IDs are only sent as a keyed hash. Only named metadata properties are let through. It never sends your token, tool argument values (IP addresses, env vars, app or image names) or results, and GeoIP is off. It adds no parameters to the tools. Events from one token are grouped under a keyed, non-reversible hash of it. The full list is in [docs/analytics.md](docs/analytics.md). To opt out, send the header `X-Edgegap-Telemetry: off` (or `DNT: 1`), or use the local server.
 
 ## 🚨 Troubleshooting
 
@@ -445,7 +469,7 @@ Please consult our [API Reference](https://docs.edgegap.com/docs/api) for possib
 
 ## 🛠️ Self-Hosting
 
-The hosted endpoint at `mcp.edgegap.dev` runs as a Cloudflare Worker (see [worker/INSTALL.md](worker/INSTALL.md)). To run the same stateless HTTP server on your own infrastructure, use the Docker image:
+The hosted endpoint at `mcp.edgegap.com` runs as a Cloudflare Worker (see [worker/INSTALL.md](worker/INSTALL.md)). To run the same stateless HTTP server on your own infrastructure, use the Docker image:
 
 ```bash
 docker build -t edgegap-mcp .

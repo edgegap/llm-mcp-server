@@ -6,7 +6,7 @@ This server handles Edgegap API tokens, which are organization-wide. Please repo
 
 Report it privately through GitHub: on this repository's **Security** tab, choose **Report a vulnerability**. Please don't open a public issue for a security problem.
 
-Include what you ran, which surface it affects (the npm package, the Docker image, or the hosted endpoint at `mcp.edgegap.dev`), and the version. `edgegap_context` reports the version.
+Include what you ran, which surface it affects (the npm package, the Docker image, or the hosted endpoint at `mcp.edgegap.com`), and the version. `edgegap_context` reports the version.
 
 ## Supported versions
 

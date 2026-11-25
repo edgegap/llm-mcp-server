@@ -383,6 +383,13 @@ check('instructions say a relay is not a game server', /Relay .*NOT a game serve
 check('instructions start the golden path with generate_dockerfile', instructions.includes('1. edgegap_generate_dockerfile'));
 const listed = (await c.listTools()).tools;
 const desc = (n) => listed.find((t) => t.name === n)?.description ?? '';
+// The rate limit matters when an agent writes backend code, which it may do without a skill.
+check('deploy tells backend code to use webhooks, which are not retried', /not by polling status \(20\/s for the whole organization\)/.test(desc('edgegap_deploy')) && /not retried or signed/.test(desc('edgegap_deploy')));
+check('get_deployment states the 20 req/s organization limit on /v1/status', /GET \/v1\/status, limited to 20 requests\/s for the whole organization/.test(desc('edgegap_get_deployment')));
+check('wait_for_deployment points backend code at webhooks', /use deployment\s+webhooks instead/.test(desc('edgegap_wait_for_deployment')));
+check('list_deployments states the 10 req/s list limit', /limited to 10 requests\/s per organization/.test(desc('edgegap_list_deployments')));
+const readyHook = listed.find((t) => t.name === 'edgegap_deploy')?.inputSchema?.properties?.webhook_on_ready?.description ?? '';
+check('webhook_on_ready says it fires before the engine loads and is not retried', /engine may still be loading/.test(readyHook) && /not retried/.test(readyHook));
 check('relay tool leads with "NOT a game server"', /^A relay is NOT a game server/.test(desc('edgegap_create_relay_session')));
 check('relay tool points to edgegap_deploy instead', /edgegap_deploy/.test(desc('edgegap_create_relay_session')));
 check('deploy tool says it is the recommended authoritative server', /authoritative dedicated game server/.test(desc('edgegap_deploy')) && /recommended/.test(desc('edgegap_deploy')));
@@ -794,6 +801,7 @@ check('reports version, transport and host', /^@edgegap\/mcp \d+\.\d+\.\d+$/.tes
 check('reports guardrails', r.forced_deploy_tag === 'edgegap-mcp' && r.read_only === false && r.max_duration_ceiling_minutes === 60 && /deploy/.test(r.guardrails?.dry_run ?? ''));
 check('gives the Private Fleet and Edge Cloud egress terms', /6 TB per host per month/.test(r.pricing?.egress?.private_fleet ?? '') && r.pricing?.egress?.edge_cloud === '$0.10 per GB' && /pricing\.md$/.test(r.pricing?.source ?? ''));
 check('token source shown, never the token', r.token === 'from EDGEGAP_API_TOKEN' && !JSON.stringify(r).includes(REAL));
+check('gives the API rate limits and webhook rules for backend code', r.api_limits?.status_and_context_per_second === 20 && r.api_limits?.deploy_per_second === 40 && r.api_limits?.list_deployments_per_second === 10 && /not retried and not signed/.test(r.api_limits?.webhooks ?? ''));
 
 // ------------------------------------------------------ 19. User-Agent ----
 console.log('\n19. User-Agent');
@@ -874,8 +882,8 @@ calls.length = 0;
 await icall('edgegap_create_app_version', { ...verUdp, env: [{ key: 'GAME_MODE', value: 'ffa' }, { key: 'STEAM_API_KEY', value: 'k' }, { key: 'db_password', value: 'p' }] });
 const envs = calls.find((x) => x.method === 'POST')?.body?.envs ?? [];
 check('create_app_version: GAME_MODE visible, STEAM_API_KEY and db_password hidden', envs.map((e) => e.is_hidden).join() === 'false,true,true', JSON.stringify(envs.map((e) => [e.key, e.is_hidden])));
-// The API stores is_secret (the dashboard's Secret toggle) and drops is_hidden (live API, 2026-11-03).
-check('create_app_version: secret-named env vars also sent with is_secret', envs.map((e) => e.is_secret).join() === 'false,true,true', JSON.stringify(envs.map((e) => [e.key, e.is_secret])));
+// is_hidden is the API's field; is_secret is not sent.
+check('create_app_version: env vars sent without is_secret', envs.every((e) => !('is_secret' in e)), JSON.stringify(envs));
 calls.length = 0;
 await icall('edgegap_deploy', { ...dep, env: [{ key: 'MATCH_ID', value: 'm' }, { key: 'JWT_SECRET', value: 's' }] });
 const depEnvs = calls.find((x) => x.method === 'POST')?.body?.environment_variables ?? [];
@@ -906,7 +914,7 @@ r = json(await acall('edgegap_update_app_version', { application: 'my-game', ver
 patch = calls.find((x) => x.method === 'PATCH');
 check('update_app_version: ports sent in full, with defaults', JSON.stringify(patch?.body?.ports) === JSON.stringify([{ port: 7777, protocol: 'UDP', name: 'gameport', to_check: true, tls_upgrade: false }, { port: 7778, protocol: 'WS', name: 'gameport', to_check: true, tls_upgrade: true }]), JSON.stringify(patch?.body?.ports));
 check('update_app_version: env sent as envs, secret-named ones hidden', JSON.stringify(patch?.body?.envs?.map((e) => [e.key, e.is_hidden])) === JSON.stringify([['GAME_MODE', false], ['STEAM_API_KEY', true]]));
-check('update_app_version: secret-named env vars also sent with is_secret', JSON.stringify(patch?.body?.envs?.map((e) => [e.key, e.is_secret])) === JSON.stringify([['GAME_MODE', false], ['STEAM_API_KEY', true]]));
+check('update_app_version: env vars sent without is_secret', (patch?.body?.envs ?? []).every((e) => !('is_secret' in e)), JSON.stringify(patch?.body?.envs));
 check('update_app_version: the result says the lists were replaced', r.notes?.some((n) => /ports replaced/.test(n)) && r.notes?.some((n) => /env replaced/.test(n)));
 check('update_app_version: the description warns ports/env replace the list', /REPLACE/.test((await ac.listTools()).tools.find((t) => t.name === 'edgegap_update_app_version')?.description ?? ''));
 for (const [label, extra] of [['tls_upgrade on UDP', { ports: [{ port: 7777, protocol: 'UDP', tls_upgrade: true }] }], ['token in an env value', { env: [{ key: 'X', value: REAL }] }]]) {

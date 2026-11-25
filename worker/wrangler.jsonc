@@ -11,6 +11,16 @@
     "@opentelemetry/api": "./otel-api-stub.ts"
   },
 
+  // Custom domains. mcp.edgegap.com is the public URL. mcp.edgegap.dev keeps
+  // serving the same Worker, with no redirect: existing client configs and
+  // installed skills use it, and MCP clients drop the Authorization header
+  // (or the POST) on a cross-host redirect. Both are listed so a deploy never
+  // detaches either one; the DNS record is created on the first deploy.
+  "routes": [
+    { "pattern": "mcp.edgegap.com", "custom_domain": true },
+    { "pattern": "mcp.edgegap.dev", "custom_domain": true }
+  ],
+
   // No KV, D1, R2, or Durable Object bindings — on purpose.
   // The stateless handler needs none, and adding storage here is how a
   // relay quietly becomes a credential vault. See worker.ts.

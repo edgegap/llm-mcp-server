@@ -40,7 +40,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.edgegap.dev/mcp",
+      "url": "https://mcp.edgegap.com/mcp",
       "headers": [
         {
           "name": "Authorization",

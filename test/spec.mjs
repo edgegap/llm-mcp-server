@@ -34,12 +34,9 @@ const UNPUBLISHED = new Set([
 // Empty since spec 2026.08.05 documented DeploymentV2.resources.
 // Fields the live API uses that the published spec doesn't list, keyed "METHOD /template".
 const UNPUBLISHED_FIELDS = {
-  // is_secret is what the dashboard's Secret toggle writes and what encrypts the value; the
-  // spec's is_hidden is accepted but not stored (live API, 2026-11-03).
   // registry_profile "Edgegap": the org's own registry login for registry.edgegap.com
   // images, create only (live API, 2026-11-04; not in the published spec yet).
-  'POST /v1/app/{app_name}/version': ['envs[].is_secret', 'registry_profile'],
-  'PATCH /v1/app/{app_name}/version/{version_name}': ['envs[].is_secret'],
+  'POST /v1/app/{app_name}/version': ['registry_profile'],
 };
 
 function resolve(spec, schema, depth = 0) {

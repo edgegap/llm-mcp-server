@@ -1,5 +1,5 @@
 /**
- * PostHog MCP Analytics for the hosted endpoint (mcp.edgegap.dev) only, using
+ * PostHog MCP Analytics for the hosted endpoint (mcp.edgegap.com) only, using
  * PostHog's official MCP SDK (@posthog/mcp) on top of posthog-node.
  *
  * The local server (npx @edgegap/mcp) and the self-hosted Docker image never
@@ -125,7 +125,7 @@ const PROPERTIES = new Set([
   // Ours: request facts (eventProperties).
   'read_only', 'has_token', 'auth_problem', 'country', 'skill', 'dry_run', 'prompt', 'prompt_name',
   'error_cause', 'probe', 'is_probe', 'org_id_hash', 'user_id', 'is_internal', 'transport', 'server_version',
-  'client_name', 'client_version', 'client_name_source',
+  'client_name', 'client_version', 'client_name_source', 'endpoint_host',
   // Ours: what the call did (src/callreport.ts).
   'tool_name', 'success', 'error_code', 'error_message', 'upstream_status', 'upstream_calls',
   'failed_stage', 'latency_ms', 'request_id_hash',
@@ -307,6 +307,15 @@ function client(key: string, host: string): PostHog {
   return shared.client;
 }
 
+/** The request's hostname, lowercased and capped, for the endpoint_host property. */
+export function endpointHostOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.toLowerCase().slice(0, 80) || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createAnalytics(
   env: TelemetryEnv,
   request: Request,
@@ -339,6 +348,9 @@ export function createAnalytics(
   );
   const country = (request as Request & { cf?: { country?: string } }).cf?.country;
   const authProblem = context.token ? undefined : context.authProblem;
+  // Which hostname the client connected to (mcp.edgegap.com, the older
+  // mcp.edgegap.com, workers.dev), to follow the move to the .com host.
+  const endpointHost = endpointHostOf(request.url);
 
   /** Properties every event of this request carries. */
   const base = async (): Promise<Record<string, unknown>> => {
@@ -353,6 +365,7 @@ export function createAnalytics(
       is_internal: id ? internalIds.has(id) : false,
       transport: TRANSPORT,
       server_version: context.serverVersion,
+      ...(endpointHost ? { endpoint_host: endpointHost } : {}),
     };
   };
 
@@ -385,6 +398,7 @@ export function createAnalytics(
             is_internal: p.is_internal ?? false,
             client_name: p.client_name,
             client_name_source: p.client_name_source,
+            ...(p.endpoint_host ? { endpoint_host: p.endpoint_host } : {}),
             transport: TRANSPORT,
             server_version: context.serverVersion,
             $geoip_disable: true,

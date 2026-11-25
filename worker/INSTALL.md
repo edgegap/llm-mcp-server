@@ -167,7 +167,7 @@ The endpoint lands at `https://edgegap-mcp.<account>.workers.dev/mcp`.
 
 For a branded URL, add a custom domain in the Cloudflare dashboard under
 Workers & Pages → your Worker → Settings → Domains & Routes, e.g.
-`mcp.edgegap.dev`. Use that in anything customer-facing.
+`mcp.edgegap.com`. Use that in anything customer-facing.
 
 ## 9. Connect a client
 
@@ -177,7 +177,7 @@ Clients supporting remote MCP with headers:
 {
   "mcpServers": {
     "edgegap": {
-      "url": "https://mcp.edgegap.dev/mcp",
+      "url": "https://mcp.edgegap.com/mcp",
       "headers": { "Authorization": "Bearer YOUR_EDGEGAP_TOKEN" }
     }
   }
@@ -191,7 +191,7 @@ Clients that only speak stdio, via the `mcp-remote` proxy:
   "mcpServers": {
     "edgegap": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.edgegap.dev/mcp",
+      "args": ["-y", "mcp-remote", "https://mcp.edgegap.com/mcp",
                "--header", "Authorization:Bearer YOUR_EDGEGAP_TOKEN"]
     }
   }
