@@ -361,6 +361,11 @@ g = json(await gen({ engine: 'unity', netcode: 'mirror-telepathy' }));
 check('netcode picks the protocol (Telepathy -> TCP)', g.ports_for_create_app_version[0].protocol === 'TCP' && g.dockerfile.includes('EXPOSE 7777/tcp'));
 g = json(await gen({ engine: 'unreal' }));
 check('unreal: non-root user and CRLF fix', g.dockerfile.includes('USER server') && g.dockerfile.includes("sed -i 's/\\r$//' /app/StartServer.sh"));
+// Official node images already have uid 1000 ("node"): a pinned "useradd -u 1000"
+// fails the build with exit code 4. Let useradd pick a free uid, and skip it
+// when the base image already has a "server" user.
+g = json(await gen({ engine: 'other', base_image: 'node:22-slim', executable: 'start.sh', ports: [{ port: 3000, protocol: 'WS' }] }));
+check('non-root user: no fixed uid, so bases that already use uid 1000 (node:*) still build', !/useradd[^\n]*-u\s*1000/.test(g.dockerfile) && g.dockerfile.includes('RUN id -u server >/dev/null 2>&1 || useradd -m server'), g.dockerfile);
 g = json(await gen({ engine: 'godot', executable: 'game.x86_64' }));
 check('godot: --headless in exec form', g.dockerfile.includes('CMD ["/app/game.x86_64","--headless"]'));
 g = json(await gen({ engine: 'other', executable: 'srv', ports: [{ port: 9000, protocol: 'TCP/UDP' }] }));
