@@ -67,6 +67,25 @@ for (const t of current.normal.tools) {
   else if (readOnlyHint && destructiveHint) diffs.push(`${t.name}: a read-only tool cannot be destructive`);
 }
 
+// Anthropic's directory review: tools that change or remove existing data carry
+// destructiveHint: true (create-only tools stay false).
+const CHANGES_EXISTING = [
+  'edgegap_update_app', 'edgegap_update_app_version', 'edgegap_tag_deployment', 'edgegap_link_pull_profile',
+  'edgegap_stop_deployment', 'edgegap_delete_registry_tag', 'edgegap_delete_app_version', 'edgegap_delete_app',
+  'edgegap_delete_pull_profile', 'edgegap_delete_endpoint_storage',
+];
+for (const name of CHANGES_EXISTING) {
+  const t = current.normal.tools.find((x) => x.name === name);
+  if (t && t.annotations?.destructiveHint !== true) diffs.push(`${name}: changes existing data, so destructiveHint must be true`);
+}
+
+// Directory reviews reject tool descriptions that promote products, quote prices
+// or tell the model how to behave beyond the tool's function.
+const PROMO = [/\$\d/, /recommended (way|setup)/i, /before acting/i, /free egress/i];
+for (const t of current.normal.tools) {
+  for (const re of PROMO) if (re.test(t.description ?? '')) diffs.push(`${t.name}: description matches ${re}`);
+}
+
 if (diffs.length) {
   for (const d of diffs) console.log(`  FAIL ${d}`);
   console.log('\nIf these changes are intended, run: node test/snapshot.mjs --update, and commit test/tools.snapshot.json.');

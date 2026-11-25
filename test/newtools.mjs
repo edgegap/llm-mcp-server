@@ -397,7 +397,7 @@ const readyHook = listed.find((t) => t.name === 'edgegap_deploy')?.inputSchema?.
 check('webhook_on_ready says it fires before the engine loads and is not retried', /engine may still be loading/.test(readyHook) && /not retried/.test(readyHook));
 check('relay tool leads with "NOT a game server"', /^A relay is NOT a game server/.test(desc('edgegap_create_relay_session')));
 check('relay tool points to edgegap_deploy instead', /edgegap_deploy/.test(desc('edgegap_create_relay_session')));
-check('deploy tool says it is the recommended authoritative server', /authoritative dedicated game server/.test(desc('edgegap_deploy')) && /recommended/.test(desc('edgegap_deploy')));
+check('deploy tool describes an authoritative server, with no promotional wording', /authoritative dedicated game server/.test(desc('edgegap_deploy')) && !/recommended/.test(desc('edgegap_deploy')));
 
 // ------------------------------------------------------------- registry ----
 console.log('\nregistry');

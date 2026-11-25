@@ -2,6 +2,12 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.3
+
+- Tools that change or remove existing data now say so: `edgegap_update_app`, `edgegap_update_app_version`, `edgegap_tag_deployment` and `edgegap_link_pull_profile` carry `destructiveHint: true`, as Anthropic's connector directory asks, so clients can ask before running them.
+- Tool descriptions describe what each tool does and nothing more: prices and "recommended" wording are gone from `edgegap_context`, `edgegap_deploy`, `edgegap_list_fleet_hosts` and `edgegap_build_matchmaker_config`, and the skill tools no longer tell the agent when to load a skill. The egress terms are still in `edgegap_context`'s result.
+- `test/snapshot.mjs` checks both rules.
+
 ## 0.20.2
 
 - `edgegap_generate_dockerfile` no longer pins the non-root user to uid 1000 (`RUN id -u server >/dev/null 2>&1 || useradd -m server`). Official `node` images already use uid 1000, so the generated Dockerfile failed to build on them (exit code 4). Covered in `test/newtools.mjs`.
