@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.17
+
+Skills pack 0.45.1 (llm-agent-skills #75): `edgegap` no longer tells agents that a `token ` prefix in Codex's `EDGEGAP_API_TOKEN` is rejected. The hosted server accepts `Bearer token <uuid>` as well as `Bearer <uuid>` (checked 2026-11-25).
+
 ## 0.19.16
 
 The hosted endpoint moves to `https://mcp.edgegap.com/mcp`. `https://mcp.edgegap.dev/mcp` keeps serving the same Worker with no redirect (MCP clients drop the POST or the `Authorization` header on a cross-host redirect), so existing configurations keep working.
