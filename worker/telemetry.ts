@@ -218,7 +218,22 @@ export function allowlist(
   userAgentClient?: { name: string; version?: string }
 ): (event: Event) => Event | null {
   const allowed = new Set([...PROPERTIES, ...(agentFields ? AGENT_PROPERTIES : [])]);
-  return (event) => {
+  return (input) => {
+    // @posthog/mcp 1.x reports a call to an unregistered tool as its own
+    // $mcp_unknown_tool event; 0.x sent a failed $mcp_tool_call. Keep the old
+    // shape so dashboards and is_probe still count these calls.
+    const event =
+      input.event === '$mcp_unknown_tool'
+        ? {
+            ...input,
+            event: '$mcp_tool_call',
+            properties: {
+              ...input.properties,
+              $mcp_is_error: true,
+              $mcp_error_message: `Tool ${String(input.properties?.$mcp_tool_name ?? 'unknown')} not found`,
+            },
+          }
+        : input;
     if (!EVENTS.has(event.event)) return null;
     const raw = event.properties ?? {};
     const properties: Record<string, unknown> = {};
