@@ -1,6 +1,6 @@
 # Analytics
 
-What the hosted endpoint (`mcp.edgegap.dev`) sends to Edgegap's PostHog, how to tell real users from probes and from our own team, and the insights to build on it.
+What the hosted endpoint (`mcp.edgegap.com`) sends to Edgegap's PostHog, how to tell real users from probes and from our own team, and the insights to build on it.
 
 The local server (`npx @edgegap/mcp`), the `.mcpb` bundle and the Docker image send nothing. The code is `worker/telemetry.ts` (events, allowlist, identity) and `src/callreport.ts` (what one tool call did). Analytics is off unless the Worker has `POSTHOG_API_KEY`; a client opts out with `X-Edgegap-Telemetry: off` or `DNT: 1`.
 
@@ -40,6 +40,7 @@ There are no OAuth events (`mcp_auth_started`/`completed`/`failed`): the hosted 
 | `org_id_hash` | `org_<32 hex>`, or `null` without a token. |
 | `is_internal` | `true` when `org_id_hash` is in `TELEMETRY_INTERNAL_IDS`. |
 | `transport` | `streamable_http` (the only transport that sends analytics). |
+| `endpoint_host` | The hostname the client connected to: `mcp.edgegap.com`, the older `mcp.edgegap.dev` (still served), or a `workers.dev` host. Shows how much traffic still uses the old URL. |
 | `server_version` | e.g. `0.12.0`. Also `$mcp_server_version`. |
 | `client_name`, `client_version` | From MCP `clientInfo` on `initialize`. The server is stateless, so later requests take them from the `User-Agent` header's first product (`claude-code/2.1.310 (cli)` → `claude-code`, `2.1.310`). Raw values: `$mcp_client_name`, `$mcp_client_version`, `$mcp_client_user_agent`. |
 | `client_name_source` | `client_info` or `user_agent`: where `client_name` came from. A User-Agent name can be a library (`node`, `python-httpx`) rather than the agent. |
@@ -104,7 +105,7 @@ Codes are only ever added, never renamed.
 
 ## Milestones
 
-One event per golden-path step a call reached, with `milestone`, `tool_name`, `org_id_hash`, `is_internal`, `client_name`, `transport`, `server_version`. They fire every time, not only the first time (the Worker keeps no state); funnels take the first occurrence per person.
+One event per golden-path step a call reached, with `milestone`, `tool_name`, `org_id_hash`, `is_internal`, `client_name`, `endpoint_host`, `transport`, `server_version`. They fire every time, not only the first time (the Worker keeps no state); funnels take the first occurrence per person.
 
 | Event | Fired by |
 | --- | --- |

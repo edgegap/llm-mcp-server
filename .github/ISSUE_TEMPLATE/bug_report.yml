@@ -18,7 +18,7 @@ body:
     attributes:
       label: Where it runs
       options:
-        - Hosted (mcp.edgegap.dev)
+        - Hosted (mcp.edgegap.com or mcp.edgegap.dev)
         - Local (npx @edgegap/mcp)
         - Docker image
     validations:

@@ -160,6 +160,7 @@ try {
   console.log('\nper-call facts (src/callreport.ts)');
   const calls = of('$mcp_tool_call');
   check('every tool call: tool_name, success, latency_ms, transport, server_version', calls.length > 5 && calls.every((e) => typeof props(e).tool_name === 'string' && typeof props(e).success === 'boolean' && typeof props(e).latency_ms === 'number' && props(e).transport === 'streamable_http' && typeof props(e).server_version === 'string'), JSON.stringify(calls.map((e) => [props(e).tool_name, props(e).success, props(e).latency_ms])));
+  check('every tool call names the endpoint host it came in on', calls.every((e) => ['127.0.0.1', 'mcp.edgegap.com'].includes(props(e).endpoint_host)), JSON.stringify(calls.map((e) => props(e).endpoint_host)));
   check('every failed call: error_code and failed_stage', calls.filter((e) => props(e).success === false).every((e) => typeof props(e).error_code === 'string' && typeof props(e).failed_stage === 'string'), JSON.stringify(calls.filter((e) => props(e).success === false).map((e) => [props(e).tool_name, props(e).error_code, props(e).failed_stage])));
   check('no token: AUTH_ABSENT, pre_flight, upstream_status null', props(noHeader).error_code === 'AUTH_ABSENT' && props(noHeader).failed_stage === 'pre_flight' && props(noHeader).upstream_status === null, JSON.stringify(props(noHeader)));
   check('foreign bearer: AUTH_FOREIGN', props(foreign).error_code === 'AUTH_FOREIGN');
