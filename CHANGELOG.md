@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.4
+
+- Every tool repeats its title in `annotations.title`. Anthropic's connector directory portal reads the display name from there and flagged all tools as missing a title. Checked in `test/snapshot.mjs`.
+
 ## 0.20.3
 
 - Tools that change or remove existing data now say so: `edgegap_update_app`, `edgegap_update_app_version`, `edgegap_tag_deployment` and `edgegap_link_pull_profile` carry `destructiveHint: true`, as Anthropic's connector directory asks, so clients can ask before running them.

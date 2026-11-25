@@ -65,6 +65,8 @@ for (const t of current.normal.tools) {
   const { readOnlyHint, destructiveHint } = t.annotations ?? {};
   if (typeof readOnlyHint !== 'boolean' || typeof destructiveHint !== 'boolean') diffs.push(`${t.name}: readOnlyHint and destructiveHint must both be set`);
   else if (readOnlyHint && destructiveHint) diffs.push(`${t.name}: a read-only tool cannot be destructive`);
+  // Anthropic's directory portal flags tools without annotations.title.
+  if (!t.annotations?.title || t.annotations.title !== t.title) diffs.push(`${t.name}: annotations.title must repeat the tool title`);
 }
 
 // Anthropic's directory review: tools that change or remove existing data carry
