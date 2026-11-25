@@ -17,7 +17,7 @@ any Edgegap server — the only thing sent to Edgegap is the API call itself,
 exactly as if you had run `curl`. Closing your editor revokes this server's
 access completely.
 
-**Remote.** Your token is sent to `mcp.edgegap.dev` on every request and
+**Remote.** Your token is sent to `mcp.edgegap.com` on every request and
 forwarded from there to the Edgegap API. It transits infrastructure Edgegap
 operates. The worker holds it for the life of the request and does not persist
 it, but that is a "we don't store it" claim rather than a "we never see it"
