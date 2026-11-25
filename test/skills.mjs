@@ -152,11 +152,17 @@ check('the Manus self-host reference has the optional matchmaker and the public 
 check('instructions point CI deploys at edgegap/deploy-action', /edgegap\/deploy-action/.test(instructions) && /edgegap-launch/.test(instructions));
 // Claude Code cuts instructions at INSTRUCTIONS_MAX_CHARS; 0.15.1 lost its
 // safety paragraphs that way. Shorten something before adding a skill line.
-for (const mode of ['local', 'hosted']) {
+const REQUIRED = {
+  local: ['cost money while running', 'dry_run: true', 'org-wide', 'do not retry'],
+  hosted: ['cost money while running', 'dry_run: true', 'org-wide', 'do not retry'],
+  oauth: ['cost money while running', 'dry_run: true', 'access token in env vars', 'signs in with Edgegap', 'do not retry', 'only for work the developer asked for'],
+};
+for (const [mode, phrases] of Object.entries(REQUIRED)) {
   const text = serverInstructions(mode);
   check(`${mode} instructions fit in ${INSTRUCTIONS_MAX_CHARS} characters`, text.length <= INSTRUCTIONS_MAX_CHARS, `${text.length} characters`);
   const head = text.slice(0, INSTRUCTIONS_MAX_CHARS);
-  check(`${mode} instructions keep the cost, guardrail and credential rules`, ['cost money while running', 'dry_run: true', 'org-wide', 'do not retry'].every((s) => head.includes(s)));
+  const missing = phrases.filter((s) => !head.includes(s));
+  check(`${mode} instructions keep the cost, guardrail and credential rules`, missing.length === 0, missing.join(', '));
   // Backend code is written without loading a skill as often as not: the rate limit and
   // webhook rules must reach every agent through the instructions themselves.
   check(`${mode} instructions carry the backend rate limit and webhook rules`, ['20 req/s for the whole organization', 'webhooks, not status polling', 'not retried or signed', 'edgegap-deployments-api'].every((s) => head.includes(s)));

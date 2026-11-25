@@ -16,13 +16,14 @@ npm run scan
 What each command does:
 - `npm run build`: the tests run `dist/`, so build before testing.
 - `npm test`: unit tests, then the MCP tests against a local mock API. Nothing reaches Edgegap.
-- `npm run test:worker`: the hosted Worker, including telemetry.
+- `npm run test:worker`: the hosted Worker under `wrangler dev`, including telemetry and OAuth mode.
 - `npm run scan`: checks tracked files for secrets and local paths.
 
 ## What the checks expect
 
 - **A test for every behavior change.** Most tool tests live in `test/newtools.mjs`, with mock routes shaped after `spec/edgegap-v1-openapi.json`. Pure rules go in `test/unit.test.mjs`.
 - **Spec parity** (`test/spec.mjs`): every endpoint and body field the server sends must be in `spec/`. An unpublished one goes in its allowlist, with a comment explaining why.
+- **Scope contract** (`test/scope-contract.test.mjs`): in OAuth mode, every API route a tool calls must require a permission that the tool's scopes in `src/oauth.ts` grant, per `spec/scope-catalogue.json`. A new tool or API call that fails it needs a scope, or is hidden in OAuth mode. `npm run sync-scope-catalogue -- <export>` refreshes the catalogue from the API's catalogue export.
 - **Tool-list snapshot** (`test/snapshot.mjs`): any change to a tool's name, description, schema or annotations, or to the server instructions, fails until you run `npm run snapshot:update` and commit `test/tools.snapshot.json`. Agents build against these, so the change should be deliberate.
 - **The version lives in six places.** Change it with `node <edgegap-mcp-update skill>/scripts/bump-version.mjs patch|minor`, or by hand in `package.json`, `package-lock.json`, `server.json` (twice), `src/version.ts` and the pinned install line in `README.md`. `test/package.mjs` checks they match.
 - **Bundled skills.** Update them with `npm run sync-skills -- --ref main`, then update the snapshot, since the instructions name the skills.

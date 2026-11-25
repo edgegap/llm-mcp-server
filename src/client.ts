@@ -6,7 +6,7 @@
  * picking the wrong one. This wraps only what the golden path needs.
  */
 
-import { Config, redact } from './config.js';
+import { Config, authScheme, redact } from './config.js';
 import { TokenSource } from './auth.js';
 import { VERSION } from './version.js';
 import type { UpstreamResult } from './callreport.js';
@@ -84,7 +84,9 @@ export class EdgegapApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly apiMessage: string,
-    public readonly details?: unknown
+    public readonly details: unknown,
+    /** The body's `error` code, e.g. `insufficient_scope`, when the API sent one. */
+    public readonly errorCode: string | undefined
   ) {
     super(`Edgegap API ${status}: ${apiMessage}`);
     this.name = 'EdgegapApiError';
@@ -202,7 +204,7 @@ export class EdgegapClient {
         method,
         host: url.host,
         path: url.pathname + url.search,
-        headers: { Authorization: 'token ***', 'Content-Type': 'application/json', 'User-Agent': this.userAgent() },
+        headers: { Authorization: `${authScheme(this.config)} ***`, 'Content-Type': 'application/json', 'User-Agent': this.userAgent() },
         ...(options.body === undefined ? {} : { body: maskSecrets(options.body, this.auth.current) }),
       });
       return {} as T;
@@ -220,8 +222,9 @@ export class EdgegapClient {
       response = await fetch(url.toString(), {
         method,
         headers: {
-          // Edgegap expects the literal word "token" before the value.
-          Authorization: `token ${token}`,
+          // An API token needs the literal word "token" before the value; an
+          // OAuth access token is forwarded unchanged as a Bearer token.
+          Authorization: `${authScheme(this.config)} ${token}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
           'User-Agent': this.userAgent(),
@@ -260,11 +263,12 @@ export class EdgegapClient {
       // re-prompts instead of failing repeatedly against a revoked credential.
       if (response.status === 401) this.auth.invalidate();
 
-      const body = (parsed ?? {}) as { message?: string; details?: unknown };
+      const body = (parsed ?? {}) as { message?: string; details?: unknown; error?: unknown };
       const apiError = new EdgegapApiError(
         response.status,
         redact(body.message ?? response.statusText, token),
-        body.details
+        body.details,
+        typeof body.error === 'string' ? body.error : undefined
       );
       apiError.retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
       throw apiError;
