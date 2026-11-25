@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.17
+
+Skills pack 0.45.1 (llm-agent-skills #75): `edgegap` no longer tells agents that a `token ` prefix in Codex's `EDGEGAP_API_TOKEN` is rejected. The hosted server accepts `Bearer token <uuid>` as well as `Bearer <uuid>` (checked 2026-11-25).
+
 ## 0.19.16
 
 The hosted endpoint moves to `https://mcp.edgegap.com/mcp`. `https://mcp.edgegap.dev/mcp` keeps serving the same Worker with no redirect (MCP clients drop the POST or the `Authorization` header on a cross-host redirect), so existing configurations keep working.
@@ -9,10 +13,6 @@ The hosted endpoint moves to `https://mcp.edgegap.com/mcp`. `https://mcp.edgegap
 - `worker/wrangler.jsonc` lists both custom domains, so a deploy attaches `mcp.edgegap.com` and never detaches `mcp.edgegap.dev`.
 - README (install commands, Cursor and VS Code buttons), `server.json` (MCP registry remote; the registry name stays `dev.edgegap/mcp`), DESIGN, SECURITY, `worker/INSTALL.md` and `docs/analytics.md` use the `.com` URL.
 - Hosted analytics: new `endpoint_host` property (the hostname the client connected to), to follow the move off the `.dev` URL. Covered in `test/worker-telemetry.mjs`.
-
-## 0.19.16
-
-Skills pack 0.45.1 (llm-agent-skills #75): `edgegap` no longer tells agents that a `token ` prefix in Codex's `EDGEGAP_API_TOKEN` is rejected. The hosted server accepts `Bearer token <uuid>` as well as `Bearer <uuid>` (checked 2026-11-25).
 
 ## 0.19.15
 
