@@ -221,7 +221,7 @@ export function validateServerConfig(input: ServerConfigInput) {
     if (engine === 'unreal') {
       if (runsAsRoot) {
         err('unreal-root', 'The container runs as root. Unreal Engine servers refuse to start as root and exit immediately.',
-          'Create a user (useradd ... -u 1000 m) and add "USER m" before CMD.', users[users.length - 1]?.line);
+          'Create a user (RUN useradd -m server) and add "USER server" before CMD.', users[users.length - 1]?.line);
       }
       if (/\.sh\b/.test(launch) && !/sed\s+-i\s+['"]?s\/\\r\$\/\/|dos2unix/.test(text)) {
         warn('crlf-script', 'The start script is not normalised to LF line endings. Scripts saved on Windows fail with "bad interpreter" or "not found".',

@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.2
+
+- `edgegap_generate_dockerfile` no longer pins the non-root user to uid 1000 (`RUN id -u server >/dev/null 2>&1 || useradd -m server`). Official `node` images already use uid 1000, so the generated Dockerfile failed to build on them (exit code 4). Covered in `test/newtools.mjs`.
+- `edgegap_validate_server_config`'s fix for a root Unreal container no longer suggests a fixed uid.
+
 ## 0.20.1
 
 - The hosted Worker on `mcp.edgegap.com` and `mcp.edgegap.dev` switches to OAuth mode: developers sign in with Edgegap, and an API token sent in the `Authorization` header gets a 401 saying to remove it and connect again, or to use the local server.

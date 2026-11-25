@@ -58,8 +58,12 @@ const APT = [
   '    apt-get clean && rm -rf /var/lib/apt/lists/*',
 ];
 
-/** Unprivileged user. Required for Unreal, good practice everywhere else. */
-const USER_SETUP = 'RUN useradd -m -u 1000 server';
+/**
+ * Unprivileged user. Required for Unreal, good practice everywhere else. No
+ * fixed uid: official node images already use 1000 ("node"), and
+ * "useradd -u 1000" fails the build there. Skipped when "server" exists.
+ */
+const USER_SETUP = 'RUN id -u server >/dev/null 2>&1 || useradd -m server';
 
 export function generateDockerfile(input: DockerfileInput) {
   const engine = input.engine;
