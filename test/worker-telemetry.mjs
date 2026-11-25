@@ -37,10 +37,14 @@ const posthog = http.createServer((req, res) => {
     raws.push(text);
     try {
       const body = JSON.parse(text);
-      for (const e of body.batch ?? [body]) events.push({ ...e, api_key: body.api_key ?? e.api_key });
+      // posthog-node 6 posts to /i/v1/analytics/events with the key as a Bearer
+      // header; older versions put api_key in the body.
+      const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
+      for (const e of body.batch ?? [body]) events.push({ ...e, api_key: body.api_key ?? e.api_key ?? bearer });
     } catch {}
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end('{"status":"Ok"}');
+    // Capture V1 reads per-event results; an empty map means every event was accepted.
+    res.end(req.url.startsWith('/i/v1/') ? '{"results":{}}' : '{"status":"Ok"}');
   });
 });
 await new Promise((r) => posthog.listen(0, '127.0.0.1', r));
