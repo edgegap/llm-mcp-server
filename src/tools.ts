@@ -982,9 +982,15 @@ export function registerTools(
     // Both MCP SDKs list a tool's _meta but drop unknown top-level fields, so
     // securitySchemes goes in _meta, which OpenAI's Apps SDK also reads.
     const schemes = options.securitySchemes?.(name);
+    // Anthropic's connector directory reads the display name from
+    // annotations.title (the MCP spec's older place for it), so repeat the title there.
+    const d = def as { title?: string; annotations?: Record<string, unknown> };
+    const titled = d.title && d.annotations && d.annotations.title === undefined
+      ? { ...d, annotations: { title: d.title, ...d.annotations } }
+      : d;
     const definition = schemes
-      ? { ...(def as object), _meta: { ...(def as { _meta?: Record<string, unknown> })._meta, securitySchemes: schemes } }
-      : def;
+      ? { ...titled, _meta: { ...(titled as { _meta?: Record<string, unknown> })._meta, securitySchemes: schemes } }
+      : titled;
     return server.registerTool(name, definition as never, (async (...a: unknown[]) => {
       const startedAt = Date.now();
       const from = client.upstream.length;
