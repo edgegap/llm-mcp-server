@@ -2,6 +2,13 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.15
+
+Skills pack 0.45.0: Codex.
+
+- llm-agent-skills #71 (0.44.0): the skills repo is a Codex plugin marketplace (`codex plugin marketplace add edgegap/llm-agent-skills`, `codex plugin add edgegap@edgegap`), with the hosted MCP server reading the token from `EDGEGAP_API_TOKEN`; `agents/openai.yaml` in every skill; `edgegap/assets/AGENTS.md`; `edgegap-chat-canvas` 0.3.1 loads in Codex again (a lone apostrophe in its description broke strict YAML parsers).
+- llm-agent-skills #73 (0.45.0): the Codex worked example [netcode-sample-codex-slime-sumo](https://github.com/edgegap/netcode-sample-codex-slime-sumo) in `edgegap-vibe-coded` and the samples catalog; `EDGEGAP_API_TOKEN` holds the UUID only.
+
 ## 0.19.14
 
 Backend guidance reaches every agent, not only those that load a skill. Tool descriptions were written for an agent operating Edgegap; an agent asked to write backend code (an allocator polling `/v1/status` for thousands of deployments) could skip `edgegap-deployments-api` and ship code that gets constant 429s.
