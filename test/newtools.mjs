@@ -383,6 +383,13 @@ check('instructions say a relay is not a game server', /Relay .*NOT a game serve
 check('instructions start the golden path with generate_dockerfile', instructions.includes('1. edgegap_generate_dockerfile'));
 const listed = (await c.listTools()).tools;
 const desc = (n) => listed.find((t) => t.name === n)?.description ?? '';
+// The rate limit matters when an agent writes backend code, which it may do without a skill.
+check('deploy tells backend code to use webhooks, which are not retried', /not by polling status \(20\/s for the whole organization\)/.test(desc('edgegap_deploy')) && /not retried or signed/.test(desc('edgegap_deploy')));
+check('get_deployment states the 20 req/s organization limit on /v1/status', /GET \/v1\/status, limited to 20 requests\/s for the whole organization/.test(desc('edgegap_get_deployment')));
+check('wait_for_deployment points backend code at webhooks', /use deployment\s+webhooks instead/.test(desc('edgegap_wait_for_deployment')));
+check('list_deployments states the 10 req/s list limit', /limited to 10 requests\/s per organization/.test(desc('edgegap_list_deployments')));
+const readyHook = listed.find((t) => t.name === 'edgegap_deploy')?.inputSchema?.properties?.webhook_on_ready?.description ?? '';
+check('webhook_on_ready says it fires before the engine loads and is not retried', /engine may still be loading/.test(readyHook) && /not retried/.test(readyHook));
 check('relay tool leads with "NOT a game server"', /^A relay is NOT a game server/.test(desc('edgegap_create_relay_session')));
 check('relay tool points to edgegap_deploy instead', /edgegap_deploy/.test(desc('edgegap_create_relay_session')));
 check('deploy tool says it is the recommended authoritative server', /authoritative dedicated game server/.test(desc('edgegap_deploy')) && /recommended/.test(desc('edgegap_deploy')));
@@ -794,6 +801,7 @@ check('reports version, transport and host', /^@edgegap\/mcp \d+\.\d+\.\d+$/.tes
 check('reports guardrails', r.forced_deploy_tag === 'edgegap-mcp' && r.read_only === false && r.max_duration_ceiling_minutes === 60 && /deploy/.test(r.guardrails?.dry_run ?? ''));
 check('gives the Private Fleet and Edge Cloud egress terms', /6 TB per host per month/.test(r.pricing?.egress?.private_fleet ?? '') && r.pricing?.egress?.edge_cloud === '$0.10 per GB' && /pricing\.md$/.test(r.pricing?.source ?? ''));
 check('token source shown, never the token', r.token === 'from EDGEGAP_API_TOKEN' && !JSON.stringify(r).includes(REAL));
+check('gives the API rate limits and webhook rules for backend code', r.api_limits?.status_and_context_per_second === 20 && r.api_limits?.deploy_per_second === 40 && r.api_limits?.list_deployments_per_second === 10 && /not retried and not signed/.test(r.api_limits?.webhooks ?? ''));
 
 // ------------------------------------------------------ 19. User-Agent ----
 console.log('\n19. User-Agent');

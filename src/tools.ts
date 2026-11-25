@@ -98,6 +98,67 @@ export const PRICING_NOTES = {
   guidance: 'Steady or bandwidth-heavy traffic (many players per server, large worlds, high tick rates) costs least on a Private Fleet baseline with cloud overflow for peaks. Prices change: check the source before quoting a total.',
 };
 
+/** Skill per project kind, as the server instructions route them (name only: the URI is
+ *  edgegap-skill://<name>/SKILL.md). Every name must be in the bundled pack (test/skills.mjs). */
+export const SKILL_ROUTES: Array<[string, string]> = [
+  ['Unity', 'edgegap-unity'],
+  ['NGO', 'edgegap-ngo'],
+  ['FishNet', 'edgegap-fishnet'],
+  ['PurrNet', 'edgegap-purrnet'],
+  ['Photon Fusion', 'edgegap-fusion'],
+  ['Simple FPS', 'edgegap-fusion-simplefps'],
+  ['Unreal', 'edgegap-unreal'],
+  ['Unreal voice chat', 'edgegap-eos-voice'],
+  ['Godot 4', 'edgegap-godot'],
+  ['Colyseus', 'edgegap-colyseus'],
+  ['Cocos Creator', 'edgegap-cocos'],
+  ['UGS Matchmaker', 'edgegap-ugs-matchmaker'],
+  ['Nakama', 'edgegap-nakama'],
+  ['PlayFab', 'edgegap-playfab'],
+  ['Supabase backend', 'edgegap-supabase'],
+  ['Three.js/web game + Node server', 'edgegap-threejs'],
+  ['WebAssembly game, Rapier physics, wss errors', 'edgegap-browser-wasm'],
+  ['vibe-coded solo web game going online', 'edgegap-vibe-coded'],
+  ['Claude/ChatGPT/Gemini chat game', 'edgegap-chat-canvas'],
+  ['fal.ai game', 'edgegap-fal'],
+  ['Manus game, Manus Cloud Computer', 'edgegap-manus'],
+  ['matchmaking, parties, regions, backfill', 'edgegap-matchmaking'],
+  ['backend/allocator code, status polling, webhooks', 'edgegap-deployments-api'],
+  ['host/client games via relays', 'edgegap-relays'],
+  ['sample projects', 'edgegap-samples'],
+];
+
+/**
+ * Deploy API rate limits, per organization (Edgegap docs, also in the
+ * edgegap-deployments-api skill). Tool descriptions are written for an agent
+ * operating Edgegap; these matter when an agent writes backend code for it, so
+ * they go in the server instructions too, which every agent reads.
+ */
+export const API_LIMITS = {
+  scope: 'per organization, all tokens and services together',
+  deploy_per_second: 40,
+  status_and_context_per_second: 20,
+  list_deployments_per_second: 10,
+  over_limit: 'HTTP 429: back off; use webhooks instead of polling',
+};
+
+export const WEBHOOK_FACTS =
+  'Deployment webhooks (webhook_on_ready, webhook_on_error, webhook_on_terminated) are the ' +
+  'recommended way for a backend to track deployments. They are not retried and not signed: ' +
+  'answer 2xx fast, put an unguessable per-match token in the URL, check the request_id, and ' +
+  'poll GET /v1/status only as a fallback. Ready means the container started; the game engine ' +
+  'may need up to a minute more, so clients retry the connection.';
+
+/** The backend-code paragraph of the server instructions. */
+export const BACKEND_GUIDANCE =
+  'Backend code (allocator, lobby service, matchmaker): track deployments with webhooks, not ' +
+  'status polling. Status (GET /v1/status) and Context share ' +
+  `${API_LIMITS.status_and_context_per_second} req/s for the whole organization (deploy ` +
+  `${API_LIMITS.deploy_per_second}/s, list ${API_LIMITS.list_deployments_per_second}/s; 429 above). ` +
+  'Webhooks are not retried or signed: poll only as a fallback, put a per-match secret in the ' +
+  'URL. Ready is not "players can connect": clients retry for up to a minute. The API token ' +
+  'stays in the backend. More: edgegap-deployments-api.';
+
 /** Claude Code drops everything after this many characters of server instructions. */
 export const INSTRUCTIONS_MAX_CHARS = 4096;
 
@@ -116,32 +177,10 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
   // sat below the architecture guidance and agents missed it), then the
   // safety rules, then the architecture and golden path.
   return (
-    `Before acting, read ${skillUri('edgegap', 'SKILL.md')} ` +
-    `(Unity: ${skillUri('edgegap-unity', 'SKILL.md')}, ` +
-    `NGO: ${skillUri('edgegap-ngo', 'SKILL.md')}, ` +
-    `FishNet: ${skillUri('edgegap-fishnet', 'SKILL.md')}, ` +
-    `PurrNet: ${skillUri('edgegap-purrnet', 'SKILL.md')}, ` +
-    `Photon Fusion: ${skillUri('edgegap-fusion', 'SKILL.md')}, ` +
-    `Simple FPS: ${skillUri('edgegap-fusion-simplefps', 'SKILL.md')}, ` +
-    `Unreal: ${skillUri('edgegap-unreal', 'SKILL.md')}, ` +
-    `Unreal voice chat: ${skillUri('edgegap-eos-voice', 'SKILL.md')}, ` +
-    `Godot 4: ${skillUri('edgegap-godot', 'SKILL.md')}, ` +
-    `Colyseus: ${skillUri('edgegap-colyseus', 'SKILL.md')}, ` +
-    `Cocos Creator: ${skillUri('edgegap-cocos', 'SKILL.md')}, ` +
-    `UGS Matchmaker: ${skillUri('edgegap-ugs-matchmaker', 'SKILL.md')}, ` +
-    `Nakama: ${skillUri('edgegap-nakama', 'SKILL.md')}, ` +
-    `PlayFab: ${skillUri('edgegap-playfab', 'SKILL.md')}, ` +
-    `Supabase backend: ${skillUri('edgegap-supabase', 'SKILL.md')}, ` +
-    `Three.js/web game + Node server: ${skillUri('edgegap-threejs', 'SKILL.md')}, ` +
-    `WebAssembly game, Rapier physics, wss errors: ${skillUri('edgegap-browser-wasm', 'SKILL.md')}, ` +
-    `vibe-coded solo web game going online: ${skillUri('edgegap-vibe-coded', 'SKILL.md')}, ` +
-    `Claude/ChatGPT/Gemini chat game: ${skillUri('edgegap-chat-canvas', 'SKILL.md')}, ` +
-    `fal.ai game: ${skillUri('edgegap-fal', 'SKILL.md')}, ` +
-    `Manus game, Manus Cloud Computer: ${skillUri('edgegap-manus', 'SKILL.md')}, ` +
-    `matchmaking, parties, regions, backfill: ${skillUri('edgegap-matchmaking', 'SKILL.md')}, ` +
-    `host/client games via relays: ${skillUri('edgegap-relays', 'SKILL.md')}, ` +
-    `sample projects: ${skillUri('edgegap-samples', 'SKILL.md')}). ` +
-    'If your client cannot read MCP resources, call edgegap_get_skill with the name from the URI (e.g. edgegap-unity). ' +
+    `Before acting, read ${skillUri('edgegap', 'SKILL.md')}, or the skill for the project at ` +
+    `${skillUri('<name>', 'SKILL.md')}: ` +
+    SKILL_ROUTES.map(([what, name]) => `${what}: ${name}`).join('; ') +
+    '. If your client cannot read MCP resources, call edgegap_get_skill with the name. ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
     'Deployments and relay sessions cost money while running. Stop deployments and delete ' +
     'relay sessions you created before ending the task; edgegap_list_deployments with ' +
@@ -155,6 +194,8 @@ export function serverInstructions(mode: 'local' | 'hosted'): string {
     'for, do not enumerate or modify unrelated applications, and do not probe what it allows. ' +
     'If the developer declines to provide a token, stop and report which operation needed it; ' +
     'do not retry.\n\n' +
+    BACKEND_GUIDANCE +
+    '\n\n' +
     ARCHITECTURE_SUMMARY +
     '\n\n' +
     'Golden path for a first dedicated-server deployment:\n' +
@@ -958,7 +999,7 @@ export function registerTools(
         'hosted server, and the guardrails in force: read-only mode, application allowlist, ' +
         'max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support ' +
         'dry_run. Also gives the egress terms (Private Fleet hosts include 6 TB of free egress per host per month; Edge Cloud egress ' +
-        'is $0.10 per GB) and says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
+        'is $0.10 per GB), the API rate limits and webhook rules for backend code, and says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
         'first when unsure what this session is allowed to do, before anything billable, or when tool calls fail ' +
         'with a token problem. Makes no API call unless check_token is true, and never shows the token.',
       inputSchema: {
@@ -998,6 +1039,7 @@ export function registerTools(
         ...(hosted ? {} : { skills_updaters_enabled: config.enableSkillsUpdate === true }),
         skills_pack: `${SKILLS_PACK.version} (${SKILLS_PACK.commit.slice(0, 7)}), ${SKILLS_PACK.skills.length} skills`,
         forced_deploy_tag: AGENT_TAG,
+        api_limits: { ...API_LIMITS, webhooks: WEBHOOK_FACTS },
         guardrails: {
           dry_run: mutating
             ? 'every write tool: deploy, stop, tag and report deployments, create/update/delete apps and versions, delete_registry_tag, endpoint storage and pull profiles, relays'
@@ -1820,8 +1862,11 @@ export function registerTools(
           'default 5): stop finished ones first. Also refused when the version\'s max_duration is unlimited or above ' +
           'EDGEGAP_MAX_DURATION_MINUTES, unless allow_long_running is true (ask the developer first), and on the local ' +
           'server after EDGEGAP_MAX_DEPLOYS_PER_RUN deploys (default 20). Env vars named like secrets are hidden in the ' +
-          'dashboard. Optional: webhooks Edgegap calls when the server is ready, errors or ends (instead of polling), ' +
-          'require_cached_locations for faster starts, and private_host_ids to place it on your private fleet first.',
+          'dashboard. Optional: webhooks Edgegap calls when the server is ready, errors or ends, ' +
+          'require_cached_locations for faster starts, and private_host_ids to place it on your private fleet first. ' +
+          'Backend code that deploys (POST /v2/deployments, 40/s per organization) should track servers with these ' +
+          'webhooks, not by polling status (20/s for the whole organization); webhooks are not retried or signed, so ' +
+          'keep polling as a fallback only.',
         inputSchema: {
           application: z.string().describe('Application name.'),
           version: z.string().describe('Version name within the application.'),
@@ -1853,9 +1898,9 @@ export function registerTools(
               'Only place it where the image is already cached: starts faster, fewer places to choose from. Needs ' +
                 'force_cache on the version (edgegap_update_app_version); without it the API refuses the deploy.'
             ),
-          webhook_on_ready: z.string().optional().describe('https URL Edgegap POSTs to when the server is ready.'),
-          webhook_on_error: z.string().optional().describe('https URL Edgegap POSTs to when the deployment fails.'),
-          webhook_on_terminated: z.string().optional().describe('https URL Edgegap POSTs to when the deployment ends.'),
+          webhook_on_ready: z.string().optional().describe('https URL Edgegap POSTs to when the container started (the engine may still be loading). Sent once, not retried, not signed.'),
+          webhook_on_error: z.string().optional().describe('https URL Edgegap POSTs to when the deployment fails. Sent once, not retried, not signed.'),
+          webhook_on_terminated: z.string().optional().describe('https URL Edgegap POSTs to when the deployment ends. Sent once, not retried, not signed.'),
           private_host_ids: z
             .array(z.string().min(1))
             .min(1)
@@ -2100,7 +2145,9 @@ export function registerTools(
       description:
         'Read the current status of one deployment, including connection address and ports once ' +
         'it is ready. For a deployment you just created, prefer edgegap_wait_for_deployment — it ' +
-        'polls for you instead of making you call this in a loop.',
+        'polls for you instead of making you call this in a loop. This is GET /v1/status, limited to ' +
+        `${API_LIMITS.status_and_context_per_second} requests/s for the whole organization (shared with Context): ` +
+        'backend code should use deployment webhooks and poll only as a fallback.',
       inputSchema: {
         request_id: z.string().describe('The request_id returned by edgegap_deploy.'),
       },
@@ -2114,7 +2161,7 @@ export function registerTools(
         const nextStep = d.error || TERMINAL_BAD.some((s) => status.includes(s))
           ? `It failed or stopped. Read why with edgegap_get_deployment_logs {request_id: "${request_id}"} before redeploying.`
           : d.running || TERMINAL_OK.some((s) => status.includes(s))
-            ? `Players connect to fqdn on each port's external number. Stop it with edgegap_stop_deployment {request_id: "${request_id}"} when done: it bills while running.`
+            ? `Players connect to fqdn on each port's external number; Ready means the container started, so clients retry for up to a minute while the engine loads. Stop it with edgegap_stop_deployment {request_id: "${request_id}"} when done: it bills while running.`
             : `Still starting. Call edgegap_wait_for_deployment {request_id: "${request_id}"} instead of polling this.`;
         return ok({ ...compactDeployment(d), next_step: nextStep });
       })
@@ -2129,7 +2176,8 @@ export function registerTools(
         'Poll a deployment until it is ready, errors, or the timeout expires, then return the ' +
         'connection details. This is the tool to call right after edgegap_deploy. Do not build ' +
         'your own polling loop — this handles backoff and reports the container error detail if ' +
-        'the server fails to start.',
+        'the server fails to start. For backend code that tracks many deployments, use deployment ' +
+        'webhooks instead: status polling is limited for the whole organization.',
       inputSchema: {
         request_id: z.string().describe('The request_id returned by edgegap_deploy.'),
         timeout_seconds: z
@@ -2212,6 +2260,7 @@ export function registerTools(
                   `edgegap_stop_deployment {request_id: "${request_id}"} unless the developer wants it kept running.`,
                 next_step:
                   `Players connect to ${last.fqdn ?? 'the fqdn above'} on each port's external number. ` +
+                  'Ready means the container started: clients retry for up to a minute while the engine loads. ' +
                   `When finished: edgegap_stop_deployment {request_id: "${request_id}"}.`,
               }),
               { ...facts('ready'), milestones: ['deployment_ready'] }
@@ -2248,6 +2297,8 @@ export function registerTools(
       description:
         'List active deployments, optionally filtered and sorted. Use this to find deployments left running ' +
         'from earlier sessions before starting new ones — orphaned servers cost money. ' +
+        `Backend code: the list API is limited to ${API_LIMITS.list_deployments_per_second} requests/s per organization, ` +
+        'so reconcile on a schedule, not per match. ' +
         'Filter by status, application, version, tags, request_id, created_at, fleet_name or host_name, ' +
         'e.g. [{field:"application",operator:"eq",value:"my-game"},{field:"status",operator:"eq",value:"ready"}]. ' +
         'Operators: eq and neq on every field except created_at (eq, gte, lte); in and nin with an array value ' +

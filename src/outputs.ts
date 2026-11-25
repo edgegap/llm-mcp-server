@@ -69,6 +69,7 @@ const shapes = {
     max_duration_ceiling_minutes: num,
     skills_pack: str,
     forced_deploy_tag: str,
+    api_limits: obj({}),
     guardrails: obj({}),
     pricing: obj({}),
   },

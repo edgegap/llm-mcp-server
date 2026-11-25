@@ -2,6 +2,17 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.dev`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.19.14
+
+Backend guidance reaches every agent, not only those that load a skill. Tool descriptions were written for an agent operating Edgegap; an agent asked to write backend code (an allocator polling `/v1/status` for thousands of deployments) could skip `edgegap-deployments-api` and ship code that gets constant 429s.
+
+- Server instructions: a backend paragraph (track deployments with webhooks, not status polling; Status and Context share 20 req/s for the whole organization, deploy 40/s, list 10/s; webhooks are not retried or signed, so polling stays a fallback and the URL carries a per-match secret; Ready is not "players can connect"; the token stays in the backend), and a route to `edgegap-deployments-api`. To stay under 4096 characters, the skill list gives the URI pattern once (`edgegap-skill://<name>/SKILL.md`) and routes by skill name.
+- `edgegap_deploy` (and its `webhook_on_*` parameters), `edgegap_get_deployment`, `edgegap_wait_for_deployment` and `edgegap_list_deployments` state the limits and webhook rules; ready results say clients retry for up to a minute while the engine loads.
+- `edgegap_context` returns `api_limits` (rate limits per organization and the webhook rules).
+- Skills pack 0.44.1 (llm-agent-skills #72): the `edgegap` router and `edgegap-deployments-api` description route backend status polling to that skill.
+
+Covered in `test/skills.mjs` (instructions carry the limits and the route, every routed name is bundled) and `test/newtools.mjs` (descriptions, `api_limits`).
+
 ## 0.19.13
 
 `edgegap_create_app_version` and `edgegap_update_app_version` send secret-looking env vars with `is_hidden` only, the API's field for an encrypted value. The extra `is_secret` field added in 0.15.9 is no longer sent. `edgegap_get_app_version` still reports an env var as hidden when the API returns `is_hidden`, `is_secret` or the encrypted placeholder. Covered in `test/newtools.mjs`.
