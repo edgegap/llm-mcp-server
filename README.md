@@ -2,8 +2,8 @@
 
 Connect AI coding agents to Edgegap through our MCP server. Your agent can take a headless server build all the way to players connecting: write or check the Dockerfile, push the image to your private Edgegap registry, deploy an authoritative dedicated server close to players, and read logs when something breaks.
 
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=Edgegap&config=eyJ1cmwiOiJodHRwczovL21jcC5lZGdlZ2FwLmNvbS9tY3AiLCJoZWFkZXJzIjp7IkF1dGhvcml6YXRpb24iOiIifX0%3D)
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Edgegap_MCP-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=Edgegap&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.edgegap.com%2Fmcp%22%2C%22headers%22%3A%7B%22Authorization%22%3A%22%22%7D%7D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=Edgegap&config=eyJ1cmwiOiJodHRwczovL21jcC5lZGdlZ2FwLmNvbS9tY3AifQ%3D%3D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Edgegap_MCP-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=Edgegap&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fmcp.edgegap.com%2Fmcp%22%7D)
 [![Edgegap MCP connector](https://glama.ai/mcp/connectors/dev.edgegap/mcp/badges/score.svg)](https://glama.ai/mcp/connectors/dev.edgegap/mcp)
 
 ## 👉 Supported Features
@@ -58,79 +58,47 @@ Edgegap can host your multiplayer game in two ways. **We recommend dedicated ser
 
 ## 🚀 Installation
 
-MCP server installation is very simple:
+Add the hosted endpoint, `https://mcp.edgegap.com/mcp`, to your MCP client and sign in with your Edgegap account when it asks. You pick the organization and approve what the connection may do; no API token is pasted anywhere. `https://mcp.edgegap.dev/mcp` serves the same server.
 
-1. Install the MCP server for [Popular Agents](#popular-agents) or with [Custom Integration](#custom-integration).
-2. Generate and attach an API token for your agent to use with our MCP server.
+- Owners and admins can connect any app. Members can connect verified apps (Claude, Claude Code, ChatGPT and Codex), with the access their role allows.
+- An app asks again when a tool needs access you haven't approved yet.
+- See and revoke your connected apps in the [dashboard](https://app.edgegap.com) under **User Settings → Authorized apps**.
 
-Generate (and view) your secret tokens for Edgegap API in [Dashboard - User Settings / Tokens](https://app.edgegap.com/user-settings?tab=tokens).
-
-Add your secret token with each API request as an HTTP header (include the word `token`):
-
-`Authorization: token xxxxxxxx-e458-4592-b607-c2c28afd8b62`
-
-> [!CAUTION]
-> **Do not integrate Edgegap API endpoints in game client, as your API token provides unlimited access to your account. See [Integration](https://docs.edgegap.com/docs/api/integration) for secure client-facing API endpoints and functions.**
-
-> [!TIP]
-> In case your secret tokens are compromised or leaked, delete and re-create them from dashboard.
-
-The token is organization-wide and cannot be scoped to one application. Read [DESIGN.md](DESIGN.md#where-your-token-goes) before giving it to an unattended agent.
+> [!NOTE]
+> The hosted endpoint no longer accepts API tokens. If your client's entry for it sends an `Authorization` header, remove the header and reconnect to sign in. To keep using an API token, run the [Local Server](#local-server).
 
 ### Popular Agents
 
-The hosted endpoint is `https://mcp.edgegap.com/mcp`. Configurations that use the earlier `https://mcp.edgegap.dev/mcp` keep working: both serve the same server.
-
-Install Edgegap MCP server in your preferred agentic IDE with the **Cursor** or **VS Code** buttons at the top of this page, then add your token to the `Authorization` header.
+Install Edgegap MCP server in your preferred agentic IDE with the **Cursor** or **VS Code** buttons at the top of this page, then sign in when the client asks.
 
 #### Claude Code
 
 ```bash
-claude mcp add --transport http edgegap https://mcp.edgegap.com/mcp \
-  -H "Authorization: token xxxxxxxx-e458-4592-b607-c2c28afd8b62" --scope user
+claude mcp add --transport http edgegap https://mcp.edgegap.com/mcp --scope user
 ```
+
+Then run `/mcp` in Claude Code, pick `edgegap` and sign in.
 
 #### ChatGPT Codex
 
-Codex reads the token from an environment variable and sends it as `Authorization: Bearer <token>`, which the hosted endpoint accepts. In `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.edgegap]
-url = "https://mcp.edgegap.com/mcp"
-bearer_token_env_var = "EDGEGAP_API_TOKEN"
+```bash
+codex mcp add edgegap --url https://mcp.edgegap.com/mcp
+codex mcp login edgegap
 ```
-
-Then set `EDGEGAP_API_TOKEN` to your token in the environment Codex starts from.
 
 #### Claude Desktop and claude.ai
 
-Custom connectors in claude.ai and Claude Desktop cannot send an `Authorization` header, so the hosted endpoint never receives your token from them: the connector shows as connected, but every tool call fails. Use the [Local Server](#local-server) instead.
-
-In Claude Desktop, open **Settings → Developer → Edit Config** and add the local server to `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "edgegap": {
-      "command": "npx",
-      "args": ["-y", "@edgegap/mcp"]
-    }
-  }
-}
-```
-
-Leave the token out and you're asked for it on first use. claude.ai in the browser can't run a local server, so it can't use Edgegap MCP until the hosted endpoint supports OAuth.
+Open **Settings → Connectors**, add a custom connector with the URL `https://mcp.edgegap.com/mcp`, then connect it and sign in. The connector is available in claude.ai, Claude Desktop and the Claude mobile apps.
 
 #### Cursor
 
-The **Cursor** button at the top of this page installs it; to do it by hand, add this to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+The **Cursor** button at the top of this page installs it; to do it by hand, add this to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project), then sign in from Cursor's MCP settings:
 
 ```json
 {
   "mcpServers": {
     "edgegap": {
-      "url": "https://mcp.edgegap.com/mcp",
-      "headers": { "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
+      "url": "https://mcp.edgegap.com/mcp"
     }
   }
 }
@@ -138,15 +106,14 @@ The **Cursor** button at the top of this page installs it; to do it by hand, add
 
 #### VS Code (Copilot agent mode)
 
-The **VS Code** button at the top of this page installs it; to do it by hand, add this to `.vscode/mcp.json` (VS Code uses `servers`, not `mcpServers`):
+The **VS Code** button at the top of this page installs it; to do it by hand, add this to `.vscode/mcp.json` (VS Code uses `servers`, not `mcpServers`), then sign in when VS Code asks:
 
 ```json
 {
   "servers": {
     "edgegap": {
       "type": "http",
-      "url": "https://mcp.edgegap.com/mcp",
-      "headers": { "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62" }
+      "url": "https://mcp.edgegap.com/mcp"
     }
   }
 }
@@ -177,10 +144,7 @@ Most agentic IDEs also support integration by pasting JSON configuration:
     "mcpServers": {
         "Edgegap": {
             "type": "http",
-            "url": "https://mcp.edgegap.com/mcp",
-            "headers": {
-                "Authorization": "token xxxxxxxx-e458-4592-b607-c2c28afd8b62"
-            }
+            "url": "https://mcp.edgegap.com/mcp"
         }
     }
 }
@@ -188,7 +152,7 @@ Most agentic IDEs also support integration by pasting JSON configuration:
 
 ### Custom Integration
 
-Install remote Edgegap MCP server in your agent's virtualized environment (never in your project!):
+Install remote Edgegap MCP server in your agent's virtualized environment (never in your project!). The proxy must support MCP sign-in (OAuth); `mcp-remote` opens it in your browser on first use.
 
 **Node, using the `mcp-remote` npx package**
 
@@ -214,7 +178,7 @@ Download [edgegap-mcp.mcpb](https://github.com/edgegap/llm-mcp-server/releases/l
 
 ### Local Server
 
-To keep your API token on your own machine, run the server locally instead. Leave the token out and your agent asks you for it on first use, holding it in memory only for that session:
+The local server runs on your machine with an API token instead of a sign-in. Leave the token out and your agent asks you for it on first use, holding it in memory only for that session:
 
 ```json
 {
@@ -228,7 +192,17 @@ To keep your API token on your own machine, run the server locally instead. Leav
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.0`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.1`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+
+Generate (and view) your API tokens in [Dashboard - User Settings / Tokens](https://app.edgegap.com/user-settings?tab=tokens).
+
+> [!CAUTION]
+> **Do not integrate Edgegap API endpoints in game client, as your API token provides unlimited access to your account. See [Integration](https://docs.edgegap.com/docs/api/integration) for secure client-facing API endpoints and functions.**
+
+> [!TIP]
+> In case your secret tokens are compromised or leaked, delete and re-create them from dashboard.
+
+The token is organization-wide and cannot be scoped to one application. Read [DESIGN.md](DESIGN.md#where-your-token-goes) before giving it to an unattended agent.
 
 The local server can also limit what an agent can do. These variables have no effect on the hosted endpoint at `mcp.edgegap.com`, which takes the two main ones as connection headers instead (see below):
 
@@ -245,14 +219,14 @@ The local server can also limit what an agent can do. These variables have no ef
 | `EDGEGAP_TIMEOUT_MS` | `30000` | Per-request HTTP timeout. |
 | `EDGEGAP_SKILLS_CHECK` | `on` | Set to `off` and the skill tools never read the latest skills version from GitHub. |
 
-On the hosted endpoint (and the self-hosted Docker image), send these headers on the MCP connection, next to `Authorization`. They can only narrow what the server allows, never widen it:
+On the hosted endpoint (and the self-hosted Docker image), send these headers on the MCP connection. They can only narrow what the server allows, never widen it:
 
 | Header | Purpose |
 | --- | --- |
 | `X-Edgegap-Read-Only: 1` | Same as `EDGEGAP_READ_ONLY=1`: no tool that changes something is offered. Use it for an ops or monitoring agent. |
 | `X-Edgegap-App-Allowlist: my-game,my-game-staging` | Same as `EDGEGAP_APP_ALLOWLIST`, for this connection. Combined with a server allowlist, only applications in both are allowed. |
 
-Your token stays organization-wide: Edgegap cannot scope tokens yet. These limit what this server's tools do with it.
+An API token stays organization-wide: Edgegap cannot scope tokens. On the hosted endpoint, the access you approved at sign-in limits the connection as well.
 
 #### Windows
 
@@ -427,18 +401,11 @@ Review common error codes and learn how to unlock your integration.
 
 ### 401 Unauthorized
 
-Your MCP integration is most likely not including the Authorization header correctly.
-
-### Tool Call Failed
-
-Your client is missing an Edgegap token. This happens with claude.ai and Claude Desktop custom connectors, which can't send an `Authorization` header. See [Claude Desktop and claude.ai](#claude-desktop-and-claudeai) for the alternative.
-
-> [!WARNING]
-> This is a known limitation which will be resolved in the near term, stay tuned for updates!
+On the hosted endpoint, your client is still sending an API token, or its sign-in has ended (an app you revoked, or a connection past its maximum age). Remove any `Authorization` header from the client's entry and reconnect to sign in again. On the local server or a self-hosted image, the token is missing or malformed.
 
 ### 403 Forbidden
 
-Your MCP integration is likely using the template token or a deleted token. Please validate that the token value used by your integration matches exactly the token displayed in dashboard.
+On the hosted endpoint, the tool needs access the connection doesn't have: approve it when your client asks, or ask an owner or admin if your role can't grant it. With an API token, your integration is likely using the template token or a deleted token: check that it matches exactly the token displayed in the dashboard.
 
 ### 424 Image Could Not Be Pulled
 
@@ -476,7 +443,7 @@ docker build -t edgegap-mcp .
 docker run --rm -p 8080:8080 edgegap-mcp
 ```
 
-Clients connect to `http://<host>:8080/mcp` with their own `Authorization` header, the same way they connect to the hosted endpoint. The image holds no credential, and `/health` answers without one. `PORT`, `HOST`, `EDGEGAP_READ_ONLY`, `EDGEGAP_APP_ALLOWLIST`, `EDGEGAP_MAX_DURATION_MINUTES`, `EDGEGAP_MAX_AGENT_DEPLOYMENTS` and `EDGEGAP_STOP_OWN_ONLY` apply; pass each with `-e NAME=value`. Never pass an API token to the container: each client sends its own on every request. Read [worker/DECISION.md](worker/DECISION.md) before exposing it beyond a private network.
+Clients connect to `http://<host>:8080/mcp` with their own `Authorization` header carrying an API token, as with the local server. The image holds no credential, and `/health` answers without one. `PORT`, `HOST`, `EDGEGAP_READ_ONLY`, `EDGEGAP_APP_ALLOWLIST`, `EDGEGAP_MAX_DURATION_MINUTES`, `EDGEGAP_MAX_AGENT_DEPLOYMENTS` and `EDGEGAP_STOP_OWN_ONLY` apply; pass each with `-e NAME=value`. Never pass an API token to the container: each client sends its own on every request. Read [worker/DECISION.md](worker/DECISION.md) before exposing it beyond a private network.
 
 Prebuilt images for `linux/amd64` and `linux/arm64` are published to `ghcr.io/edgegap/llm-mcp-server` (and, for existing setups, the old name `ghcr.io/edgegap/edgegap-mcp`), tagged `main` and `sha-<commit>` on every push to `main`, plus the version on `v*` tags:
 
@@ -486,10 +453,11 @@ docker run --rm -p 8080:8080 ghcr.io/edgegap/llm-mcp-server:main
 
 ### Hosted Worker: OAuth environments
 
-Two more Workers run the same code in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one: a client entry that still sends an `Authorization` header with an API token gets a 401 saying to remove the header and connect again (a client with a header configured doesn't offer the sign-in), or to use the local server. They are the `staging` and `beta` environments in [worker/wrangler.jsonc](worker/wrangler.jsonc); `mcp.edgegap.dev` stays in token mode.
+The hosted Worker runs in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one: a client entry that still sends an `Authorization` header with an API token gets a 401 saying to remove the header and connect again (a client with a header configured doesn't offer the sign-in), or to use the local server. Production is the top-level Worker in [worker/wrangler.jsonc](worker/wrangler.jsonc), on both `mcp.edgegap.com` and `mcp.edgegap.dev`: `MCP_RESOURCE_URL` lists one URL per domain, and each request gets the one on its own host, so each domain advertises itself and accepts only tokens issued for it. `staging` and `beta` are environments of the same file.
 
 | Environment | MCP URL | Authorization server | Edgegap API |
 | --- | --- | --- | --- |
+| production (top level) | `https://mcp.edgegap.com/mcp`, `https://mcp.edgegap.dev/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
 | `staging` | `https://mcp-staging.edgegap.dev/mcp` | `https://staging-auth.edgegap.dev` | `https://staging-api.edgegap.dev` |
 | `beta` | `https://mcp-beta.edgegap.dev/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
 
@@ -509,7 +477,7 @@ Deploys are manual: nothing deploys a Worker from CI. From a checkout of the com
 4. Check: `curl https://mcp-staging.edgegap.dev/.well-known/oauth-protected-resource/mcp` names the right `resource` and issuer, and an MCP client adding the URL is sent to the Edgegap sign-in.
 5. Roll back if needed: `npx wrangler rollback --config worker/wrangler.jsonc --env staging`.
 
-Use `--env beta` for beta. The authorization server must list the environment's MCP URL in `OAUTH/ALLOWED_RESOURCES`, or it refuses to issue tokens for it.
+Use `--env beta` for beta, and no `--env` (`npm run worker:check`, `npm run worker:deploy`) for production. The authorization server must list each of the environment's MCP URLs in `OAUTH/ALLOWED_RESOURCES`, or it refuses to issue tokens for it.
 
 To run OAuth mode locally against a development authorization server and API, pass the vars to `wrangler dev`:
 

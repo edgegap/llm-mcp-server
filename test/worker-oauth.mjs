@@ -215,7 +215,7 @@ try {
 }
 
 console.log('\nmisconfiguration');
-w = await startWorker(['OAUTH_MODE:1', `OAUTH_JWKS_URL:${UPSTREAM}/jwks.json`, 'MCP_RESOURCE_URL:http://localhost/mcp']);
+w = await startWorker(['OAUTH_MODE:1', 'OAUTH_ISSUER:', `OAUTH_JWKS_URL:${UPSTREAM}/jwks.json`, 'MCP_RESOURCE_URL:http://localhost/mcp']);
 try {
   const res = await w.post('tools/list', {});
   check('OAuth mode without OAUTH_ISSUER: 500, nothing served', res.status === 500 && res.json?.error === 'server_misconfigured');

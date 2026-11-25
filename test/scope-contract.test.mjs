@@ -282,7 +282,7 @@ test('every scope the Worker names is in the catalogue', async () => {
     OAUTH_ISSUER: 'https://auth.example.test',
     OAUTH_JWKS_URL: 'https://auth.example.test/jwks.json',
     MCP_RESOURCE_URL: 'https://mcp.example.test/mcp',
-  });
+  }, 'https://mcp.example.test/mcp');
   const jwks = new JwksCache(settings.jwksUrl, { fetch: () => assert.fail('a signed-out request fetched the JWKS') });
   const named = new Map(); // scope -> where the Worker names it
   const note = (scopes, where) => {

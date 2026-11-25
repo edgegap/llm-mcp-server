@@ -249,7 +249,7 @@ export default {
 
     let settings: OAuthSettings | undefined;
     try {
-      if (oauthEnabled(env)) settings = loadOAuthSettings(env);
+      if (oauthEnabled(env)) settings = loadOAuthSettings(env, request.url);
       parseBaseUrl(env.EDGEGAP_API_URL);
     } catch (err) {
       if (!(err instanceof ConfigError)) throw err;

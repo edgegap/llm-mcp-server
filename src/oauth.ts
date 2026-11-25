@@ -28,7 +28,10 @@ export interface OAuthSettings {
   issuer: string;
   /** Where the issuer publishes its signing keys. */
   jwksUrl: string;
-  /** This Worker's own MCP URL: the RFC 9728 `resource`, and what a token's `aud` must contain. */
+  /**
+   * This Worker's own MCP URL on the host the request came to: the RFC 9728
+   * `resource`, and what a token's `aud` must contain.
+   */
   resource: string;
   /** Where the protected-resource metadata is served, derived from `resource` (RFC 9728 section 3.1). */
   resourceMetadataUrl: string;
@@ -41,6 +44,7 @@ export interface OAuthEnv {
   OAUTH_MODE?: string;
   OAUTH_ISSUER?: string;
   OAUTH_JWKS_URL?: string;
+  /** Comma-separated, one MCP URL per hostname the Worker is served on. */
   MCP_RESOURCE_URL?: string;
   ALLOWED_ORIGINS?: string;
 }
@@ -50,14 +54,21 @@ export function oauthEnabled(env: OAuthEnv): boolean {
 }
 
 /**
- * Reads the OAuth vars. Throws ConfigError when one is missing or is not an
- * http(s) URL: a Worker in OAuth mode that can't verify tokens must refuse to
- * serve rather than fall back to anything.
+ * Reads the OAuth vars for a request. Throws ConfigError when one is missing
+ * or is not an http(s) URL: a Worker in OAuth mode that can't verify tokens
+ * must refuse to serve rather than fall back to anything.
+ *
+ * One Worker can serve several hostnames: its resource is the MCP_RESOURCE_URL
+ * entry on the request's origin, so each hostname advertises itself and only
+ * accepts tokens issued for it. A request on any other origin (a workers.dev
+ * URL) gets the first entry.
  */
-export function loadOAuthSettings(env: OAuthEnv): OAuthSettings {
+export function loadOAuthSettings(env: OAuthEnv, requestUrl: string): OAuthSettings {
   const issuer = requiredUrl(env, 'OAUTH_ISSUER');
   const jwksUrl = requiredUrl(env, 'OAUTH_JWKS_URL');
-  const resource = requiredUrl(env, 'MCP_RESOURCE_URL');
+  const resources = requiredUrls(env, 'MCP_RESOURCE_URL');
+  const origin = new URL(requestUrl).origin;
+  const resource = resources.find((candidate) => new URL(candidate).origin === origin) ?? resources[0];
   const url = new URL(resource);
 
   return {
@@ -77,6 +88,19 @@ export function loadOAuthSettings(env: OAuthEnv): OAuthSettings {
 function requiredUrl(env: OAuthEnv, key: keyof OAuthEnv): string {
   const value = env[key]?.trim();
   if (!value) throw new ConfigError(`${key} is required while OAUTH_MODE is on.`);
+  return validUrl(key, value);
+}
+
+function requiredUrls(env: OAuthEnv, key: keyof OAuthEnv): string[] {
+  const values = (env[key] ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (values.length === 0) throw new ConfigError(`${key} is required while OAUTH_MODE is on.`);
+  return values.map((value) => validUrl(key, value));
+}
+
+function validUrl(key: keyof OAuthEnv, value: string): string {
   let url: URL;
   try {
     url = new URL(value);
