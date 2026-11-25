@@ -1065,8 +1065,7 @@ export function registerTools(
         'Report which Edgegap API this server talks to, its version, whether it is the local or ' +
         'hosted server, and the guardrails in force: read-only mode, application allowlist, ' +
         'max_duration ceiling, the agent deployment cap, the tag forced onto every deployment, and which tools support ' +
-        'dry_run. Also gives the egress terms (Private Fleet hosts include 6 TB of free egress per host per month; Edge Cloud egress ' +
-        'is $0.10 per GB), the API rate limits and webhook rules for backend code, and says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
+        'dry_run. Also gives the egress terms per hosting type, the API rate limits and webhook rules for backend code, and says whether this session has a usable token and, if not, why and how to fix it. Call it ' +
         'first when unsure what this session is allowed to do, before anything billable, or when tool calls fail ' +
         'with a token problem. Makes no API call unless check_token is true, and never shows the token.',
       inputSchema: {
@@ -1267,7 +1266,7 @@ export function registerTools(
           is_active: z.boolean().describe('false blocks new deployments; true allows them again.'),
           dry_run: dryRunParam,
         },
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ application, is_active, dry_run }) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1728,7 +1727,7 @@ export function registerTools(
             .describe('REPLACES every env var on the version; [] removes them all. Values are never echoed back.'),
           dry_run: dryRunParam,
         },
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async (args) =>
         guarded(auth, NOT_FOUND.app, async () => {
@@ -1939,8 +1938,7 @@ export function registerTools(
         title: 'Deploy a game server',
         description:
           'Start one authoritative dedicated game server from an application version, placed near ' +
-          'the players you specify. This is the recommended way to host a multiplayer match: the ' +
-          'server owns the game state, so no player hosts it. Returns immediately with a request_id; the server is still starting and ' +
+          'the players you specify. The server owns the game state, so no player hosts it. Returns immediately with a request_id; the server is still starting and ' +
           'has no connection details yet. Follow this call with edgegap_wait_for_deployment to ' +
           'get the address players connect to. Always stop deployments you started for testing. ' +
           `Every deployment is tagged "${AGENT_TAG}" in addition to any tags you pass, so ` +
@@ -3540,7 +3538,7 @@ export function registerTools(
           remove: z.array(z.string().min(1).max(40)).optional().describe('Tags to remove.'),
           dry_run: dryRunParam,
         },
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async ({ request_id, add, remove, dry_run }) =>
         guarded(auth, NOT_FOUND.deployment, async () => {
@@ -3765,9 +3763,8 @@ export function registerTools(
       description:
         'List the hosts in one of the organization\'s private fleets (dedicated machines Edgegap manages for ' +
         'you), with status, IP and location. Only ACTIVE hosts accept deployments. Pass their host_id values to ' +
-        'edgegap_deploy as private_host_ids to place a server on them first. Each host includes 6 TB of free egress per ' +
-        'month; deployments that overflow to the cloud pay cloud egress ($0.10 per GB). Organizations without private ' +
-        'fleets get an error from the API.',
+        'edgegap_deploy as private_host_ids to place a server on them first. edgegap_context gives the egress terms ' +
+        'for fleet hosts and cloud overflow. Organizations without private fleets get an error from the API.',
       inputSchema: {
         fleet_name: z.string().min(1).describe('The private fleet name, as shown in the dashboard.'),
       },
@@ -3961,7 +3958,7 @@ export function registerTools(
           unlink: z.boolean().optional().describe('true removes the link instead.'),
           dry_run: dryRunParam,
         },
-        annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
       },
       async (args) =>
         guard(auth, async () => {
@@ -4319,8 +4316,7 @@ export function registerTools(
         'longer a player waits. Checks the referenced application version exists and has ports. ' +
         'Edgegap has no API for creating a matchmaker, so this tool does NOT create one: save the ' +
         'returned config to a file (e.g. matchmaker-config.json) and have the developer upload it ' +
-        'on the Matchmaker page of the dashboard. The matchmaker starts an authoritative dedicated ' +
-        'server for each match, which is the recommended setup for multiplayer games.',
+        'on the Matchmaker page of the dashboard. The matchmaker starts one dedicated server for each match.',
       inputSchema: {
         profile_name: z.string().describe('Profile clients will queue into, e.g. "casual-2v2".'),
         application: z.string().describe('Application the matchmaker deploys.'),
@@ -4476,9 +4472,8 @@ function registerSkills(
         'List the Edgegap agent skills: tested, step-by-step workflows for getting a multiplayer ' +
         'game online on Edgegap, with templates (Dockerfiles, matchmaker configs, Unity C# and ' +
         'Unreal C++ drop-ins) and known pitfalls. Each entry says which engine, netcode or backend ' +
-        'it is for, and the server instructions map projects to skills. Before working on a game ' +
-        'project, load the matching skill with edgegap_get_skill; "edgegap" covers any other engine ' +
-        'and routes to the rest. Also says whether a newer skills pack is on GitHub (reads one ' +
+        'it is for, and the server instructions map projects to skills. edgegap_get_skill returns the text of a skill; ' +
+        '"edgegap" covers any other engine and points to the rest. Also says whether a newer skills pack is on GitHub (reads one ' +
         'version number, no Edgegap API call).',
       inputSchema: {},
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -4509,9 +4504,8 @@ function registerSkills(
       title: 'Load an Edgegap agent skill',
       description:
         'Load one Edgegap agent skill: its SKILL.md (the workflow to follow) by default, or one of ' +
-        'its reference documents or templates with file. Load the skill that matches the project ' +
-        'before acting (the server instructions and edgegap_list_skills say which; "edgegap" when ' +
-        'unsure), then fetch the references and templates it points to as you reach them. No API call.',
+        'its reference documents or templates with file. edgegap_list_skills and the server instructions ' +
+        'say which skill fits which project ("edgegap" covers any other engine). No API call.',
       inputSchema: {
         // A string, not an enum: clients cache tool schemas, and a cached enum from an older
         // release would refuse a skill the router already points to. The handler checks the name.
