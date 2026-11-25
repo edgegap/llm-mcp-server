@@ -2,6 +2,12 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.1
+
+- The hosted Worker on `mcp.edgegap.com` and `mcp.edgegap.dev` switches to OAuth mode: developers sign in with Edgegap, and an API token sent in the `Authorization` header gets a 401 saying to remove it and connect again, or to use the local server.
+- One Worker serves OAuth on several hostnames: `MCP_RESOURCE_URL` takes a comma-separated list, one URL per custom domain, and each request uses the one on its own origin for its RFC 9728 metadata, its `WWW-Authenticate` challenge and the token's `aud` check. A request on any other origin gets the first. Covered in `test/oauth.test.mjs`.
+- README install instructions sign in instead of pasting a token (Claude Code, Codex, claude.ai and Claude Desktop connectors, Cursor, VS Code, `mcp.json`, and the install buttons), with API tokens kept for the local server and the Docker image. The MCP registry entry (`server.json`) no longer declares an `Authorization` header for the remote.
+
 ## 0.20.0
 
 - Hosted Worker: OAuth mode, for Edgegap's OAuth sign-in. With `OAUTH_MODE` `"1"` the Worker is an OAuth resource server: it serves RFC 9728 metadata (`/.well-known/oauth-protected-resource/mcp`, scopes `apps:read deployments:read locations:read registry:read`, the member defaults), verifies access tokens against the issuer's JWKS (RS256 and `typ: at+jwt` only, a `kid` from the JWKS, `iss`, `aud` containing its own MCP URL, `exp`, `nbf`; the JWKS is cached 10 minutes, refetched on an unknown `kid` at most once a minute, fetched with a 5-second timeout, and not refetched for 10 seconds after a failure), and forwards the token unchanged to the API as `Authorization: Bearer`. Discovery and the no-account tools work signed out; an account tool signed out gets 401 with `resource_metadata` and the scopes to ask for, a token without the tool's scopes gets 403 `insufficient_scope` with the scopes held plus the ones needed, and an invalid token gets 401 `invalid_token`; an API token left in the client's config is told to remove the header and sign in, or to use the local server. Browser requests must come from an origin in `ALLOWED_ORIGINS`. The per-connection limit headers (`X-Edgegap-Read-Only`, `X-Edgegap-App-Allowlist`) narrow OAuth connections too.

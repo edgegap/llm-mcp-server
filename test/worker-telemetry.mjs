@@ -55,6 +55,8 @@ async function startWorker(extraVars = []) {
   const port = 8700 + Math.floor(Math.random() * 90);
   const proc = spawn(npx, [
     'wrangler', 'dev', '--config', 'worker/wrangler.jsonc', '--local', '--port', String(port),
+    // Token mode: the top-level config runs OAuth mode, covered by worker-oauth.mjs.
+    '--var', 'OAUTH_MODE:0',
     '--var', 'POSTHOG_API_KEY:phc_test_key',
     '--var', `POSTHOG_HOST:http://127.0.0.1:${posthog.address().port}`,
     '--var', 'TELEMETRY_SALT:test-salt',

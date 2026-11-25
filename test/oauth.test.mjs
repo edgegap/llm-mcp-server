@@ -43,7 +43,7 @@ const ENV = {
   MCP_RESOURCE_URL: RESOURCE,
   ALLOWED_ORIGINS: 'https://allowed.example.test',
 };
-const settings = loadOAuthSettings(ENV);
+const settings = loadOAuthSettings(ENV, RESOURCE);
 
 const KEY = await signingKey('key-1');
 const OTHER_KEY = await signingKey('key-2');
@@ -80,12 +80,12 @@ const call = (name, args = {}) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call'
 
 test('settings: every URL var is required in OAuth mode, and the metadata URL is path-inserted', () => {
   for (const key of ['OAUTH_ISSUER', 'OAUTH_JWKS_URL', 'MCP_RESOURCE_URL']) {
-    assert.throws(() => loadOAuthSettings({ ...ENV, [key]: '' }), ConfigError, key);
-    assert.throws(() => loadOAuthSettings({ ...ENV, [key]: 'ftp://x' }), ConfigError, key);
+    assert.throws(() => loadOAuthSettings({ ...ENV, [key]: '' }, RESOURCE), ConfigError, key);
+    assert.throws(() => loadOAuthSettings({ ...ENV, [key]: 'ftp://x' }, RESOURCE), ConfigError, key);
   }
   assert.equal(settings.resourceMetadataUrl, 'https://mcp.example.test/.well-known/oauth-protected-resource/mcp');
   assert.deepEqual(resourceMetadataPaths(settings), ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-protected-resource']);
-  const local = loadOAuthSettings({ ...ENV, MCP_RESOURCE_URL: 'http://localhost:8787/mcp', ALLOWED_ORIGINS: undefined });
+  const local = loadOAuthSettings({ ...ENV, MCP_RESOURCE_URL: 'http://localhost:8787/mcp', ALLOWED_ORIGINS: undefined }, 'http://localhost:8787/mcp');
   assert.equal(local.resourceMetadataUrl, 'http://localhost:8787/.well-known/oauth-protected-resource/mcp');
   assert.equal(local.allowedOrigins.size, 0);
 });
@@ -99,6 +99,25 @@ test('protected-resource metadata: exact resource, the issuer first, the member-
 });
 
 // ---------------------------------------------------------- verification ----
+
+test('settings: a Worker on several hostnames takes the resource of the one the request came to', async () => {
+  const OTHER = 'https://mcp.other.example.test/mcp';
+  const both = { ...ENV, MCP_RESOURCE_URL: `${RESOURCE}, ${OTHER}` };
+
+  const other = loadOAuthSettings(both, 'https://mcp.other.example.test/mcp/sse');
+  assert.equal(other.resource, OTHER);
+  assert.equal(other.resourceMetadataUrl, 'https://mcp.other.example.test/.well-known/oauth-protected-resource/mcp');
+  assert.equal(protectedResourceMetadata(other).resource, OTHER);
+  assert.equal(loadOAuthSettings(both, 'https://mcp.example.test/.well-known/oauth-protected-resource/mcp').resource, RESOURCE);
+  assert.equal(loadOAuthSettings(both, 'https://edgegap-mcp.example.workers.dev/mcp').resource, RESOURCE, 'any other origin gets the first');
+  assert.throws(() => loadOAuthSettings({ ...ENV, MCP_RESOURCE_URL: `${RESOURCE},ftp://x` }, RESOURCE), ConfigError);
+  assert.throws(() => loadOAuthSettings({ ...ENV, MCP_RESOURCE_URL: ' , ' }, RESOURCE), ConfigError);
+
+  // A token is bound to the hostname it was issued for.
+  const { cache } = freshJwks();
+  assert.equal((await verifyAccessToken(await accessToken(KEY, claims({ aud: OTHER })), other, cache)).valid, true);
+  assert.deepEqual(await verifyAccessToken(await accessToken(KEY, claims({ aud: RESOURCE })), other, cache), { valid: false, reason: 'audience' });
+});
 
 test('verifyAccessToken accepts an issuer token for this resource and reads org, sub and scopes', async () => {
   const { cache } = freshJwks();
