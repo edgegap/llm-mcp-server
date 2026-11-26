@@ -65,5 +65,10 @@ const registered = snapshot.normal.tools.map((t) => t.name).sort().join(',');
 check('manifest.json lists exactly the registered tools', listed === registered, `${listed} vs ${registered}`);
 check('manifest.json runs dist/index.js with the token from its settings', manifest.server?.entry_point === 'dist/index.js' && manifest.server.mcp_config.env.EDGEGAP_API_TOKEN === '${user_config.api_token}' && manifest.user_config.api_token.sensitive === true);
 
+// mcp.edgegap.dev is retired: directories copy the README, docs and manifests, so none of them may point at it.
+for (const file of ['README.md', 'server.json', 'manifest.json', 'package.json', 'docs/analytics.md', 'worker/INSTALL.md', '.github/ISSUE_TEMPLATE/bug_report.yml']) {
+  check(`${file} does not mention the retired mcp.edgegap.dev`, !readFileSync(file, 'utf8').includes('mcp.edgegap.dev'));
+}
+
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

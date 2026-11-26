@@ -243,6 +243,6 @@ OAuth mode closes that gap: with `OAUTH_MODE` `"1"` the developer signs in with
 Edgegap from the MCP client, and the Worker accepts only the scoped,
 short-lived access tokens Edgegap's authorization server issues, verified
 against its JWKS and forwarded to the API unchanged. It runs on this Worker
-(`mcp.edgegap.com` and `mcp.edgegap.dev`) and in the `staging` and `beta`
+(`mcp.edgegap.com`) and in the `staging` and `beta`
 environments of `wrangler.jsonc`; the deploy runbook is in the README
 ("Hosted Worker: OAuth environments").

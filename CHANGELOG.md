@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.6
+
+The hosted endpoint is `https://mcp.edgegap.com/mcp`. The README, analytics notes, Worker install notes and bug-report form no longer mention the retired `mcp.edgegap.dev`, so MCP directories that copy them pick up the current URL. Checked in `test/package.mjs`.
+
 ## 0.20.5
 
 Skills pack 0.46.0 (llm-agent-skills #77): every skill and both skills plugins (Claude Code, Codex) connect to the hosted server with Edgegap sign-in instead of an API token; the token stays for the local server, backends and CI. README: the Codex section leads with the Edgegap Codex plugin (`codex plugin add edgegap@edgegap`, then `codex mcp login edgegap`), checked with Codex CLI 0.172.0 on 2026-11-26.
