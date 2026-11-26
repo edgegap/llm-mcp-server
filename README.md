@@ -204,7 +204,7 @@ The local server runs on your machine with an API token instead of a sign-in. Le
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.8`) rather than floating on latest. Registered in the official MCP registry as `com.edgegap/mcp` (earlier versions are under `dev.edgegap/mcp`).
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.9`) rather than floating on latest. Registered in the official MCP registry as `com.edgegap/mcp` (earlier versions are under `dev.edgegap/mcp`).
 
 Generate (and view) your API tokens in [Dashboard - User Settings / Tokens](https://app.edgegap.com/user-settings?tab=tokens).
 

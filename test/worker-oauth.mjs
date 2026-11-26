@@ -142,6 +142,19 @@ try {
     check(`${path}: resource, issuer first, the member-default read scopes`, res.status === 200 && doc.resource === RESOURCE && doc.authorization_servers?.[0] === ISSUER && JSON.stringify(doc.scopes_supported) === '["apps:read","deployments:read","locations:read","registry:read"]', JSON.stringify(doc));
   }
 
+  console.log('\nbrowser help page');
+  const html = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+  for (const path of ['/', '/mcp']) {
+    const res = await fetch(`${w.base}${path}`, { headers: { Accept: html } });
+    const body = await res.text();
+    check(`GET ${path} from a browser: 200 HTML with the connector URL and the setup guide`, res.status === 200 && /^text\/html/.test(res.headers.get('content-type') ?? '') && body.includes('https://mcp.edgegap.com/mcp') && body.includes('https://docs.edgegap.com/docs/mcp-integration') && /default-src 'none'/.test(res.headers.get('content-security-policy') ?? ''), `${res.status} ${res.headers.get('content-type')}`);
+  }
+  const sse = await fetch(`${w.base}/mcp`, { headers: { Accept: 'text/event-stream' } });
+  check('GET /mcp with Accept: text/event-stream still reaches the MCP handler', !/^text\/html/.test(sse.headers.get('content-type') ?? ''), `${sse.status} ${sse.headers.get('content-type')}`);
+  await sse.body?.cancel();
+  const other = await fetch(`${w.base}/elsewhere`, { headers: { Accept: html } });
+  check('other paths still 404', other.status === 404);
+
   console.log('\nlazy authentication');
   const init = await w.post('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'claude-code', version: '2.1.0' } });
   check('initialize: 200 signed out, OAuth instructions', init.status === 200 && /signs in with Edgegap/.test(init.json?.result?.instructions ?? ''), `${init.status}`);

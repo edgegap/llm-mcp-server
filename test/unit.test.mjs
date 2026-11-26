@@ -221,3 +221,22 @@ test('loadConfig reads the new limits', () => {
   assert.equal(c.stopOwnOnly, true);
   assert.equal(c.enableSkillsUpdate, true);
 });
+
+test('wantsHelpPage: browser navigations to / and /mcp only, never MCP traffic', async () => {
+  const { wantsHelpPage, helpPageHtml } = await import('../dist/browserpage.js');
+  const browser = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+  assert.equal(wantsHelpPage('GET', '/', browser), true);
+  assert.equal(wantsHelpPage('GET', '/mcp', browser), true);
+  assert.equal(wantsHelpPage('HEAD', '/mcp', browser), true);
+  assert.equal(wantsHelpPage('POST', '/mcp', browser), false);
+  assert.equal(wantsHelpPage('GET', '/mcp', 'text/event-stream'), false);
+  assert.equal(wantsHelpPage('GET', '/mcp', 'application/json, text/event-stream'), false);
+  assert.equal(wantsHelpPage('GET', '/mcp', 'text/html, text/event-stream'), false);
+  assert.equal(wantsHelpPage('GET', '/mcp', null), false);
+  assert.equal(wantsHelpPage('GET', '/.well-known/oauth-protected-resource', browser), false);
+  assert.equal(wantsHelpPage('GET', '/health', browser), false);
+  const page = helpPageHtml();
+  assert.match(page, /https:\/\/mcp\.edgegap\.com\/mcp/);
+  assert.match(page, /https:\/\/docs\.edgegap\.com\/docs\/mcp-integration/);
+  assert.doesNotMatch(page, /<script/i);
+});

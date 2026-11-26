@@ -14,5 +14,5 @@
     "declaration": false,
     "sourceMap": false
   },
-  "files": ["src/index.ts", "src/http.ts", "src/oauth.ts"]
+  "files": ["src/index.ts", "src/http.ts", "src/oauth.ts", "src/browserpage.ts"]
 }
