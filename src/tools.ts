@@ -124,13 +124,14 @@ export const SKILL_ROUTES: Array<[string, string]> = [
   ['PlayFab', 'edgegap-playfab'],
   ['Supabase backend', 'edgegap-supabase'],
   ['Three.js/web game + Node server', 'edgegap-threejs'],
+  ['HTML5/Phaser 2D game', 'edgegap-html5'],
   ['WebAssembly game, Rapier physics, wss errors', 'edgegap-browser-wasm'],
   ['vibe-coded solo web game going online', 'edgegap-vibe-coded'],
   ['Claude/ChatGPT/Gemini chat game', 'edgegap-chat-canvas'],
   ['fal.ai game', 'edgegap-fal'],
   ['Manus game, Manus Cloud Computer', 'edgegap-manus'],
   ['matchmaking, parties, regions, backfill', 'edgegap-matchmaking'],
-  ['backend/allocator code, status polling, webhooks', 'edgegap-deployments-api'],
+  ['backend/allocator code, webhooks', 'edgegap-deployments-api'],
   ['host/client games via relays', 'edgegap-relays'],
   ['sample projects', 'edgegap-samples'],
 ];
@@ -202,7 +203,7 @@ export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
         ? `${what}: the local server (npx -y @edgegap/mcp) with an API token`
         : `${what}: ${name}`
     ).join('; ') +
-    '. If your client cannot read MCP resources, call edgegap_get_skill with the name. ' +
+    '. Without MCP resources, call edgegap_get_skill with the name. ' +
     'Skills hold the tested workflow, templates and pitfalls; follow them over general knowledge (edgegap_list_skills lists all).\n\n' +
     (mode === 'oauth'
       ? 'Deployments cost money while running. Stop deployments you created before ending the task; '
