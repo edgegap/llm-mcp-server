@@ -58,7 +58,7 @@ Edgegap can host your multiplayer game in two ways. **We recommend dedicated ser
 
 ## 🚀 Installation
 
-Add the hosted endpoint, `https://mcp.edgegap.com/mcp`, to your MCP client and sign in with your Edgegap account when it asks. You pick the organization and approve what the connection may do; no API token is pasted anywhere. `https://mcp.edgegap.dev/mcp` serves the same server.
+Add the hosted endpoint, `https://mcp.edgegap.com/mcp`, to your MCP client and sign in with your Edgegap account when it asks. You pick the organization and approve what the connection may do; no API token is pasted anywhere.
 
 - Owners and admins can connect any app. Members can connect verified apps (Claude, Claude Code, ChatGPT and Codex), with the access their role allows.
 - An app asks again when a tool needs access you haven't approved yet.
@@ -204,7 +204,7 @@ The local server runs on your machine with an API token instead of a sign-in. Le
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.5`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.6`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 Generate (and view) your API tokens in [Dashboard - User Settings / Tokens](https://app.edgegap.com/user-settings?tab=tokens).
 
@@ -465,11 +465,11 @@ docker run --rm -p 8080:8080 ghcr.io/edgegap/llm-mcp-server:main
 
 ### Hosted Worker: OAuth environments
 
-The hosted Worker runs in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one: a client entry that still sends an `Authorization` header with an API token gets a 401 saying to remove the header and connect again (a client with a header configured doesn't offer the sign-in), or to use the local server. Production is the top-level Worker in [worker/wrangler.jsonc](worker/wrangler.jsonc), on both `mcp.edgegap.com` and `mcp.edgegap.dev`: `MCP_RESOURCE_URL` lists one URL per domain, and each request gets the one on its own host, so each domain advertises itself and accepts only tokens issued for it. `staging` and `beta` are environments of the same file.
+The hosted Worker runs in OAuth mode (`OAUTH_MODE` `"1"`): the developer adds the URL to their MCP client, signs in with Edgegap and approves what the connection may do. No API token is pasted anywhere, and the Worker refuses one: a client entry that still sends an `Authorization` header with an API token gets a 401 saying to remove the header and connect again (a client with a header configured doesn't offer the sign-in), or to use the local server. Production is the top-level Worker in [worker/wrangler.jsonc](worker/wrangler.jsonc), on `mcp.edgegap.com`. `MCP_RESOURCE_URL` lists one URL per custom domain, and each request gets the one on its own host, so each domain advertises itself and accepts only tokens issued for it. `staging` and `beta` are environments of the same file.
 
 | Environment | MCP URL | Authorization server | Edgegap API |
 | --- | --- | --- | --- |
-| production (top level) | `https://mcp.edgegap.com/mcp`, `https://mcp.edgegap.dev/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
+| production (top level) | `https://mcp.edgegap.com/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
 | `staging` | `https://mcp-staging.edgegap.dev/mcp` | `https://staging-auth.edgegap.dev` | `https://staging-api.edgegap.dev` |
 | `beta` | `https://mcp-beta.edgegap.dev/mcp` | `https://auth.edgegap.com` | `https://api.edgegap.com` |
 
