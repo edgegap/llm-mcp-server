@@ -79,12 +79,24 @@ claude mcp add --transport http edgegap https://mcp.edgegap.com/mcp --scope user
 
 Then run `/mcp` in Claude Code, pick `edgegap` and sign in.
 
-#### ChatGPT Codex
+#### OpenAI Codex
+
+The Edgegap plugin installs this server and the Edgegap skills together:
+
+```bash
+codex plugin marketplace add edgegap/llm-agent-skills
+codex plugin add edgegap@edgegap
+codex mcp login edgegap
+```
+
+Or add only the server:
 
 ```bash
 codex mcp add edgegap --url https://mcp.edgegap.com/mcp
 codex mcp login edgegap
 ```
+
+`codex mcp login` opens the Edgegap sign-in; `codex mcp list` then shows `edgegap` with `OAuth` auth. The CLI, the IDE extension and the ChatGPT desktop app share this configuration. Worked example: [netcode-sample-codex-slime-sumo](https://github.com/edgegap/netcode-sample-codex-slime-sumo).
 
 #### Claude Desktop and claude.ai
 
@@ -192,7 +204,7 @@ The local server runs on your machine with an API token instead of a sign-in. Le
 }
 ```
 
-Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.4`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
+Needs Node 18+. Pin a version in production (`@edgegap/mcp@0.20.5`) rather than floating on latest. Registered in the official MCP registry as `dev.edgegap/mcp`.
 
 Generate (and view) your API tokens in [Dashboard - User Settings / Tokens](https://app.edgegap.com/user-settings?tab=tokens).
 
