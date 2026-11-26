@@ -2,6 +2,10 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.7
+
+The MCP registry entry is now `com.edgegap/mcp`, matching the hosted endpoint `https://mcp.edgegap.com/mcp`; `package.json` `mcpName` follows. Versions up to 0.20.6 stay under `dev.edgegap/mcp`. Checked in `test/package.mjs`.
+
 ## 0.20.6
 
 The hosted endpoint is `https://mcp.edgegap.com/mcp`. The README, analytics notes, Worker install notes and bug-report form no longer mention the retired `mcp.edgegap.dev`, so MCP directories that copy them pick up the current URL. Checked in `test/package.mjs`.

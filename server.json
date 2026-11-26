@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "dev.edgegap/mcp",
+  "name": "com.edgegap/mcp",
   "title": "Edgegap",
   "description": "Deploy and operate multiplayer game servers on Edgegap's global edge network.",
-  "version": "0.20.6",
+  "version": "0.20.7",
   "repository": {
     "url": "https://github.com/edgegap/llm-mcp-server",
     "source": "github"
@@ -22,7 +22,7 @@
     {
       "registryType": "npm",
       "identifier": "@edgegap/mcp",
-      "version": "0.20.6",
+      "version": "0.20.7",
       "transport": {
         "type": "stdio"
       },
