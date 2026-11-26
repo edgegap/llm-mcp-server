@@ -2,6 +2,15 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.8
+
+- Skills pack 0.48.0 (llm-agent-skills 6ffd7da):
+  - 0.47.0 (edgegap/llm-agent-skills#69): `edgegap-nakama` 0.3.0 follows the Edgegap Fleet Manager for Nakama to Nakama 3.42.0 and its `EdgegapConfig` constructor; the template built for the previous plugin no longer compiled.
+  - 0.48.0 (edgegap/llm-agent-skills#70): new `edgegap-html5` skill for HTML5 2D games (Phaser, canvas), from netcode-sample-html5-phaser.
+- Server instructions route HTML5/Phaser 2D games to `edgegap-html5`, with shorter wording elsewhere to stay under 4096 characters.
+- `scripts/sync-skills.mjs` bundles `.ps1` text files.
+- Covered by the skills tests (the new link resolves, instructions under the limit) and the tool snapshot.
+
 ## 0.20.7
 
 The MCP registry entry is now `com.edgegap/mcp`, matching the hosted endpoint `https://mcp.edgegap.com/mcp`; `package.json` `mcpName` follows. Versions up to 0.20.6 stay under `dev.edgegap/mcp`. Checked in `test/package.mjs`.

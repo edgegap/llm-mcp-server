@@ -24,7 +24,7 @@ const totalFiles = SKILLS_PACK.skills.reduce((n, s) => n + s.files.length, 0);
 console.log('\nbundle');
 const pin = readFileSync('scripts/skills-pin.txt', 'utf8').trim();
 check('bundle is the pinned commit', SKILLS_PACK.commit === pin, `${SKILLS_PACK.commit} vs ${pin}`);
-check('bundle has the core skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs', 'edgegap-relays'].every((n) => SKILLS_PACK.skills.some((s) => s.name === n)));
+check('bundle has the core skills', ['edgegap', 'edgegap-unity', 'edgegap-ngo', 'edgegap-fishnet', 'edgegap-purrnet', 'edgegap-fusion', 'edgegap-manus', 'edgegap-unreal', 'edgegap-eos-voice', 'edgegap-fusion-simplefps', 'edgegap-godot', 'edgegap-colyseus', 'edgegap-nakama', 'edgegap-playfab', 'edgegap-supabase', 'edgegap-threejs', 'edgegap-relays', 'edgegap-html5'].every((n) => SKILLS_PACK.skills.some((s) => s.name === n)));
 check('every skill starts with its SKILL.md', SKILLS_PACK.skills.every((s) => s.files[0].path === 'SKILL.md' && s.files[0].content.includes(`name: ${s.name}`)));
 check('no evals, scripts or fixtures bundled', SKILLS_PACK.skills.every((s) => s.files.every((f) => !/^(evals|scripts|fixtures)\//.test(f.path))));
 check('no Windows line endings', SKILLS_PACK.skills.every((s) => s.files.every((f) => !f.content.includes('\r\n'))));
