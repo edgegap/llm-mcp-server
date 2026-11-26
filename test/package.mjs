@@ -42,6 +42,9 @@ check('homepage and bugs use the current repository name', [pkg.homepage, pkg.bu
 check('server.json has an https icon that is the repo icon.png', server.icons?.[0]?.src === 'https://raw.githubusercontent.com/edgegap/llm-mcp-server/main/icon.png' && server.icons[0].mimeType === 'image/png', JSON.stringify(server.icons));
 check('server.json names the current repository', server.repository?.url === 'https://github.com/edgegap/llm-mcp-server', server.repository?.url);
 check('mcpName matches the registry name', pkg.mcpName === server.name, `${pkg.mcpName} vs ${server.name}`);
+// The registry namespace follows the hosted endpoint's domain (mcp.edgegap.com),
+// verified by a DNS TXT record on edgegap.com. dev.edgegap/mcp holds versions up to 0.20.6.
+check('registry name is com.edgegap/mcp', server.name === 'com.edgegap/mcp', server.name);
 
 // The version is hardcoded in five places; a release with them out of step
 // tells clients one version and npm another.
