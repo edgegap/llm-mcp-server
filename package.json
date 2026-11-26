@@ -1,7 +1,7 @@
 {
   "name": "@edgegap/mcp",
   "mcpName": "com.edgegap/mcp",
-  "version": "0.20.8",
+  "version": "0.20.9",
   "description": "Check, push, and deploy game servers on Edgegap from your coding agent, with relays for P2P games. Runs locally; your API token never leaves your machine.",
   "scripts": {
     "prebuild": "rm -rf dist",

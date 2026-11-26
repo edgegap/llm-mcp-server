@@ -65,6 +65,7 @@ import {
   type OAuthSettings,
 } from '../src/oauth.js';
 import { VERSION } from '../src/version.js';
+import { helpPageResponse, wantsHelpPage } from '../src/browserpage.js';
 import { createAnalytics, type TelemetryEnv } from './telemetry.js';
 
 export interface Env extends TelemetryEnv, OAuthEnv {
@@ -245,6 +246,11 @@ export default {
     // Token-free, so uptime checks need no credential.
     if (url.pathname === '/health') {
       return new Response('ok', { status: 200 });
+    }
+
+    // A person who opened the address in a browser; MCP clients never match.
+    if (wantsHelpPage(request.method, url.pathname, request.headers.get('Accept'))) {
+      return helpPageResponse(request.method);
     }
 
     let settings: OAuthSettings | undefined;

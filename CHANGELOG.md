@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.9
+
+- Hosted server: opening `mcp.edgegap.com` or `mcp.edgegap.com/mcp` in a web browser now shows a short help page (the connector URL to paste into Claude, ChatGPT, Cursor or another MCP client, and a link to the setup guide) instead of "Not found" or 405. Only GET/HEAD to `/` or `/mcp` that ask for `text/html` and not `text/event-stream` get it; MCP clients are unchanged.
+- Covered by a unit test (`wantsHelpPage`) and `test/worker-oauth.mjs` (HTML on `/` and `/mcp`, SSE GET still reaches the MCP handler, other paths still 404).
+
 ## 0.20.8
 
 - Skills pack 0.48.0 (llm-agent-skills 6ffd7da):
