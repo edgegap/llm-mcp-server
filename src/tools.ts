@@ -229,7 +229,8 @@ export function serverInstructions(mode: 'local' | 'hosted' | 'oauth'): string {
     '6. edgegap_deploy near the players\n' +
     '7. edgegap_wait_for_deployment for the connection address\n' +
     '8. edgegap_stop_deployment when finished\n' +
-    'edgegap_build_matchmaker_config makes the matchmaker config to upload in the dashboard. ' +
+    'Unity: the Edgegap Unity plugin does steps 1-3\n' +
+    'edgegap_build_matchmaker_config writes the matchmaker config for the dashboard. ' +
     'For later builds, suggest CI over repeating steps 2-7: the GitHub Action edgegap/deploy-action ' +
     '(edgegap-launch skill) creates the version from an existing one, smoke-tests and promotes it. ' +
     'Do not write Deploy API code for a CI job that only ships a build.'
@@ -3076,14 +3077,15 @@ export function registerTools(
           .optional()
           .describe(
             'Server build folder, relative to where docker build runs. Defaults: unity ' +
-              '"Builds/EdgegapServer", unreal "." (run from inside the packaged LinuxServer folder), godot "build".'
+              '"Builds/EdgegapServer", unreal "Packaged/LinuxServer", godot "build".'
           ),
         executable: z
           .string()
           .optional()
           .describe(
-            'File name of the server binary or start script inside build_path. Defaults: unity ' +
-              '"ServerBuild", unreal "StartServer.sh", godot "server.x86_64". Required for "other".'
+            'Server binary or start script inside build_path (a file name or a relative path). Defaults: unity ' +
+              '"ServerBuild", unreal "MyGame/Binaries/Linux/MyGameServer" (pass <Project>/Binaries/Linux/<Module>Server; ' +
+              'run the binary, not <Module>Server.sh), godot "server.x86_64". Required for "other".'
           ),
         ports: z
           .array(
