@@ -2,6 +2,11 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.10
+
+- Skills pack 0.49.0 (llm-agent-skills 2fd489c, edgegap/llm-agent-skills#87): fixes from the 2026-11-27 end-to-end review of every public Edgegap sample (#78-#86): FishNet SDK 3.5.6 + plugin 3.2.2, NGO and PurrNet pinned versions, Nakama Godot direct-test join, `@edgegap/sdk` 1.2.0 in the browser templates, PlayFab MPS sample on main, new Fusion references for Tanknarok (Fusion 1) and Asteroids Simple (Fusion 2).
+- No tool or instruction changes.
+
 ## 0.20.9
 
 - Hosted server: opening `mcp.edgegap.com` or `mcp.edgegap.com/mcp` in a web browser now shows a short help page (the connector URL to paste into Claude, ChatGPT, Cursor or another MCP client, and a link to the setup guide) instead of "Not found" or 405. Only GET/HEAD to `/` or `/mcp` that ask for `text/html` and not `text/event-stream` get it; MCP clients are unchanged.
