@@ -360,7 +360,17 @@ check('defaults are listed as assumptions to confirm', g.assumptions.some((a) =>
 g = json(await gen({ engine: 'unity', netcode: 'mirror-telepathy' }));
 check('netcode picks the protocol (Telepathy -> TCP)', g.ports_for_create_app_version[0].protocol === 'TCP' && g.dockerfile.includes('EXPOSE 7777/tcp'));
 g = json(await gen({ engine: 'unreal' }));
-check('unreal: non-root user and CRLF fix', g.dockerfile.includes('USER server') && g.dockerfile.includes("sed -i 's/\\r$//' /app/StartServer.sh"));
+check('unreal: non-root user, binary run directly with project name and log flags',
+  g.dockerfile.includes('USER server') && g.dockerfile.includes('COPY --chown=server:server Packaged/LinuxServer /app/') &&
+  g.dockerfile.includes('CMD ["/app/MyGame/Binaries/Linux/MyGameServer","MyGame","-log","-port=7777","-stdout","-FullStdOutLogOutput"]'), g.dockerfile);
+check('unreal: default binary listed as an assumption', g.assumptions.some((a) => a.includes('<Project>/Binaries/Linux/<Module>Server')));
+g = json(await gen({ engine: 'unreal', executable: 'Shooter/Binaries/Linux/ShooterServer', launch_args: ['-port=7778', '-log'] }));
+check('unreal: launch_args are not duplicated', g.dockerfile.includes('CMD ["/app/Shooter/Binaries/Linux/ShooterServer","Shooter","-stdout","-FullStdOutLogOutput","-port=7778","-log"]'), g.dockerfile);
+g = json(await gen({ engine: 'unreal', executable: 'MyGameServer.sh' }));
+check('unreal: a .sh start script keeps the CRLF fix and a SIGTERM warning',
+  g.dockerfile.includes("sed -i 's/\\r$//' /app/MyGameServer.sh") && g.assumptions.some((a) => /exec/.test(a)), g.dockerfile);
+const escaped = await gen({ engine: 'unreal', executable: '../escape/Server' });
+check('executable path cannot leave build_path', escaped.isError);
 // Official node images already have uid 1000 ("node"): a pinned "useradd -u 1000"
 // fails the build with exit code 4. Let useradd pick a free uid, and skip it
 // when the base image already has a "server" user.

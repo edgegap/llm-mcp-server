@@ -2,6 +2,12 @@
 
 Published versions of `@edgegap/mcp`, which also run on the hosted endpoint at `mcp.edgegap.com`. Dates are npm publish dates. Versions merged but never published (0.5.8, 0.6.0, 0.8.0) shipped as part of the next release. Older entries are summarised from the commit history.
 
+## 0.20.10
+
+- Server instructions: the golden path says the Edgegap Unity plugin does steps 1-3 (build, Dockerfile, push) for Unity projects, as `edgegap-unity` already does, so an agent that skips the skill no longer hand-writes a Unity Dockerfile. The matchmaker-config line is shorter to stay under 4096 characters.
+- `edgegap_generate_dockerfile` for Unreal now runs the packaged server binary directly (`<Project>/Binaries/Linux/<Module>Server` from `Packaged/LinuxServer`) with the project name, `-log`, `-port`, `-stdout` and `-FullStdOutLogOutput`, matching the `edgegap-unreal` skill and the Unreal SDK's build panel. The old default, `StartServer.sh`, came from the previous Unreal plugin; a `.sh` start script that does not `exec` swallows the SIGTERM Edgegap sends on stop. `executable` accepts a relative path inside `build_path`.
+- Covered by `test/newtools.mjs` (Unreal defaults, no duplicated launch args, `.sh` warning, path escape refused) and the tool snapshot.
+
 ## 0.20.9
 
 - Hosted server: opening `mcp.edgegap.com` or `mcp.edgegap.com/mcp` in a web browser now shows a short help page (the connector URL to paste into Claude, ChatGPT, Cursor or another MCP client, and a link to the setup guide) instead of "Not found" or 405. Only GET/HEAD to `/` or `/mcp` that ask for `text/html` and not `text/event-stream` get it; MCP clients are unchanged.

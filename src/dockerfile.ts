@@ -6,8 +6,12 @@
  * actual build folder, binary name, ports and launch arguments, so the agent
  * does not have to adapt a fixed template by trial and error.
  *
- * Unity and Unreal output follows the Dockerfiles Edgegap ships in its engine
- * plugins. Godot and "other" follow the same conventions. Every template must
+ * Unity output follows the Dockerfile the Edgegap Unity plugin writes (Unity
+ * projects normally build and push with that plugin; this is for projects that
+ * don't). Unreal output follows the edgegap-unreal skill and the Edgegap
+ * Unreal SDK's build panel: the server binary runs directly, not through the
+ * generated <Module>Server.sh, which does not exec and so swallows the SIGTERM
+ * Edgegap sends on stop. Godot and "other" follow the same conventions. Every template must
  * pass validateServerConfig; newtools.mjs enforces that.
  */
 
@@ -27,13 +31,12 @@ export interface DockerfileInput {
 // a shell command for Unity, so each is restricted to characters that cannot
 // start a new instruction, quote out of an argument, or run a subshell.
 const PATH_RE = /^[A-Za-z0-9._\-/]+$/;
-const FILE_RE = /^[A-Za-z0-9._-]+$/;
 const ARG_RE = /^[A-Za-z0-9._\-=:/,+@]+$/;
 const IMAGE_RE = /^[a-z0-9][a-z0-9._\-/:@]*$/;
 
 const DEFAULTS: Record<Engine, { build_path: string; executable?: string }> = {
   unity: { build_path: 'Builds/EdgegapServer', executable: 'ServerBuild' },
-  unreal: { build_path: '.', executable: 'StartServer.sh' },
+  unreal: { build_path: 'Packaged/LinuxServer', executable: 'MyGame/Binaries/Linux/MyGameServer' },
   godot: { build_path: 'build', executable: 'server.x86_64' },
   other: { build_path: 'build' },
 };
@@ -65,6 +68,24 @@ const APT = [
  */
 const USER_SETUP = 'RUN id -u server >/dev/null 2>&1 || useradd -m server';
 
+/**
+ * Unreal server arguments. A packaged binary at <Project>/Binaries/Linux/<X>
+ * takes the project name first (what <Module>Server.sh passes), then the flags
+ * the skill and the SDK panel use, unless launch_args already sets them.
+ */
+function unrealArgs(executable: string, isScript: boolean, port: number | undefined, args: string[]): string[] {
+  if (isScript) return args;
+  const has = (flag: string) => args.some((a) => a.toLowerCase() === flag.toLowerCase() || a.toLowerCase().startsWith(`${flag.toLowerCase()}=`));
+  const project = /^([^/]+)\/Binaries\/Linux\/[^/]+$/.exec(executable)?.[1];
+  const out: string[] = [];
+  if (project && args[0] !== project) out.push(project);
+  if (!has('-log')) out.push('-log');
+  if (port !== undefined && !has('-port')) out.push(`-port=${port}`);
+  if (!has('-stdout')) out.push('-stdout');
+  if (!has('-FullStdOutLogOutput')) out.push('-FullStdOutLogOutput');
+  return [...out, ...args];
+}
+
 export function generateDockerfile(input: DockerfileInput) {
   const engine = input.engine;
   const defaults = DEFAULTS[engine];
@@ -85,8 +106,10 @@ export function generateDockerfile(input: DockerfileInput) {
       `build_path "${buildPath}" must be a relative path inside the Docker build context (letters, digits, ".", "_", "-", "/"; no "..").`
     );
   }
-  if (!FILE_RE.test(executable)) {
-    throw new DockerfileInputError(`executable "${executable}" must be a plain file name (letters, digits, ".", "_", "-").`);
+  if (!PATH_RE.test(executable) || executable.split('/').includes('..') || executable.startsWith('/')) {
+    throw new DockerfileInputError(
+      `executable "${executable}" must be a file name or a relative path inside build_path (letters, digits, ".", "_", "-", "/"; no "..").`
+    );
   }
   for (const a of args) {
     if (!ARG_RE.test(a)) {
@@ -181,11 +204,24 @@ export function generateDockerfile(input: DockerfileInput) {
       '# Documentation only: the port Edgegap exposes is the one on the app version.',
       ...expose,
       '',
-      `CMD ${JSON.stringify([`/app/${executable}`, ...args])}`,
+      ...(isScript
+        ? []
+        : [
+            '# -stdout -FullStdOutLogOutput: without them stdout is buffered and Edgegap logs stay empty.',
+          ]),
+      `CMD ${JSON.stringify([`/app/${executable}`, ...unrealArgs(executable, isScript, ports[0]?.port, args)])}`,
     ];
     if (input.executable === undefined) {
       assumptions.push(
-        'Assumed StartServer.sh, which the Edgegap Unreal plugin generates. Without the plugin, use the <Project>Server.sh from the packaged LinuxServer folder.'
+        'Assumed the packaged server binary is MyGame/Binaries/Linux/MyGameServer inside Packaged/LinuxServer. ' +
+          'Pass executable as <Project>/Binaries/Linux/<Module>Server from the packaged LinuxServer folder (and build_path if ' +
+          'it was packaged elsewhere). Run the binary, not <Module>Server.sh: that script does not exec, so it swallows the ' +
+          'SIGTERM Edgegap sends on stop.'
+      );
+    } else if (isScript) {
+      assumptions.push(
+        'A start script only stops cleanly on Edgegap if it ends with exec; the generated <Module>Server.sh does not. ' +
+          'Prefer executable <Project>/Binaries/Linux/<Module>Server.'
       );
     }
   } else {

@@ -225,7 +225,7 @@ export function validateServerConfig(input: ServerConfigInput) {
       }
       if (/\.sh\b/.test(launch) && !/sed\s+-i\s+['"]?s\/\\r\$\/\/|dos2unix/.test(text)) {
         warn('crlf-script', 'The start script is not normalised to LF line endings. Scripts saved on Windows fail with "bad interpreter" or "not found".',
-          "Add \"RUN sed -i 's/\\r$//' /app/StartServer.sh\" after the COPY.");
+          "Add \"RUN sed -i 's/\\r$//' /app/<script>.sh\" after the COPY, or run the server binary directly.");
       }
     }
 
